@@ -39,7 +39,9 @@ class BreakoutTargetEngineTests(unittest.TestCase):
         plan = TradePlanEngine.generate(entry_report(20), breakout_probability=80)
 
         self.assertEqual(plan.breakout_probability, 80)
-        self.assertEqual(plan.target_basis, "BREAKOUT_WEIGHTED_TARGETS")
+        self.assertEqual(plan.target_basis, "SECOND_TARGET_BREAKOUT")
+        self.assertEqual(plan.expected_reward, 10)
+        self.assertEqual(plan.risk_reward, 2)
 
 
 if __name__ == "__main__":

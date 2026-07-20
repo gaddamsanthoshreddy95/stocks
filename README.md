@@ -17,7 +17,7 @@ KITE_ACCESS_TOKEN=your_daily_access_token
 ```bash
 .venv/bin/python main.py analyze RELIANCE
 .venv/bin/python main.py suggest --limit 5
-.venv/bin/python main.py daily-report --limit 15
+.venv/bin/python main.py daily-report --limit 5
 .venv/bin/python main.py backtest RELIANCE
 .venv/bin/python main.py papertrade RELIANCE BUY --quantity 10
 .venv/bin/python main.py portfolio
@@ -88,7 +88,7 @@ investment advice.
 ## Daily recommendation report
 
 `daily-report` is the end-to-end output: it scans the configured universe,
-ranks up to 15 actionable candidates, generates entry/stop/target/position
+risk-reviews the top 20 ranked candidates, generates entry/stop/target/position
 size details, enriches finalists with live option-chain intelligence when Kite
 is enabled, and prints a market summary. Add `--json` for the equivalent
 machine-readable report. It never submits live orders.
@@ -105,6 +105,14 @@ performance.
 
 Each daily recommendation receives a `recommendation_id`. After closing the
 paper trade, record the result with `main.py record-outcome ID WIN` (optionally
-add `--return-percent`). Once at least 20 completed outcomes exist for a
+add `--return-percent`, `--exit-price`, `--mfe-percent`, and `--mae-percent`).
+The outcome store also records the predicted probability, entry, stop, targets,
+readiness, expected value, probability error, and Brier score. Once at least 20 completed outcomes exist for a
 strategy, the report blends its observed win rate into the estimated
-probability.
+probability; 200 outcomes is the report's validation milestone.
+The daily report risk-reviews the top 20 ranked stocks by default, independently
+of the final trade `--limit`. Override this with `RANKING_SHORTLIST_SIZE` (1–30).
+Equity setups use confidence-aware reward/risk floors: A-grade 1.5
+(`EQUITY_MIN_RISK_REWARD`), B-grade 1.3
+(`EQUITY_B_GRADE_MIN_RISK_REWARD`), and watchlist/C-grade 1.2
+(`EQUITY_WATCHLIST_MIN_RISK_REWARD`).

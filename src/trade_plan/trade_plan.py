@@ -12,6 +12,7 @@ from src.config.trading_config import EQUITY_MIN_RISK_REWARD
 class TradePlanEngine:
 
     BREAKOUT_THRESHOLD = 65.0
+    STRONG_BREAKOUT_THRESHOLD = 80.0
 
     @staticmethod
     def generate(entry_report, breakout_probability=None):
@@ -79,7 +80,13 @@ class TradePlanEngine:
         nearest_reward = rewards[0]
         resistance_is_close = nearest_reward < atr if atr > 0 else False
         breakout_adjusted = resistance_is_close and probability >= TradePlanEngine.BREAKOUT_THRESHOLD
-        if breakout_adjusted:
+        strong_breakout = resistance_is_close and probability >= TradePlanEngine.STRONG_BREAKOUT_THRESHOLD
+        if strong_breakout:
+            # At very high conviction, treat the first level as the breakout
+            # trigger and manage the trade against the next credible target.
+            expected_reward = rewards[1]
+            target_basis = "SECOND_TARGET_BREAKOUT"
+        elif breakout_adjusted:
             expected_reward = .5 * rewards[0] + .3 * rewards[1] + .2 * rewards[2]
             target_basis = "BREAKOUT_WEIGHTED_TARGETS"
         else:
@@ -93,7 +100,11 @@ class TradePlanEngine:
             diagnostics.append(
                 f"Nearest resistance is only {nearest_reward:.2f} away versus ATR {atr:.2f}."
             )
-        if breakout_adjusted:
+        if strong_breakout:
+            diagnostics.append(
+                f"Strong breakout probability ({probability:.0f}%) treats nearest resistance as a trigger and uses the second target."
+            )
+        elif breakout_adjusted:
             diagnostics.append(
                 f"Credible breakout ({probability:.0f}%) activates weighted targets beyond nearest resistance."
             )

@@ -18,13 +18,16 @@ def main():
     suggest.add_argument("--limit", type=int, default=5)
     suggest.add_argument("--minimum-score", type=int, default=40)
     daily = subcommands.add_parser("daily-report", help="generate the final daily trading report")
-    daily.add_argument("--limit", type=int, default=15)
+    daily.add_argument("--limit", type=int, default=5, help="maximum final trades; top 20 are risk-reviewed")
     daily.add_argument("--minimum-score", type=int, default=40)
     daily.add_argument("--json", action="store_true", help="emit machine-readable JSON instead of the CLI report")
     outcome = subcommands.add_parser("record-outcome", help="record a completed recommendation for calibration")
     outcome.add_argument("recommendation_id")
     outcome.add_argument("outcome", choices=("WIN", "LOSS"))
     outcome.add_argument("--return-percent", type=float)
+    outcome.add_argument("--exit-price", type=float)
+    outcome.add_argument("--mfe-percent", type=float)
+    outcome.add_argument("--mae-percent", type=float)
     paper = subcommands.add_parser("papertrade")
     paper.add_argument("symbol")
     paper.add_argument("side", choices=("BUY", "SELL"))
@@ -42,7 +45,10 @@ def main():
         elif args.command == "daily-report":
             result = platform.daily_report(args.limit, args.minimum_score)
         elif args.command == "record-outcome":
-            result = platform.record_trade_outcome(args.recommendation_id, args.outcome == "WIN", args.return_percent)
+            result = platform.record_trade_outcome(
+                args.recommendation_id, args.outcome == "WIN", args.return_percent,
+                args.exit_price, args.mfe_percent, args.mae_percent,
+            )
         elif args.command == "papertrade":
             result = platform.paper_trade(args.symbol, args.side, args.quantity)
         else:

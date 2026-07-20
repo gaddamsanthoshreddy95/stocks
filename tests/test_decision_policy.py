@@ -5,6 +5,9 @@ from src.workflow.decision_policy import (
     option_confidence_status, pcr_adjustment,
     market_risk_scale,
     combine_strategy_eligibility,
+    risk_reward_tier,
+    adaptive_market_policy,
+    expected_value,
 )
 
 
@@ -30,6 +33,23 @@ class DecisionPolicyTests(unittest.TestCase):
         self.assertEqual(market_risk_scale(60), .75)
         self.assertEqual(market_risk_scale(80), 1.0)
         self.assertEqual(market_risk_scale(0, available=False), 1.0)
+        self.assertEqual(market_risk_scale(80, alignment_status="CONFLICT"), .5)
+
+    def test_risk_reward_is_confidence_tiered(self):
+        self.assertFalse(risk_reward_tier(82, 1.4)["approved"])
+        self.assertTrue(risk_reward_tier(76, 1.3)["approved"])
+        self.assertTrue(risk_reward_tier(68, 1.2)["watchlist_eligible"])
+        self.assertFalse(risk_reward_tier(68, 1.19)["watchlist_eligible"])
+
+    def test_market_regime_changes_execution_thresholds(self):
+        self.assertEqual(adaptive_market_policy("BULLISH")["readiness_minimum"], 75)
+        self.assertEqual(adaptive_market_policy("BEARISH")["readiness_minimum"], 90)
+        self.assertIn("MEAN_REVERSION", adaptive_market_policy("SIDEWAYS")["preferred_strategies"])
+
+    def test_expected_value_uses_probability_reward_and_risk(self):
+        self.assertEqual(expected_value(60, 200, 100), {
+            "amount": 80.0, "risk_multiple": .8, "win_probability": 60.0,
+        })
 
     def test_equity_rr_rejection_does_not_block_approved_short_put(self):
         result = combine_strategy_eligibility(False, .4, 1.5, True)

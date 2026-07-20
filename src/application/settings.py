@@ -16,6 +16,9 @@ class PlatformSettings:
     market_data_source: str = "kite"
     trading_strategy_mode: str = "both"
     equity_min_risk_reward: float = 1.5
+    equity_b_grade_min_risk_reward: float = 1.3
+    equity_watchlist_min_risk_reward: float = 1.2
+    ranking_shortlist_size: int = 20
     short_put_min_otm_percent: float = 8.0
     short_put_max_otm_percent: float = 10.0
     short_put_min_dte: int = 7
@@ -47,6 +50,12 @@ class PlatformSettings:
             raise ValueError("TRADING_STRATEGY_MODE must be 'equity', 'short_put', or 'both'")
         if self.equity_min_risk_reward <= 0:
             raise ValueError("EQUITY_MIN_RISK_REWARD must be positive")
+        if not (0 < self.equity_watchlist_min_risk_reward
+                <= self.equity_b_grade_min_risk_reward
+                <= self.equity_min_risk_reward):
+            raise ValueError("Equity risk/reward thresholds must satisfy C <= B <= A")
+        if not 1 <= self.ranking_shortlist_size <= 30:
+            raise ValueError("RANKING_SHORTLIST_SIZE must be between 1 and 30")
         if not 0 < self.short_put_min_otm_percent <= self.short_put_max_otm_percent < 100:
             raise ValueError("Short-Put OTM range is invalid")
         if not 0 <= self.short_put_min_dte <= self.short_put_max_dte:
@@ -104,6 +113,9 @@ class PlatformSettings:
             market_data_source=market_data_source,
             trading_strategy_mode=strategy_mode,
             equity_min_risk_reward=env_float("EQUITY_MIN_RISK_REWARD", 1.5),
+            equity_b_grade_min_risk_reward=env_float("EQUITY_B_GRADE_MIN_RISK_REWARD", 1.3),
+            equity_watchlist_min_risk_reward=env_float("EQUITY_WATCHLIST_MIN_RISK_REWARD", 1.2),
+            ranking_shortlist_size=env_int("RANKING_SHORTLIST_SIZE", 20),
             short_put_min_otm_percent=min_otm,
             short_put_max_otm_percent=max_otm,
             short_put_min_dte=min_dte,

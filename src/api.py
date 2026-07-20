@@ -26,6 +26,9 @@ class OutcomeRequest(BaseModel):
     recommendation_id: str = Field(min_length=1)
     won: bool
     return_percent: float | None = None
+    exit_price: float | None = Field(default=None, gt=0)
+    mfe_percent: float | None = None
+    mae_percent: float | None = None
 
 
 def _call(operation):
@@ -51,7 +54,7 @@ def suggestions(limit: int = 5, minimum_score: int = 40):
 
 
 @app.get("/daily-report")
-def daily_report(limit: int = 15, minimum_score: int = 40):
+def daily_report(limit: int = 5, minimum_score: int = 40):
     return _call(lambda: platform.daily_report(limit, minimum_score))
 
 
@@ -72,4 +75,7 @@ def portfolio():
 
 @app.post("/outcomes")
 def record_outcome(request: OutcomeRequest):
-    return _call(lambda: platform.record_trade_outcome(request.recommendation_id, request.won, request.return_percent))
+    return _call(lambda: platform.record_trade_outcome(
+        request.recommendation_id, request.won, request.return_percent,
+        request.exit_price, request.mfe_percent, request.mae_percent,
+    ))

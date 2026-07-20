@@ -31,7 +31,8 @@ class DailyReportPresenter:
                 f"AI score             : {trade['ai_score']}/100",
                 f"Confidence grade     : {trade.get('confidence_grade', {}).get('grade', 'N/A')} — {trade.get('confidence_grade', {}).get('label', 'Unrated')}",
                 f"News sentiment       : {trade['news']['sentiment']} ({trade['news']['score']:+.1f})",
-                f"News source          : {'AVAILABLE' if trade['news'].get('available') else 'UNAVAILABLE — neutral, no score impact'}",
+                f"News collection      : {trade['news'].get('collection_state', 'UNKNOWN')} ({trade['news'].get('article_count', 0)} articles)",
+                f"News sentiment state : {trade['news'].get('analysis_state', 'UNKNOWN')}",
                 f"News analysis        : {trade['news'].get('analysis_method', 'UNAVAILABLE')} / {trade['news'].get('model', 'N/A')}",
                 f"News materiality     : {trade['news'].get('materiality', 'UNAVAILABLE')} / impact {trade['news'].get('trade_impact', 'NONE')}",
                 f"Model confidence     : {trade['model_confidence']['decision_confidence']}%",
@@ -50,6 +51,9 @@ class DailyReportPresenter:
                 f"Target model         : {levels.get('target_basis', 'NEAREST_RESISTANCE')} ({levels.get('breakout_probability', 0)}% breakout probability)",
                 f"Expected reward      : {cls._money(levels.get('expected_reward'))} (nearest target {cls._money(levels.get('nearest_target_reward'))})",
                 f"Expected risk/reward : 1:{levels['risk_reward']}",
+                f"Expected value       : {cls._money(trade.get('expected_value', {}).get('amount'))} ({trade.get('expected_value', {}).get('risk_multiple', 0):+.3f}R)",
+                f"Trade readiness      : {trade['trade_readiness']['percentage']}% — {trade['trade_readiness']['classification']}",
+                f"Adaptive policy      : {trade.get('market_policy', {}).get('profile', 'N/A')} — score {trade.get('market_policy', {}).get('trade_score_minimum', 'N/A')}+, readiness {trade.get('market_policy', {}).get('readiness_minimum', 'N/A')}%+",
                 f"Position size        : {risk['quantity']} shares (max risk {cls._money(risk['risk_amount'])})",
                 f"Risk scaling         : {trade['risk_policy']['position_scale'] * 100:.0f}% position; {trade['risk_policy']['effective_risk_percent']}% effective risk",
                 f"Option account       : {cls._money(trade['option_budget_policy']['capital_available'])} capital; {cls._money(trade['option_budget_policy']['risk_per_trade'])} max risk/trade",
@@ -99,7 +103,6 @@ class DailyReportPresenter:
                     rows.append(f"Option capital       : needs {cls._money(rejection.get('capital_required'))}; available {cls._money(rejection.get('capital_available'))}")
             if trade["status"] == "WATCHLIST":
                 readiness = trade["trade_readiness"]
-                rows.append(f"Trade readiness      : {readiness['percentage']}% — {readiness['classification']}")
                 for check in readiness["checks"]:
                     rows.append(f"  {'✓' if check['passed'] else '✗'} {check['name']}: {check['detail']}")
             for diagnostic in levels.get("target_diagnostics", []):
@@ -218,6 +221,9 @@ class DailyReportPresenter:
             line,
             "HISTORICAL LEARNING", "-" * 68,
             f"Completed outcomes   : {report.get('historical_learning', {}).get('completed_outcomes', 0)}",
+            f"Calibration stage    : {report.get('historical_learning', {}).get('calibration_stage', 'CALIBRATING')} / target {report.get('historical_learning', {}).get('recommended_validation_samples', 200)} outcomes",
+            f"Mean Brier score     : {report.get('historical_learning', {}).get('mean_brier_score', 'N/A')}",
+            f"Average MFE / MAE    : {report.get('historical_learning', {}).get('average_mfe_percent', 'N/A')}% / {report.get('historical_learning', {}).get('average_mae_percent', 'N/A')}%",
             *[f"{item['symbol']}: {item['recommendations']} recommendations, {item['wins']}W/{item['losses']}L, {item['win_rate_percent']}% ({item['confidence']})"
               for item in report.get("historical_learning", {}).get("by_symbol", [])[:5]],
             *[f"{item['setup']} in {item['market_regime']}: {item['recommendations']} samples, {item['win_rate_percent']}% ({item['confidence']})"
