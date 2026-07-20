@@ -38,6 +38,7 @@ from src.options.kite_option_chain import (
 )
 from src.options.trade_builder import OptionTradeBuilder
 from src.options.entry_validator import OptionEntryValidator
+from src.options.structure_validator import OptionStructureValidator
 from src.options.short_put import ShortPutStrategyEngine
 from src.sector.sector_mapper import SectorMapper
 from src.trade_plan.trade_plan import TradePlanEngine
@@ -110,6 +111,94 @@ class TradingPlatform:
         if action in {"SELL", "SHORT"}:
             return "BEARISH"
         return "NEUTRAL"
+
+    @staticmethod
+    def _bearish_option_score(analysis: dict[str, Any], candlestick: dict[str, Any]) -> dict[str, Any]:
+        """Score explicit bearish evidence independently from the bullish stock score."""
+        trend = str(analysis.get("trend", "")).upper()
+        checks = {
+            "bearish_trend": "BEARISH" in trend,
+            "price_below_ema20": float(analysis.get("current_price", 0)) < float(analysis.get("ema20", 0)),
+            "macd_below_signal": float(analysis.get("macd", 0)) < float(analysis.get("macd_signal_line", 0)),
+            "rsi_below_50": float(analysis.get("rsi", 100)) < 50,
+            "bearish_candle": candlestick.get("signal") == "SELL",
+            "adequate_volume": float(analysis.get("relative_volume", 0)) >= .75,
+        }
+        weights = {"bearish_trend": 35, "price_below_ema20": 20, "macd_below_signal": 20,
+                   "rsi_below_50": 10, "bearish_candle": 10, "adequate_volume": 5}
+        score = sum(weights[name] for name, passed in checks.items() if passed)
+        return {"score": score, "checks": checks,
+                "confirmed": all(checks[name] for name in
+                                 ("bearish_trend", "price_below_ema20", "macd_below_signal"))}
+
+    def bearish_option_candidates(self, limit: int = 2, minimum_score: int = 60,
+                                  option_month: str | None = None) -> dict[str, Any]:
+        """Return up to two evidence-backed, structurally valid bearish debit trades."""
+        if not isinstance(limit, int) or not 1 <= limit <= 5:
+            raise ValidationError("bearish option limit must be between 1 and 5")
+        if not isinstance(minimum_score, int) or not 0 <= minimum_score <= 100:
+            raise ValidationError("bearish option minimum score must be between 0 and 100")
+        symbols = self._universe_symbols()
+        reviewed, qualified = 0, []
+        rejection_counts: dict[str, int] = {}
+        for symbol in symbols:
+            try:
+                report = self.analyze(symbol)
+            except (DataUnavailableError, ValueError, KeyError, TypeError):
+                rejection_counts["ANALYSIS_UNAVAILABLE"] = rejection_counts.get("ANALYSIS_UNAVAILABLE", 0) + 1
+                continue
+            reviewed += 1
+            analysis = report["analysis"]
+            evidence = self._bearish_option_score(analysis, report["candlestick"])
+            if evidence["score"] < minimum_score or not evidence["confirmed"]:
+                rejection_counts["BEARISH_EVIDENCE_INSUFFICIENT"] = rejection_counts.get("BEARISH_EVIDENCE_INSUFFICIENT", 0) + 1
+                continue
+            liquidity = self._stock_liquidity(analysis)
+            if liquidity["score"] < self.settings.candidate_min_liquidity_score:
+                rejection_counts["STOCK_LIQUIDITY_LOW"] = rejection_counts.get("STOCK_LIQUIDITY_LOW", 0) + 1
+                continue
+            candidate = {
+                "symbol": symbol, "action": "SELL", "current_price": analysis["current_price"],
+                "trade_plan": report["trade_plan"],
+                "analysis_report": {"analysis": analysis, "entry": report["entry"],
+                                    "breakout": report["breakout"], "candlestick": report["candlestick"],
+                                    "setup_evaluation": report["setup_evaluation"]},
+            }
+            option = self._option_trade_plan(candidate, option_month)
+            structure = OptionStructureValidator.validate(option, self.settings)
+            trade = option.get("trade") or {}
+            bearish_structure = trade.get("strategy") in {"Long Put", "Bear Put Spread"}
+            approval = {
+                "result_type": "OptionTradeApprovalResult",
+                "status": "APPROVED" if structure["valid"] and bearish_structure else "REJECTED",
+                "approved": bool(structure["valid"] and bearish_structure),
+                "rejection_codes": ([] if structure["valid"] and bearish_structure else
+                                    structure.get("rejection_codes") or ["NOT_BEARISH_DEBIT_STRUCTURE"]),
+            }
+            if not approval["approved"]:
+                code = approval["rejection_codes"][0]
+                rejection_counts[code] = rejection_counts.get(code, 0) + 1
+                continue
+            qualified.append({
+                "symbol": symbol, "bearish_score": evidence["score"], "evidence": evidence,
+                "current_price": analysis["current_price"], "trend": analysis["trend"],
+                "rsi": analysis["rsi"], "relative_volume": analysis["relative_volume"],
+                "levels": {"support": report["entry"].get("support"),
+                           "resistance": report["entry"].get("resistance"),
+                           "entry": report["trade_plan"].get("entry"),
+                           "stop_loss": report["trade_plan"].get("stop_loss"),
+                           "target_1": report["trade_plan"].get("target1"),
+                           "target_2": report["trade_plan"].get("target2"),
+                           "target_3": report["trade_plan"].get("target3")},
+                "stock_liquidity": liquidity, "option": option,
+                "option_structure": structure, "option_trade_approval": approval,
+            })
+        qualified.sort(key=lambda row: (row["bearish_score"], row["stock_liquidity"]["score"]), reverse=True)
+        return {"requested_limit": limit, "reviewed": reviewed, "minimum_score": minimum_score,
+                "candidates": qualified[:limit], "qualified_before_limit": len(qualified),
+                "rejection_counts": rejection_counts,
+                "message": (f"{min(limit, len(qualified))} validated bearish option candidate(s)."
+                            if qualified else "No bearish option candidate passed every validation gate.")}
 
     @staticmethod
     def _stock_liquidity(analysis: dict[str, Any]) -> dict[str, Any]:
@@ -398,7 +487,7 @@ class TradingPlatform:
     def _option_trade_plan(self, candidate: dict[str, Any], option_month: str | None = None) -> dict[str, Any]:
         key = (
             candidate["symbol"], round(float(candidate["current_price"]), 1),
-            self.settings.trading_strategy_mode, option_month,
+            self.settings.trading_strategy_mode, self._option_direction(candidate), option_month,
         )
         with self._option_cache_lock:
             cached = self._option_cache.get(key)

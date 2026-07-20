@@ -25,23 +25,30 @@ class ContextEnrichment:
     def __init__(self, live: bool):
         self.live = live
 
-    def market_and_sectors(self):
+    def market_and_sectors(self, force_refresh: bool = False):
         if not self.live:
             return ({"available": False, "regime": "UNAVAILABLE", "score": 0, "confidence": 0, "indices": {}}, {})
         with self._cache_lock:
             cached = self._market_cache
-            if cached and monotonic() - cached[0] < self.market_cache_ttl_seconds:
+            if not force_refresh and cached and monotonic() - cached[0] < self.market_cache_ttl_seconds:
                 return deepcopy(cached[1])
         try:
             snapshot = MarketDataHub().get_market_snapshot()
             regime = MarketRegime.classify(snapshot)
             indices = snapshot.get("india", {})
-            result = ({"available": True, "regime": regime.status, "score": regime.score,
+            market_result = {"available": True, "regime": regime.status, "score": regime.score,
                      "confidence": regime.confidence, "reasons": regime.reasons, "indices": indices,
                      "global": snapshot.get("global", {}),
                      "commodities": snapshot.get("commodities", {}),
                      "forex": snapshot.get("forex", {}),
-                     "vix": snapshot.get("volatility")}, SectorStrength().analyze())
+                     "vix": snapshot.get("volatility")}
+            try:
+                sectors = SectorStrength().analyze()
+            except Exception as exc:
+                sectors = {}
+                market_result["sector_data_status"] = "FAILED"
+                market_result["sector_data_reason"] = exc.__class__.__name__
+            result = (market_result, sectors)
         except Exception as exc:  # Provider failure must not stop recommendations.
             result = ({"available": False, "regime": "UNAVAILABLE", "score": 0, "confidence": 0,
                      "indices": {}, "reason": exc.__class__.__name__}, {})
