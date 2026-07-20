@@ -8,5 +8,5 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
-call ".venv\Scripts\python.exe" -m streamlit run ui_app.py
+call ".venv\Scripts\python.exe" -m streamlit run ui_app.py --server.fileWatcherType none
 if errorlevel 1 pause

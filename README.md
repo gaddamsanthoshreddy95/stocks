@@ -127,6 +127,12 @@ The UI provides:
 
 To stop the UI, close its Command Prompt window or press `Ctrl+C`.
 
+The UI disables Streamlit's Python module watcher because Hugging Face
+Transformers exposes optional computer-vision modules that reference
+`torchvision`. The project uses text-only FinBERT and does not require
+`torchvision`; disabling the watcher prevents misleading `ModuleNotFoundError:
+torchvision` messages without installing an unrelated vision stack.
+
 ## Daily recommendation report
 
 `daily-report` is the end-to-end output: it scans the configured universe,
