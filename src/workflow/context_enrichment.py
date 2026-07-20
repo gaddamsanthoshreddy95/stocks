@@ -22,8 +22,9 @@ class ContextEnrichment:
     market_cache_ttl_seconds = 5 * 60
     relative_strength_cache_ttl_seconds = 15 * 60
 
-    def __init__(self, live: bool):
+    def __init__(self, live: bool, sector_history_provider=None):
         self.live = live
+        self.sector_history_provider = sector_history_provider
 
     def market_and_sectors(self, force_refresh: bool = False):
         if not self.live:
@@ -53,7 +54,7 @@ class ContextEnrichment:
                      "forex": snapshot.get("forex", {}),
                      "vix": snapshot.get("volatility")}
             try:
-                sectors = SectorStrength().analyze()
+                sectors = SectorStrength(self.sector_history_provider).analyze()
             except Exception as exc:
                 sectors = {}
                 market_result["sector_data_status"] = "FAILED"

@@ -202,7 +202,11 @@ def dashboard(platform: TradingPlatform, database: ReportDatabase) -> None:
         with st.spinner("Loading global indices, commodities and forex…"):
             # This button explicitly requests internet market context. Global
             # and sector quotes come from Yahoo and do not require Kite mode.
-            market, sectors = ContextEnrichment(True).market_and_sectors(force_refresh=True)
+            market, sectors = ContextEnrichment(
+                True,
+                sector_history_provider=(platform.provider
+                                         if platform.settings.market_data_source == "kite" else None),
+            ).market_and_sectors(force_refresh=True)
             st.session_state["global_market_context"] = market
             st.session_state["sector_market_context"] = sectors
             st.session_state["global_market_refresh_attempted"] = True
@@ -223,9 +227,15 @@ def dashboard(platform: TradingPlatform, database: ReportDatabase) -> None:
     st.subheader("Sector strength")
     sectors = st.session_state.get("sector_market_context", {})
     sector_rows = [{"Sector": name, "Status": row.get("status", "UNAVAILABLE"),
+                    "Source": row.get("source", "UNAVAILABLE"),
                     "Market score": row.get("score"), "Rating": row.get("rating", "UNAVAILABLE"),
                     "Contribution proxy %": row.get("contribution_proxy_percent"),
                     "Price": row.get("price"), "Change %": row.get("change_percent"),
+                    "Model": row.get("score_model"), "Samples": row.get("sample_count"),
+                    "Above 20 DMA %": row.get("breadth_above_20dma_percent"),
+                    "Above 50 DMA %": row.get("breadth_above_50dma_percent"),
+                    "Median 20D %": row.get("median_return_20d_percent"),
+                    "Median 5D %": row.get("median_return_5d_percent"),
                     "Reason": row.get("reason")}
                    for name, row in sectors.items()]
     if sector_rows:

@@ -1043,7 +1043,11 @@ class DailyTradingAssistant:
         logger.info("Daily stage screening: %.3fs", screening_seconds)
 
         context_started = perf_counter()
-        enrichment = ContextEnrichment(self.platform.settings.market_data_source == "kite")
+        enrichment = ContextEnrichment(
+            self.platform.settings.market_data_source == "kite",
+            sector_history_provider=(self.platform.provider
+                                     if self.platform.settings.market_data_source == "kite" else None),
+        )
         market_context, sector_strength = enrichment.market_and_sectors()
         try:
             self.event_context = self.event_service.build_daily_context(market_context)

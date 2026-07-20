@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from unittest.mock import Mock
+import pandas as pd
 from requests.exceptions import ConnectionError
 
 from src.application.settings import PlatformSettings
@@ -130,6 +131,32 @@ class ProductionHardeningTests(unittest.TestCase):
         self.assertTrue(all(row["score_model"] ==
                             "SECTOR_RETURN_CROSS_SECTIONAL_PERCENTILE"
                             for row in result.values()))
+
+    def test_sector_strength_prefers_kite_index_history(self):
+        history = pd.DataFrame({"Close": [100.0, 102.0]})
+        provider = Mock()
+        provider.get_data.return_value = history
+        engine = SectorStrength(historical_provider=provider)
+        engine.download_symbol = Mock(return_value=None)
+        result = engine.analyze()
+        self.assertTrue(all(row["status"] == "AVAILABLE" for row in result.values()))
+        self.assertTrue(all(row["source"] == "KITE" for row in result.values()))
+
+    def test_sector_strength_falls_back_to_constituent_composite(self):
+        history = pd.DataFrame({"Close": [100 + index * .5 for index in range(60)]})
+        provider = Mock()
+        provider.get_data.side_effect = lambda symbol: (
+            pd.DataFrame() if str(symbol).startswith("NIFTY ") else history
+        )
+        engine = SectorStrength(historical_provider=provider)
+        engine.download_symbol = Mock(return_value=None)
+        result = engine.analyze()
+        banking = result["BANKING"]
+        self.assertEqual(banking["status"], "AVAILABLE")
+        self.assertEqual(banking["source"], "KITE_CONSTITUENTS")
+        self.assertEqual(banking["score_model"], "CONSTITUENT_TECHNICAL_COMPOSITE")
+        self.assertIsNotNone(banking["score"])
+        self.assertGreater(banking["sample_count"], 0)
 
     def test_canonical_option_rejection_ignores_legacy_approval(self):
         trade = {
