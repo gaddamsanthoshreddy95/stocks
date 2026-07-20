@@ -26,7 +26,12 @@ class OptionEntryValidator:
             elif spot > call_resistance.strike:
                 warnings.append(f"breakout above Call-OI resistance {call_resistance.strike} lacks OI unwinding confirmation")
 
-        long_leg = next((leg for leg in trade.get("legs", []) if leg["side"] == "BUY"), None)
+        if not trade.get("available") or not trade.get("legs"):
+            approved = False
+            reasons.append((trade.get("rejection") or {}).get(
+                "reason", trade.get("reason", "No executable option legs are available.")))
+
+        long_leg = next((leg for leg in trade.get("legs", []) if leg.get("side") == "BUY"), None)
         if long_leg:
             delta = long_leg.get("delta")
             theta = long_leg.get("theta")

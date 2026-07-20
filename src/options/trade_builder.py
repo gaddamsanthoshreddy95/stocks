@@ -45,7 +45,11 @@ class OptionTradeBuilder:
         long_leg = cls._nearest(contracts, chain.spot_price)
         if long_leg is None:
             reason = "No executable option strike passes bid/ask, volume, OI, and spread filters."
-            return {"available": False, "reason": reason,
+            return {"available": False, "strategy": "Wait", "analysis_strategy": strategy,
+                    "expiry": chain.expiry, "spot_price": round(chain.spot_price, 2),
+                    "legs": [], "recommended_lots": 0, "recommended_quantity": 0,
+                    "maximum_profit": None, "maximum_loss": None, "breakeven": None,
+                    "risk_defined": False, "structure_type": "NONE", "reason": reason,
                     "rejection": {"code": "NO_LIQUID_CONTRACTS", "category": "LIQUIDITY", "reason": reason}}
 
         # Prefer a vertical spread for defined risk when a second liquid strike

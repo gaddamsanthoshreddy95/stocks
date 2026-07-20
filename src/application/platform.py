@@ -591,9 +591,23 @@ class TradingPlatform:
                 risk_budget=self.settings.option_risk_per_trade,
                 capital_available=self.settings.option_capital,
             )
+            # Builders must return a canonical payload, but normalize older or
+            # partial rejection dictionaries defensively at this boundary.
+            if not isinstance(trade, dict):
+                trade = {}
+            trade.setdefault("available", False)
+            trade.setdefault("strategy", "Wait")
+            trade.setdefault("analysis_strategy", analysis.suggested_strategy or "Wait")
+            trade.setdefault("expiry", chain.expiry)
+            trade.setdefault("legs", [])
+            trade.setdefault("reason", "No executable option structure was produced.")
+            trade.setdefault("rejection", {
+                "code": "OPTION_STRUCTURE_UNAVAILABLE", "category": "STRUCTURE",
+                "reason": trade["reason"],
+            })
             validation = OptionEntryValidator.validate(chain, trade, direction, self.settings)
             rejection = trade.get("rejection")
-            if trade["available"] and not validation["approved"]:
+            if trade.get("available") and not validation["approved"]:
                 rejection = {"code": "ENTRY_VALIDATION_FAILED", "category": "EXECUTION",
                              "reason": "; ".join(validation["reasons"])}
             # Bullish premium-selling plans have first refusal. Directional
@@ -607,18 +621,18 @@ class TradingPlatform:
                     "rejection_code": short_put.get("rejection_code"),
                 })
             candidates.append({
-                "strategy": trade["strategy"],
-                "available": bool(trade["available"] and validation["approved"]),
+                "strategy": trade.get("strategy", "Wait"),
+                "available": bool(trade.get("available") and validation["approved"]),
                 "source": "DIRECTIONAL_OPTION_ENGINE",
             })
             selected_strategy = next(
                 (item["strategy"] for item in candidates if item["available"]), "Wait"
             )
             return self._serialize({
-                "available": trade["available"],
+                "available": trade.get("available", False),
                 "reason": trade.get("reason"),
                 "expiry": chain.expiry,
-                "strategy": trade["strategy"],
+                "strategy": trade.get("strategy", "Wait"),
                 "analysis_strategy": analysis.suggested_strategy,
                 "direction": direction,
                 "confidence": analysis.confidence,
