@@ -98,6 +98,35 @@ each request.
 This project is for research and paper trading. It does not constitute
 investment advice.
 
+## Windows 10 local UI
+
+The local interface uses Streamlit and stores generated report snapshots in
+SQLite at `data/ui/stock_analyzer.db`. Analytical decisions still come only
+from `TradingPlatform`; the UI does not duplicate scoring logic or expose live
+order submission.
+
+1. Install 64-bit Python 3.12 and select **Add Python to PATH** during setup.
+2. Open Command Prompt in the project directory.
+3. Run `setup_windows.bat` once.
+4. Copy `.env.example` to `.env` and enter the current Kite API key and daily
+   access token. Never commit this file.
+5. Double-click `run_ui.bat`, or run it from Command Prompt.
+6. Open `http://localhost:8501` if the browser does not open automatically.
+
+For an offline demonstration, set `MARKET_DATA_SOURCE=cache` in `.env`. Cache
+mode cannot provide live relative strength, sector indices, news, quotes, or
+option-chain validation and reports those inputs as unavailable.
+
+The UI provides:
+
+- a summary dashboard and recent report history;
+- end-to-end daily report generation with configurable limit and minimum score;
+- candidate, rejected-candidate, context, dependency-health, text, and JSON views;
+- single-symbol analysis;
+- SQLite-backed immutable report snapshots and downloadable JSON.
+
+To stop the UI, close its Command Prompt window or press `Ctrl+C`.
+
 ## Daily recommendation report
 
 `daily-report` is the end-to-end output: it scans the configured universe,
