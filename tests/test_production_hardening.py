@@ -107,6 +107,30 @@ class ProductionHardeningTests(unittest.TestCase):
         self.assertTrue(all(row["rating"] == "UNAVAILABLE" for row in result.values()))
         self.assertTrue(all(row["score"] is None for row in result.values()))
 
+    def test_nan_sector_context_is_not_available_or_weak(self):
+        engine = SectorStrength()
+        engine.download_symbol = Mock(return_value={"price": float("nan"),
+                                                     "change_percent": float("nan")})
+        result = engine.analyze()
+        self.assertTrue(all(row["status"] == "UNAVAILABLE" for row in result.values()))
+        self.assertTrue(all(row["rating"] == "UNAVAILABLE" for row in result.values()))
+        self.assertTrue(all(row["score"] is None for row in result.values()))
+
+    def test_available_sectors_receive_cross_sectional_scores(self):
+        engine = SectorStrength()
+        changes = iter([-2.0, -1.0, 0.0, 1.0, 2.0] * 10)
+        engine.download_symbol = Mock(side_effect=lambda _symbol: {
+            "price": 100.0, "change_percent": next(changes),
+        })
+        result = engine.analyze()
+        scores = {row["score"] for row in result.values()}
+        self.assertGreater(len(scores), 1)
+        self.assertEqual(min(scores), 0.0)
+        self.assertEqual(max(scores), 100.0)
+        self.assertTrue(all(row["score_model"] ==
+                            "SECTOR_RETURN_CROSS_SECTIONAL_PERCENTILE"
+                            for row in result.values()))
+
     def test_canonical_option_rejection_ignores_legacy_approval(self):
         trade = {
             "option_trade_approval": {"status": "REJECTED"},

@@ -204,10 +204,14 @@ def dashboard(platform: TradingPlatform, database: ReportDatabase) -> None:
     sectors = st.session_state.get("sector_market_context", {})
     sector_rows = [{"Sector": name, "Status": row.get("status", "UNAVAILABLE"),
                     "Market score": row.get("score"), "Rating": row.get("rating", "UNAVAILABLE"),
+                    "Contribution proxy %": row.get("contribution_proxy_percent"),
                     "Price": row.get("price"), "Change %": row.get("change_percent"),
                     "Reason": row.get("reason")}
                    for name, row in sectors.items()]
     if sector_rows:
+        st.caption("Market score is the sector's cross-sectional return percentile (0–100). "
+                   "Contribution proxy is the signed share of absolute sector-index movement; "
+                   "it is not official Nifty constituent attribution.")
         st.dataframe(pd.DataFrame(sector_rows), width="stretch", hide_index=True)
     else:
         st.info("Sector strength is unavailable. Refresh in live mode to request sector-index data.")

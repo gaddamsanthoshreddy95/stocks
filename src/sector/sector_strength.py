@@ -4,6 +4,8 @@ Sector Strength Engine
 Calculates today's strength for every sector.
 """
 
+import math
+
 import pandas as pd
 
 from src.market_data.base_provider import BaseMarketProvider
@@ -46,45 +48,56 @@ class SectorStrength(BaseMarketProvider):
 
                 continue
 
-            cp = data["change_percent"]
+            try:
+                price = float(data["price"])
+                cp = float(data["change_percent"])
+            except (KeyError, TypeError, ValueError):
+                price = cp = float("nan")
 
-            if cp >= 1:
-
-                rating = "STRONG"
-
-                score = 90
-
-            elif cp > 0:
-
-                rating = "BULLISH"
-
-                score = 75
-
-            elif cp > -1:
-
-                rating = "NEUTRAL"
-
-                score = 55
-
-            else:
-
-                rating = "WEAK"
-
-                score = 30
+            if not math.isfinite(price) or not math.isfinite(cp):
+                report[sector] = {"available": False, "status": "UNAVAILABLE", "score": None,
+                                  "rating": "UNAVAILABLE", "price": None,
+                                  "change_percent": None,
+                                  "reason": f"Invalid index data for {symbol}"}
+                continue
 
             report[sector] = {
 
                 "available": True,
                 "status": "AVAILABLE",
 
-                "price": data["price"],
+                "price": price,
 
                 "change_percent": cp,
 
-                "rating": rating,
+                "rating": None,
 
-                "score": score
+                "score": None
 
             }
+
+        # Score sectors against one another instead of assigning the same
+        # fixed number to every member of a broad daily-change bucket.
+        available = [(name, row) for name, row in report.items()
+                     if row.get("status") == "AVAILABLE"]
+        changes = sorted({row["change_percent"] for _, row in available})
+        activity = sum(abs(row["change_percent"]) for _, row in available)
+        for _, row in available:
+            percentile = (50.0 if len(changes) == 1 else
+                          100.0 * changes.index(row["change_percent"]) / (len(changes) - 1))
+            row["score"] = round(percentile, 2)
+            row["score_model"] = "SECTOR_RETURN_CROSS_SECTIONAL_PERCENTILE"
+            row["contribution_proxy_percent"] = (
+                round(100.0 * row["change_percent"] / activity, 2) if activity else 0.0
+            )
+            row["contribution_model"] = "EQUAL_WEIGHT_SECTOR_INDEX_MOVE_PROXY"
+            if percentile >= 75:
+                row["rating"] = "STRONG"
+            elif percentile >= 55:
+                row["rating"] = "BULLISH"
+            elif percentile >= 40:
+                row["rating"] = "NEUTRAL"
+            else:
+                row["rating"] = "WEAK"
 
         return report

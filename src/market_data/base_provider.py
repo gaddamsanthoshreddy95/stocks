@@ -6,6 +6,8 @@ Downloads market data using Yahoo Finance.
 All market providers inherit from this class.
 """
 
+import math
+
 import pandas as pd
 import yfinance as yf
 
@@ -36,6 +38,12 @@ class BaseMarketProvider:
 
             close = float(df["Close"].iloc[-1])
             previous = float(df["Close"].iloc[-2])
+
+            # yfinance can return rows whose Close values are NaN.  NaN does
+            # not raise during arithmetic and would otherwise be mistaken for
+            # a real negative sector move by downstream bucket logic.
+            if not math.isfinite(close) or not math.isfinite(previous) or previous <= 0:
+                return None
 
             change = round(close - previous, 2)
 
