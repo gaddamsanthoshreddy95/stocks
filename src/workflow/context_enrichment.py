@@ -38,6 +38,9 @@ class ContextEnrichment:
             indices = snapshot.get("india", {})
             result = ({"available": True, "regime": regime.status, "score": regime.score,
                      "confidence": regime.confidence, "reasons": regime.reasons, "indices": indices,
+                     "global": snapshot.get("global", {}),
+                     "commodities": snapshot.get("commodities", {}),
+                     "forex": snapshot.get("forex", {}),
                      "vix": snapshot.get("volatility")}, SectorStrength().analyze())
         except Exception as exc:  # Provider failure must not stop recommendations.
             result = ({"available": False, "regime": "UNAVAILABLE", "score": 0, "confidence": 0,

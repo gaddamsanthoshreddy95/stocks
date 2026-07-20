@@ -61,6 +61,17 @@ def candidate_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def snapshot_rows(group: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = []
+    for name, quote in (group or {}).items():
+        if isinstance(quote, dict):
+            rows.append({"Market": name.replace("_", " ").title(),
+                         "Price": quote.get("price"), "Change": quote.get("change"),
+                         "Change %": quote.get("change_percent"),
+                         "Status": "AVAILABLE" if quote.get("price") is not None else "UNAVAILABLE"})
+    return rows
+
+
 def show_report(report: dict[str, Any]) -> None:
     summary_cards(report)
     tabs = st.tabs(["Candidates", "Market & context", "Rejected", "Complete report", "JSON"])
@@ -70,6 +81,24 @@ def show_report(report: dict[str, Any]) -> None:
             "No executable or watchlist candidates were produced. Review rejected candidates for exact reasons."
         )
     with tabs[1]:
+        market = report.get("market", {})
+        st.subheader("Global markets")
+        global_rows = snapshot_rows(market.get("global", {}))
+        if global_rows:
+            st.dataframe(pd.DataFrame(global_rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("Global market data is unavailable for this run. Live Kite mode still depends on Yahoo global-index connectivity.")
+        context_columns = st.columns(2)
+        with context_columns[0]:
+            st.subheader("Commodities")
+            commodity_rows = snapshot_rows(market.get("commodities", {}))
+            st.dataframe(pd.DataFrame(commodity_rows), use_container_width=True,
+                         hide_index=True) if commodity_rows else st.info("Commodity data unavailable.")
+        with context_columns[1]:
+            st.subheader("Forex")
+            forex_rows = snapshot_rows(market.get("forex", {}))
+            st.dataframe(pd.DataFrame(forex_rows), use_container_width=True,
+                         hide_index=True) if forex_rows else st.info("Forex data unavailable.")
         st.subheader("Sector context")
         st.dataframe(pd.DataFrame(report.get("sector_ranking", [])), use_container_width=True,
                      hide_index=True)
