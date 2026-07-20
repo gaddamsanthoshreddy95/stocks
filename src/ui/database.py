@@ -42,6 +42,30 @@ class ReportDatabase:
                 );
                 CREATE INDEX IF NOT EXISTS idx_report_runs_generated_at
                     ON report_runs(generated_at DESC);
+                CREATE TABLE IF NOT EXISTS actual_trades (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    instrument_type TEXT NOT NULL CHECK(instrument_type IN ('EQUITY','OPTION')),
+                    side TEXT NOT NULL CHECK(side IN ('BUY','SELL')),
+                    strategy TEXT,
+                    option_type TEXT CHECK(option_type IS NULL OR option_type IN ('CE','PE')),
+                    strike REAL,
+                    expiry TEXT,
+                    quantity INTEGER NOT NULL CHECK(quantity > 0),
+                    entry_date TEXT NOT NULL,
+                    entry_price REAL NOT NULL CHECK(entry_price > 0),
+                    stop_loss REAL,
+                    target_price REAL,
+                    status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN','CLOSED')),
+                    exit_date TEXT,
+                    exit_price REAL,
+                    fees REAL NOT NULL DEFAULT 0,
+                    realized_pnl REAL,
+                    notes TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_actual_trades_status
+                    ON actual_trades(status, entry_date DESC);
                 """
             )
             connection.commit()
@@ -86,6 +110,98 @@ class ReportDatabase:
                 "SELECT report_json FROM report_runs WHERE id = ?", (int(report_id),)
             ).fetchone()
         return json.loads(row["report_json"]) if row else None
+
+    def delete_report(self, report_id: int) -> bool:
+        with closing(self._connect()) as connection:
+            cursor = connection.execute("DELETE FROM report_runs WHERE id = ?", (int(report_id),))
+            connection.commit()
+            return cursor.rowcount == 1
+
+    def add_actual_trade(self, trade: dict[str, Any]) -> int:
+        symbol = str(trade.get("symbol", "")).strip().upper().removesuffix(".NS")
+        instrument = str(trade.get("instrument_type", "EQUITY")).upper()
+        side = str(trade.get("side", "BUY")).upper()
+        quantity = int(trade.get("quantity", 0))
+        entry_price = float(trade.get("entry_price", 0))
+        if not symbol or instrument not in {"EQUITY", "OPTION"} or side not in {"BUY", "SELL"}:
+            raise ValueError("Symbol, instrument type, or side is invalid.")
+        if quantity <= 0 or entry_price <= 0:
+            raise ValueError("Quantity and entry price must be positive.")
+        option_type = str(trade.get("option_type") or "").upper() or None
+        if instrument == "OPTION" and option_type not in {"CE", "PE"}:
+            raise ValueError("Option trades require CE or PE.")
+        with closing(self._connect()) as connection:
+            cursor = connection.execute(
+                """INSERT INTO actual_trades (
+                    created_at, symbol, instrument_type, side, strategy, option_type,
+                    strike, expiry, quantity, entry_date, entry_price, stop_loss,
+                    target_price, fees, notes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (datetime.now(timezone.utc).isoformat(), symbol, instrument, side,
+                 str(trade.get("strategy") or ""), option_type,
+                 float(trade["strike"]) if trade.get("strike") else None,
+                 str(trade.get("expiry") or "") or None, quantity,
+                 str(trade.get("entry_date")), entry_price,
+                 float(trade["stop_loss"]) if trade.get("stop_loss") else None,
+                 float(trade["target_price"]) if trade.get("target_price") else None,
+                 max(0.0, float(trade.get("fees") or 0)), str(trade.get("notes") or "")),
+            )
+            connection.commit()
+            return int(cursor.lastrowid)
+
+    def list_actual_trades(self, status: str | None = None) -> list[dict[str, Any]]:
+        query = "SELECT * FROM actual_trades"
+        parameters: tuple[Any, ...] = ()
+        if status:
+            status = status.upper()
+            if status not in {"OPEN", "CLOSED"}:
+                raise ValueError("Trade status must be OPEN or CLOSED.")
+            query += " WHERE status = ?"
+            parameters = (status,)
+        query += " ORDER BY entry_date DESC, id DESC"
+        with closing(self._connect()) as connection:
+            return [dict(row) for row in connection.execute(query, parameters).fetchall()]
+
+    def close_actual_trade(self, trade_id: int, exit_date: str, exit_price: float,
+                           additional_fees: float = 0) -> float:
+        exit_price, additional_fees = float(exit_price), max(0.0, float(additional_fees))
+        if exit_price <= 0:
+            raise ValueError("Exit price must be positive.")
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM actual_trades WHERE id = ?", (int(trade_id),)
+            ).fetchone()
+            if not row or row["status"] != "OPEN":
+                raise ValueError("Open trade was not found.")
+            direction = 1 if row["side"] == "BUY" else -1
+            fees = float(row["fees"] or 0) + additional_fees
+            pnl = (exit_price - float(row["entry_price"])) * int(row["quantity"]) * direction - fees
+            connection.execute(
+                """UPDATE actual_trades SET status='CLOSED', exit_date=?, exit_price=?,
+                   fees=?, realized_pnl=? WHERE id=?""",
+                (str(exit_date), exit_price, fees, round(pnl, 2), int(trade_id)),
+            )
+            connection.commit()
+            return round(pnl, 2)
+
+    def delete_actual_trade(self, trade_id: int) -> bool:
+        with closing(self._connect()) as connection:
+            cursor = connection.execute("DELETE FROM actual_trades WHERE id = ?", (int(trade_id),))
+            connection.commit()
+            return cursor.rowcount == 1
+
+    def actual_trade_summary(self) -> dict[str, Any]:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """SELECT COUNT(*) total,
+                          SUM(CASE WHEN status='OPEN' THEN 1 ELSE 0 END) open_count,
+                          SUM(CASE WHEN status='CLOSED' THEN 1 ELSE 0 END) closed_count,
+                          COALESCE(SUM(realized_pnl), 0) realized_pnl
+                   FROM actual_trades"""
+            ).fetchone()
+        return {"total": int(row["total"] or 0), "open": int(row["open_count"] or 0),
+                "closed": int(row["closed_count"] or 0),
+                "realized_pnl": round(float(row["realized_pnl"] or 0), 2)}
 
     def counts(self) -> dict[str, int]:
         with closing(self._connect()) as connection:

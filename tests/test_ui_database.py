@@ -30,6 +30,43 @@ class ReportDatabaseTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertEqual(database.counts()["reports"], 1)
 
+    def test_selected_report_can_be_deleted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = ReportDatabase(Path(directory) / "reports.db")
+            report_id = database.save_report(
+                {"run_id": "delete-me", "date": "2026-07-20", "market": {}, "summary": {}},
+                "cache",
+            )
+            self.assertTrue(database.delete_report(report_id))
+            self.assertIsNone(database.get_report(report_id))
+            self.assertFalse(database.delete_report(report_id))
+
+    def test_actual_trade_round_trip_and_buy_pnl(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = ReportDatabase(Path(directory) / "reports.db")
+            trade_id = database.add_actual_trade({
+                "symbol": "SBIN", "instrument_type": "EQUITY", "side": "BUY",
+                "quantity": 10, "entry_date": "2026-07-20", "entry_price": 800,
+                "fees": 10,
+            })
+            self.assertEqual(database.actual_trade_summary()["open"], 1)
+            pnl = database.close_actual_trade(trade_id, "2026-07-21", 810, 5)
+            self.assertEqual(pnl, 85)
+            self.assertEqual(database.list_actual_trades()[0]["status"], "CLOSED")
+            self.assertEqual(database.actual_trade_summary()["realized_pnl"], 85)
+
+    def test_actual_sell_trade_pnl_and_delete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = ReportDatabase(Path(directory) / "reports.db")
+            trade_id = database.add_actual_trade({
+                "symbol": "NIFTY", "instrument_type": "OPTION", "option_type": "PE",
+                "strike": 25000, "expiry": "2026-07-30", "side": "SELL",
+                "quantity": 75, "entry_date": "2026-07-20", "entry_price": 100,
+            })
+            self.assertEqual(database.close_actual_trade(trade_id, "2026-07-21", 80), 1500)
+            self.assertTrue(database.delete_actual_trade(trade_id))
+            self.assertEqual(database.list_actual_trades(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

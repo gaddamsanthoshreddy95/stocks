@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -342,9 +343,106 @@ def history_page(database: ReportDatabase) -> None:
     labels = {f"#{row['id']} — {row['generated_at']} — {row['market_regime']}": row["id"] for row in history}
     selected = st.selectbox("Open saved report", list(labels))
     if selected:
-        report = database.get_report(labels[selected])
+        report_id = labels[selected]
+        delete_columns = st.columns([1, 2])
+        confirmed = delete_columns[0].checkbox("Confirm deletion", key=f"confirm-report-{report_id}")
+        if delete_columns[1].button("Delete selected report", type="secondary",
+                                    disabled=not confirmed):
+            if database.delete_report(report_id):
+                st.success(f"Deleted report #{report_id}. This cannot be undone.")
+                st.rerun()
+        report = database.get_report(report_id)
         if report:
             show_report(report)
+
+
+def trade_tracker_page(database: ReportDatabase) -> None:
+    st.title("Actual trade tracker")
+    st.caption("Record trades you actually placed. This journal never sends broker orders.")
+    summary = database.actual_trade_summary()
+    columns = st.columns(4)
+    columns[0].metric("Recorded", summary["total"])
+    columns[1].metric("Open", summary["open"])
+    columns[2].metric("Closed", summary["closed"])
+    columns[3].metric("Realized P&L", f"₹{summary['realized_pnl']:,.2f}")
+
+    with st.expander("Add an actual trade", expanded=not summary["total"]):
+        with st.form("actual-trade-entry", clear_on_submit=True):
+            first = st.columns(4)
+            symbol = first[0].text_input("Symbol", placeholder="SBIN").strip().upper()
+            instrument = first[1].selectbox("Instrument", ("EQUITY", "OPTION"))
+            side = first[2].selectbox("Side", ("BUY", "SELL"))
+            quantity = first[3].number_input("Quantity", min_value=1, value=1, step=1)
+            second = st.columns(4)
+            entry_date = second[0].date_input("Entry date", value=date.today())
+            entry_price = second[1].number_input("Entry price", min_value=0.01, value=1.0, step=0.05)
+            stop_loss = second[2].number_input("Stop loss (optional)", min_value=0.0, value=0.0)
+            target = second[3].number_input("Target (optional)", min_value=0.0, value=0.0)
+            third = st.columns(4)
+            strategy = third[0].text_input("Strategy", placeholder="Swing / Long Call")
+            option_type = third[1].selectbox("Option type", ("CE", "PE"),
+                                             help="Used only when Instrument is OPTION")
+            strike = third[2].number_input("Strike (options)", min_value=0.0, value=0.0)
+            expiry = third[3].date_input("Expiry (options)", value=date.today())
+            fees = st.number_input("Entry fees/taxes", min_value=0.0, value=0.0)
+            notes = st.text_area("Notes")
+            add = st.form_submit_button("Save actual trade", type="primary")
+        if add:
+            try:
+                trade_id = database.add_actual_trade({
+                    "symbol": symbol, "instrument_type": instrument, "side": side,
+                    "quantity": int(quantity), "entry_date": entry_date.isoformat(),
+                    "entry_price": entry_price, "stop_loss": stop_loss or None,
+                    "target_price": target or None, "strategy": strategy,
+                    "option_type": option_type if instrument == "OPTION" else None,
+                    "strike": strike if instrument == "OPTION" else None,
+                    "expiry": expiry.isoformat() if instrument == "OPTION" else None,
+                    "fees": fees, "notes": notes,
+                })
+                st.success(f"Actual trade #{trade_id} saved.")
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+
+    trades = database.list_actual_trades()
+    if not trades:
+        st.info("No actual trades recorded yet.")
+        return
+    display_columns = ["id", "symbol", "instrument_type", "side", "strategy", "option_type",
+                       "strike", "expiry", "quantity", "entry_date", "entry_price", "stop_loss",
+                       "target_price", "status", "exit_date", "exit_price", "fees", "realized_pnl", "notes"]
+    st.dataframe(pd.DataFrame(trades)[display_columns], width="stretch", hide_index=True)
+
+    open_trades = [trade for trade in trades if trade["status"] == "OPEN"]
+    if open_trades:
+        st.subheader("Close an open trade")
+        open_labels = {f"#{trade['id']} — {trade['symbol']} — {trade['side']} {trade['quantity']}": trade["id"]
+                       for trade in open_trades}
+        with st.form("close-actual-trade"):
+            close_label = st.selectbox("Open trade", list(open_labels))
+            close_columns = st.columns(3)
+            exit_date = close_columns[0].date_input("Exit date", value=date.today())
+            exit_price = close_columns[1].number_input("Exit price", min_value=0.01, value=1.0, step=0.05)
+            exit_fees = close_columns[2].number_input("Additional exit fees", min_value=0.0, value=0.0)
+            close = st.form_submit_button("Close trade", type="primary")
+        if close:
+            try:
+                pnl = database.close_actual_trade(open_labels[close_label], exit_date.isoformat(),
+                                                  exit_price, exit_fees)
+                st.success(f"Trade closed. Realized P&L: ₹{pnl:,.2f}")
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+
+    st.subheader("Delete an incorrectly entered trade")
+    trade_labels = {f"#{trade['id']} — {trade['symbol']} — {trade['status']}": trade["id"] for trade in trades}
+    delete_label = st.selectbox("Trade record", list(trade_labels), key="delete-trade-record")
+    delete_confirmed = st.checkbox("I confirm this trade record should be permanently deleted")
+    if st.button("Delete selected trade record", disabled=not delete_confirmed):
+        trade_id = trade_labels[delete_label]
+        if database.delete_actual_trade(trade_id):
+            st.success(f"Deleted actual trade record #{trade_id}. This cannot be undone.")
+            st.rerun()
 
 
 def system_page(platform: TradingPlatform, database: ReportDatabase) -> None:
@@ -371,7 +469,8 @@ def main() -> None:
     platform, database = services()
     with st.sidebar:
         st.header("Navigation")
-        page = st.radio("Page", ("Dashboard", "Daily report", "Bearish options", "Analyze", "History", "System"),
+        page = st.radio("Page", ("Dashboard", "Daily report", "Bearish options", "Analyze",
+                                 "Trade tracker", "History", "System"),
                         label_visibility="collapsed")
         st.divider()
         st.caption(f"Source: {platform.settings.market_data_source.upper()}")
@@ -384,6 +483,8 @@ def main() -> None:
         analyze_page(platform)
     elif page == "Bearish options":
         bearish_options_page(platform)
+    elif page == "Trade tracker":
+        trade_tracker_page(database)
     elif page == "History":
         history_page(database)
     else:
