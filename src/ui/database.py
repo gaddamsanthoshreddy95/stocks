@@ -166,6 +166,42 @@ class ReportDatabase:
             ).fetchall()
         return {str(row["symbol"]): str(row["execution_status"]) for row in rows}
 
+    def list_traded_suggestions(self) -> list[dict[str, Any]]:
+        """Join user execution marks to the immutable recommendation snapshot."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT m.run_id, m.symbol, m.updated_at, r.id report_id,
+                          r.generated_at, r.report_date, r.report_json
+                   FROM candidate_execution_marks m
+                   JOIN report_runs r ON r.run_id = m.run_id
+                   WHERE m.execution_status = 'TRADED'
+                   ORDER BY m.updated_at DESC"""
+            ).fetchall()
+        results = []
+        for row in rows:
+            report = json.loads(row["report_json"])
+            candidate, original_status = None, "UNKNOWN"
+            for bucket, status in (("trades", "TRADE"), ("watchlist", "WATCHLIST"),
+                                   ("rejected", "REJECTED")):
+                candidate = next((item for item in report.get(bucket, [])
+                                  if str(item.get("symbol", "")).upper() == row["symbol"]), None)
+                if candidate is not None:
+                    original_status = str(candidate.get("status") or status)
+                    break
+            candidate = candidate or {}
+            results.append({
+                "report_id": int(row["report_id"]), "run_id": row["run_id"],
+                "report_date": row["report_date"], "report_generated_at": row["generated_at"],
+                "marked_traded_at": row["updated_at"], "symbol": row["symbol"],
+                "original_status": original_status,
+                "original_action": candidate.get("final_action") or candidate.get("action"),
+                "quality_grade": candidate.get("quality_grade"),
+                "readiness": candidate.get("execution_readiness_score"),
+                "entry": (candidate.get("levels") or {}).get("entry"),
+                "option_approval": (candidate.get("option_trade_approval") or {}).get("status"),
+            })
+        return results
+
     def add_actual_trade(self, trade: dict[str, Any]) -> int:
         symbol = str(trade.get("symbol", "")).strip().upper().removesuffix(".NS")
         instrument = str(trade.get("instrument_type", "EQUITY")).upper()

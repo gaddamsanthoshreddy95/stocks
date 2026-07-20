@@ -80,6 +80,21 @@ class ReportDatabaseTests(unittest.TestCase):
             self.assertEqual(database.list_reports(), [])
             self.assertEqual(database.get_candidate_executions("run-a"), {})
 
+    def test_traded_suggestions_preserve_original_recommendation_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = ReportDatabase(Path(directory) / "reports.db")
+            database.save_report({
+                "run_id": "run-rejected", "date": "2026-07-20", "market": {}, "summary": {},
+                "trades": [], "watchlist": [],
+                "rejected": [{"symbol": "PREMIERENE", "status": "REJECTED",
+                              "final_action": "REJECT", "execution_readiness_score": 55}],
+            }, "cache")
+            database.set_candidate_execution("run-rejected", "PREMIERENE", True)
+            rows = database.list_traded_suggestions()
+            self.assertEqual(rows[0]["symbol"], "PREMIERENE")
+            self.assertEqual(rows[0]["original_status"], "REJECTED")
+            self.assertEqual(rows[0]["original_action"], "REJECT")
+
 
 if __name__ == "__main__":
     unittest.main()

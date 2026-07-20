@@ -79,6 +79,22 @@ def option_leg_rows(trade: dict[str, Any]) -> list[dict[str, Any]]:
     } for leg in plan.get("legs", [])]
 
 
+def execution_mark_control(database: ReportDatabase | None, run_id: str, symbol: str,
+                           current_mark: str = "NOT_TRADED", key_prefix: str = "candidate") -> None:
+    if not database or not run_id or not symbol:
+        return
+    mark = st.radio(
+        "Did you actually trade this suggestion?",
+        ("NOT_TRADED", "TRADED"),
+        index=1 if current_mark == "TRADED" else 0,
+        horizontal=True,
+        key=f"execution-mark-{key_prefix}-{run_id}-{symbol}",
+    )
+    if st.button("Save traded status", key=f"save-execution-{key_prefix}-{run_id}-{symbol}"):
+        database.set_candidate_execution(run_id, symbol, mark == "TRADED")
+        st.success(f"{symbol} saved as {mark}.")
+
+
 def selected_stock_details(report: dict[str, Any], database: ReportDatabase | None = None) -> None:
     selected = [*report.get("trades", []), *report.get("watchlist", [])]
     run_id = str(report.get("run_id", ""))
@@ -89,19 +105,9 @@ def selected_stock_details(report: dict[str, Any], database: ReportDatabase | No
         plan = option.get("trade") or {}
         label = f"{trade.get('symbol')} — {trade.get('final_action')} — {trade.get('status')}"
         with st.expander(label):
-            if database and run_id:
-                symbol = str(trade.get("symbol", ""))
-                current_mark = execution_marks.get(symbol, "NOT_TRADED")
-                mark = st.radio(
-                    "Did you actually trade this suggestion?",
-                    ("NOT_TRADED", "TRADED"),
-                    index=1 if current_mark == "TRADED" else 0,
-                    horizontal=True,
-                    key=f"execution-mark-{run_id}-{symbol}",
-                )
-                if st.button("Save traded status", key=f"save-execution-{run_id}-{symbol}"):
-                    database.set_candidate_execution(run_id, symbol, mark == "TRADED")
-                    st.success(f"{symbol} saved as {mark}.")
+            symbol = str(trade.get("symbol", ""))
+            execution_mark_control(database, run_id, symbol,
+                                   execution_marks.get(symbol, "NOT_TRADED"), "selected")
             if trade.get("status") != "TRADE":
                 st.warning("Watchlist/research candidate only — this is not an executable trade. "
                            "Position quantity remains zero until every final gate passes.")
@@ -188,8 +194,16 @@ def show_report(report: dict[str, Any], database: ReportDatabase | None = None) 
     with tabs[2]:
         rejected = report.get("rejected", [])
         if rejected:
+            run_id = str(report.get("run_id", ""))
+            execution_marks = (database.get_candidate_executions(run_id)
+                               if database and run_id else {})
             for item in rejected:
                 with st.expander(str(item.get("symbol", "UNKNOWN"))):
+                    symbol = str(item.get("symbol", "UNKNOWN"))
+                    st.error("Analytical status: REJECTED. Marking this as TRADED records your "
+                             "actual action and does not convert it into an approved recommendation.")
+                    execution_mark_control(database, run_id, symbol,
+                                           execution_marks.get(symbol, "NOT_TRADED"), "rejected")
                     for reason in item.get("reasons", []):
                         st.write(f"• {reason}")
         else:
@@ -389,6 +403,13 @@ def history_page(database: ReportDatabase) -> None:
 def trade_tracker_page(database: ReportDatabase) -> None:
     st.title("Actual trade tracker")
     st.caption("Record trades you actually placed. This journal never sends broker orders.")
+    st.subheader("All suggestions marked TRADED")
+    traded_suggestions = database.list_traded_suggestions()
+    if traded_suggestions:
+        st.dataframe(pd.DataFrame(traded_suggestions), width="stretch", hide_index=True)
+        st.caption("Original status is preserved from the report snapshot: TRADE, WATCHLIST, or REJECTED.")
+    else:
+        st.info("No report suggestions have been marked TRADED yet.")
     summary = database.actual_trade_summary()
     columns = st.columns(4)
     columns[0].metric("Recorded", summary["total"])

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-20T21:34:44.900265+00:00",
+  "generated_at": "2026-07-20T21:43:51.443991+00:00",
   "events": [
     {
       "event_id": "MARKET-WIDE-20260720",
@@ -17,7 +17,7 @@
       "event_end": null,
       "expected_duration": "ONE_TO_THREE_DAYS",
       "raw_score": 70.0,
-      "decayed_score": 47.29,
+      "decayed_score": 47.08,
       "confidence": 0.95,
       "freshness_score": 25,
       "materiality": 1.0,
