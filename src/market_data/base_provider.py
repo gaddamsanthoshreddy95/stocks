@@ -7,12 +7,22 @@ All market providers inherit from this class.
 """
 
 import math
+from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
 import yfinance as yf
 
 
 class BaseMarketProvider:
+
+    def download_symbols(self, symbols: dict[str, str]) -> dict:
+        """Download independent quotes concurrently for interactive refreshes."""
+        items = list(symbols.items())
+        if not items:
+            return {}
+        with ThreadPoolExecutor(max_workers=min(8, len(items))) as executor:
+            values = executor.map(lambda item: self.download_symbol(item[1]), items)
+        return {name: value for (name, _), value in zip(items, values)}
 
     def download_symbol(self, symbol: str):
 
@@ -22,7 +32,8 @@ class BaseMarketProvider:
                 symbol,
                 period="5d",
                 progress=False,
-                auto_adjust=False
+                auto_adjust=False,
+                timeout=8,
             )
 
             if df is None or df.empty:

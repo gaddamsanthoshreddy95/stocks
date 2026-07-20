@@ -36,7 +36,17 @@ class ContextEnrichment:
             snapshot = MarketDataHub().get_market_snapshot()
             regime = MarketRegime.classify(snapshot)
             indices = snapshot.get("india", {})
-            market_result = {"available": True, "regime": regime.status, "score": regime.score,
+            quote_groups = (indices, snapshot.get("global", {}),
+                            snapshot.get("commodities", {}), snapshot.get("forex", {}))
+            usable_quotes = sum(
+                1 for group in quote_groups for quote in (group or {}).values()
+                if isinstance(quote, dict) and quote.get("price") is not None
+            )
+            market_result = {"available": usable_quotes > 0,
+                     "reason": None if usable_quotes else "No usable Yahoo Finance quotes returned",
+                     "usable_quote_count": usable_quotes,
+                     "source_errors": snapshot.get("source_errors", {}),
+                     "regime": regime.status if usable_quotes else "UNAVAILABLE", "score": regime.score,
                      "confidence": regime.confidence, "reasons": regime.reasons, "indices": indices,
                      "global": snapshot.get("global", {}),
                      "commodities": snapshot.get("commodities", {}),

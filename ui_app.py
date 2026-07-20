@@ -49,6 +49,7 @@ def candidate_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
         event = trade.get("event_risk", {})
         rows.append({
             "Symbol": trade.get("symbol"), "Status": trade.get("status"),
+            "Executable trade": "YES" if trade.get("status") == "TRADE" else "NO",
             "Action": trade.get("final_action"), "Quality": trade.get("quality_grade"),
             "Quality score": trade.get("quality_score"),
             "Readiness": trade.get("execution_readiness_score"),
@@ -83,6 +84,9 @@ def selected_stock_details(report: dict[str, Any]) -> None:
         plan = option.get("trade") or {}
         label = f"{trade.get('symbol')} — {trade.get('final_action')} — {trade.get('status')}"
         with st.expander(label):
+            if trade.get("status") != "TRADE":
+                st.warning("Watchlist/research candidate only — this is not an executable trade. "
+                           "Position quantity remains zero until every final gate passes.")
             columns = st.columns(4)
             columns[0].metric("Current price", value(trade.get("current_price")))
             columns[1].metric("Support", value(levels.get("support")))
@@ -97,13 +101,15 @@ def selected_stock_details(report: dict[str, Any]) -> None:
             st.write(f"**Expiry:** {plan.get('expiry', option.get('expiry', 'UNAVAILABLE'))}")
             st.write(f"**Canonical structure:** {trade.get('option_structure', {}).get('status', 'UNAVAILABLE')}")
             st.write(f"**Canonical approval:** {trade.get('option_trade_approval', {}).get('status', 'UNAVAILABLE')}")
-            legs = option_leg_rows(trade)
+            approval = trade.get("option_trade_approval", {}).get("status")
+            legs = option_leg_rows(trade) if approval == "APPROVED" and trade.get("status") == "TRADE" else []
             if legs:
                 st.markdown("**Exact option strikes**")
                 st.dataframe(pd.DataFrame(legs), width="stretch", hide_index=True)
             else:
                 rejection = option.get("rejection") or {}
-                st.warning(rejection.get("reason", option.get("reason", "No executable option strike was approved.")))
+                st.warning(rejection.get("reason", option.get("reason",
+                           "No executable option strike was approved for this candidate.")))
 
 
 def snapshot_rows(group: dict[str, Any]) -> list[dict[str, Any]]:
@@ -114,6 +120,9 @@ def snapshot_rows(group: dict[str, Any]) -> list[dict[str, Any]]:
                          "Price": quote.get("price"), "Change": quote.get("change"),
                          "Change %": quote.get("change_percent"),
                          "Status": "AVAILABLE" if quote.get("price") is not None else "UNAVAILABLE"})
+        else:
+            rows.append({"Market": name.replace("_", " ").title(), "Price": None,
+                         "Change": None, "Change %": None, "Status": "UNAVAILABLE"})
     return rows
 
 
@@ -126,7 +135,9 @@ def show_report(report: dict[str, Any]) -> None:
             "No executable or watchlist candidates were produced. Review rejected candidates for exact reasons."
         )
         if rows:
-            st.subheader("Selected-stock levels and option strikes")
+            st.subheader("Candidate levels and approved option strikes")
+            st.caption("This section includes both executable trades and watchlist candidates. "
+                       "Only rows marked TRADE / Executable trade YES are actionable paper-trade plans.")
             selected_stock_details(report)
     with tabs[1]:
         market = report.get("market", {})
@@ -189,17 +200,26 @@ def dashboard(platform: TradingPlatform, database: ReportDatabase) -> None:
     st.subheader("Live global market snapshot")
     if st.button("Refresh global markets"):
         with st.spinner("Loading global indices, commodities and forex…"):
-            market, sectors = ContextEnrichment(
-                platform.settings.market_data_source == "kite"
-            ).market_and_sectors(force_refresh=True)
+            # This button explicitly requests internet market context. Global
+            # and sector quotes come from Yahoo and do not require Kite mode.
+            market, sectors = ContextEnrichment(True).market_and_sectors(force_refresh=True)
             st.session_state["global_market_context"] = market
             st.session_state["sector_market_context"] = sectors
+            st.session_state["global_market_refresh_attempted"] = True
     market = st.session_state.get("global_market_context", {})
     global_rows = snapshot_rows(market.get("global", {}))
+    global_available = sum(row["Status"] == "AVAILABLE" for row in global_rows)
     if global_rows:
         st.dataframe(pd.DataFrame(global_rows), width="stretch", hide_index=True)
-    else:
-        st.info("Press Refresh global markets. Live mode and working internet access are required.")
+    if not global_available:
+        if st.session_state.get("global_market_refresh_attempted"):
+            st.error(f"Market refresh returned no usable global quotes. Reason: "
+                     f"{market.get('reason', 'Yahoo Finance returned no data')}. "
+                     "Check internet/firewall access to query1.finance.yahoo.com and try again.")
+        elif not global_rows:
+            st.info("Press Refresh global markets. Working internet access is required.")
+    elif global_available < len(global_rows):
+        st.warning(f"Partial market refresh: {global_available}/{len(global_rows)} global quotes are available.")
     st.subheader("Sector strength")
     sectors = st.session_state.get("sector_market_context", {})
     sector_rows = [{"Sector": name, "Status": row.get("status", "UNAVAILABLE"),

@@ -22,15 +22,4 @@ class IndiaMarketProvider(BaseMarketProvider):
         }
 
     def get_snapshot(self):
-
-        data = {}
-
-        for name, symbol in self.symbols.items():
-
-            snapshot = self.download_symbol(symbol)
-
-            if snapshot is not None:
-
-                data[name] = snapshot
-
-        return data
+        return self.download_symbols(self.symbols)

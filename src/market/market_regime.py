@@ -21,7 +21,7 @@ class MarketRegime:
         # INDIA
         # ----------------------------------------
 
-        nifty = snapshot["india"]["nifty"]
+        nifty = snapshot.get("india", {}).get("nifty")
 
         if nifty:
 
@@ -51,7 +51,7 @@ class MarketRegime:
         # BANK NIFTY
         # ----------------------------------------
 
-        bank = snapshot["india"]["banknifty"]
+        bank = snapshot.get("india", {}).get("banknifty")
 
         if bank:
 
@@ -81,7 +81,7 @@ class MarketRegime:
         # US FUTURES
         # ----------------------------------------
 
-        us = snapshot["global"]["sp500_futures"]
+        us = snapshot.get("global", {}).get("sp500_futures")
 
         if us:
 
@@ -111,7 +111,7 @@ class MarketRegime:
         # INDIA VIX
         # ----------------------------------------
 
-        vix = snapshot["volatility"]
+        vix = snapshot.get("volatility")
 
         if vix:
 

@@ -16,10 +16,17 @@ class UIMarketContextTests(unittest.TestCase):
 
     def test_candidate_rows_expose_support_and_resistance(self):
         rows = candidate_rows({"trades": [{
-            "symbol": "SBIN", "levels": {"support": 790, "resistance": 825},
+            "symbol": "SBIN", "status": "TRADE",
+            "levels": {"support": 790, "resistance": 825},
         }]})
         self.assertEqual(rows[0]["Support"], 790)
         self.assertEqual(rows[0]["Resistance"], 825)
+        self.assertEqual(rows[0]["Executable trade"], "YES")
+
+    def test_watchlist_candidate_is_not_presented_as_executable(self):
+        rows = candidate_rows({"watchlist": [{"symbol": "PREMIERENE",
+                                               "status": "WATCHLIST", "levels": {}}]})
+        self.assertEqual(rows[0]["Executable trade"], "NO")
 
     def test_option_leg_rows_expose_exact_trade_strikes(self):
         rows = option_leg_rows({"option_strategy": {"trade": {"legs": [{

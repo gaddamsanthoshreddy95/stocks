@@ -33,13 +33,21 @@ class SectorStrength(BaseMarketProvider):
 
         report = {}
 
+        requested = {
+            str(row["Sector"]): self.SECTOR_INDEX_SYMBOLS.get(
+                str(row["Sector"]), row["IndexSymbol"]
+            )
+            for _, row in self.indices.iterrows()
+        }
+        downloads = self.download_symbols(requested)
+
         for _, row in self.indices.iterrows():
 
             sector = row["Sector"]
 
             symbol = self.SECTOR_INDEX_SYMBOLS.get(sector, row["IndexSymbol"])
 
-            data = self.download_symbol(symbol)
+            data = downloads.get(sector)
 
             if data is None:
 

@@ -9,6 +9,7 @@ calling providers directly.
 """
 
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 from src.market_data.global_provider import GlobalMarketProvider
 from src.market_data.india_provider import IndiaMarketProvider
@@ -34,19 +35,21 @@ class MarketDataHub:
     # -------------------------------------------------
 
     def get_market_snapshot(self):
-
-        return {
-
-            "timestamp": datetime.now(),
-
-            "india": self.india_provider.get_snapshot(),
-
-            "global": self.global_provider.get_snapshot(),
-
-            "commodities": self.commodity_provider.get_snapshot(),
-
-            "forex": self.forex_provider.get_snapshot(),
-
-            "volatility": self.volatility_provider.get_snapshot()
-
+        providers = {
+            "india": self.india_provider.get_snapshot,
+            "global": self.global_provider.get_snapshot,
+            "commodities": self.commodity_provider.get_snapshot,
+            "forex": self.forex_provider.get_snapshot,
+            "volatility": self.volatility_provider.get_snapshot,
         }
+        results = {}
+        errors = {}
+        with ThreadPoolExecutor(max_workers=len(providers)) as executor:
+            futures = {name: executor.submit(fetch) for name, fetch in providers.items()}
+            for name, future in futures.items():
+                try:
+                    results[name] = future.result()
+                except Exception as exc:
+                    results[name] = None if name == "volatility" else {}
+                    errors[name] = exc.__class__.__name__
+        return {"timestamp": datetime.now(), **results, "source_errors": errors}

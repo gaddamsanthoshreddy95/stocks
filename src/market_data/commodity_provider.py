@@ -57,8 +57,4 @@ class CommodityProvider(BaseMarketProvider):
         }
 
     def get_snapshot(self):
-
-        return {
-            name: self.download_symbol(symbol)
-            for name, symbol in self.SYMBOLS.items()
-        }
+        return self.download_symbols(self.SYMBOLS)
