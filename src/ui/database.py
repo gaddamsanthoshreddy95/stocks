@@ -66,6 +66,13 @@ class ReportDatabase:
                 );
                 CREATE INDEX IF NOT EXISTS idx_actual_trades_status
                     ON actual_trades(status, entry_date DESC);
+                CREATE TABLE IF NOT EXISTS candidate_execution_marks (
+                    run_id TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    execution_status TEXT NOT NULL CHECK(execution_status IN ('TRADED','NOT_TRADED')),
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (run_id, symbol)
+                );
                 """
             )
             connection.commit()
@@ -112,10 +119,52 @@ class ReportDatabase:
         return json.loads(row["report_json"]) if row else None
 
     def delete_report(self, report_id: int) -> bool:
+        return self.delete_reports([report_id]) == 1
+
+    def delete_reports(self, report_ids: list[int]) -> int:
+        ids = sorted({int(item) for item in report_ids})
+        if not ids:
+            return 0
+        placeholders = ",".join("?" for _ in ids)
         with closing(self._connect()) as connection:
-            cursor = connection.execute("DELETE FROM report_runs WHERE id = ?", (int(report_id),))
+            run_ids = [row["run_id"] for row in connection.execute(
+                f"SELECT run_id FROM report_runs WHERE id IN ({placeholders})", ids
+            ).fetchall()]
+            cursor = connection.execute(
+                f"DELETE FROM report_runs WHERE id IN ({placeholders})", ids
+            )
+            if run_ids:
+                run_placeholders = ",".join("?" for _ in run_ids)
+                connection.execute(
+                    f"DELETE FROM candidate_execution_marks WHERE run_id IN ({run_placeholders})",
+                    run_ids,
+                )
             connection.commit()
-            return cursor.rowcount == 1
+            return int(cursor.rowcount)
+
+    def set_candidate_execution(self, run_id: str, symbol: str, traded: bool) -> None:
+        run_id, symbol = str(run_id).strip(), str(symbol).strip().upper().removesuffix(".NS")
+        if not run_id or not symbol:
+            raise ValueError("Run ID and symbol are required.")
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """INSERT INTO candidate_execution_marks
+                   (run_id, symbol, execution_status, updated_at) VALUES (?, ?, ?, ?)
+                   ON CONFLICT(run_id, symbol) DO UPDATE SET
+                     execution_status=excluded.execution_status,
+                     updated_at=excluded.updated_at""",
+                (run_id, symbol, "TRADED" if traded else "NOT_TRADED",
+                 datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
+
+    def get_candidate_executions(self, run_id: str) -> dict[str, str]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT symbol, execution_status FROM candidate_execution_marks WHERE run_id = ?",
+                (str(run_id),),
+            ).fetchall()
+        return {str(row["symbol"]): str(row["execution_status"]) for row in rows}
 
     def add_actual_trade(self, trade: dict[str, Any]) -> int:
         symbol = str(trade.get("symbol", "")).strip().upper().removesuffix(".NS")

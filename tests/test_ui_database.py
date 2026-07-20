@@ -67,6 +67,19 @@ class ReportDatabaseTests(unittest.TestCase):
             self.assertTrue(database.delete_actual_trade(trade_id))
             self.assertEqual(database.list_actual_trades(), [])
 
+    def test_candidate_trade_mark_and_bulk_report_delete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = ReportDatabase(Path(directory) / "reports.db")
+            first = database.save_report(
+                {"run_id": "run-a", "date": "2026-07-20", "market": {}, "summary": {}}, "cache")
+            second = database.save_report(
+                {"run_id": "run-b", "date": "2026-07-21", "market": {}, "summary": {}}, "cache")
+            database.set_candidate_execution("run-a", "PREMIERENE", True)
+            self.assertEqual(database.get_candidate_executions("run-a")["PREMIERENE"], "TRADED")
+            self.assertEqual(database.delete_reports([first, second]), 2)
+            self.assertEqual(database.list_reports(), [])
+            self.assertEqual(database.get_candidate_executions("run-a"), {})
+
 
 if __name__ == "__main__":
     unittest.main()

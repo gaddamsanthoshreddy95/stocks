@@ -44,13 +44,15 @@ def summary_cards(report: dict[str, Any]) -> None:
         column.metric(label, metric)
 
 
-def candidate_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
+def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    execution_marks = execution_marks or {}
     rows = []
     for trade in [*report.get("trades", []), *report.get("watchlist", [])]:
         event = trade.get("event_risk", {})
         rows.append({
             "Symbol": trade.get("symbol"), "Status": trade.get("status"),
             "Executable trade": "YES" if trade.get("status") == "TRADE" else "NO",
+            "Actually traded": execution_marks.get(str(trade.get("symbol")), "NOT_TRADED"),
             "Action": trade.get("final_action"), "Quality": trade.get("quality_grade"),
             "Quality score": trade.get("quality_score"),
             "Readiness": trade.get("execution_readiness_score"),
@@ -77,14 +79,29 @@ def option_leg_rows(trade: dict[str, Any]) -> list[dict[str, Any]]:
     } for leg in plan.get("legs", [])]
 
 
-def selected_stock_details(report: dict[str, Any]) -> None:
+def selected_stock_details(report: dict[str, Any], database: ReportDatabase | None = None) -> None:
     selected = [*report.get("trades", []), *report.get("watchlist", [])]
+    run_id = str(report.get("run_id", ""))
+    execution_marks = database.get_candidate_executions(run_id) if database and run_id else {}
     for trade in selected:
         levels = trade.get("levels", {})
         option = trade.get("option_strategy", {})
         plan = option.get("trade") or {}
         label = f"{trade.get('symbol')} — {trade.get('final_action')} — {trade.get('status')}"
         with st.expander(label):
+            if database and run_id:
+                symbol = str(trade.get("symbol", ""))
+                current_mark = execution_marks.get(symbol, "NOT_TRADED")
+                mark = st.radio(
+                    "Did you actually trade this suggestion?",
+                    ("NOT_TRADED", "TRADED"),
+                    index=1 if current_mark == "TRADED" else 0,
+                    horizontal=True,
+                    key=f"execution-mark-{run_id}-{symbol}",
+                )
+                if st.button("Save traded status", key=f"save-execution-{run_id}-{symbol}"):
+                    database.set_candidate_execution(run_id, symbol, mark == "TRADED")
+                    st.success(f"{symbol} saved as {mark}.")
             if trade.get("status") != "TRADE":
                 st.warning("Watchlist/research candidate only — this is not an executable trade. "
                            "Position quantity remains zero until every final gate passes.")
@@ -127,11 +144,13 @@ def snapshot_rows(group: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def show_report(report: dict[str, Any]) -> None:
+def show_report(report: dict[str, Any], database: ReportDatabase | None = None) -> None:
     summary_cards(report)
     tabs = st.tabs(["Candidates", "Market & context", "Rejected", "Complete report", "JSON"])
     with tabs[0]:
-        rows = candidate_rows(report)
+        marks = (database.get_candidate_executions(str(report.get("run_id")))
+                 if database and report.get("run_id") else {})
+        rows = candidate_rows(report, marks)
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True) if rows else st.info(
             "No executable or watchlist candidates were produced. Review rejected candidates for exact reasons."
         )
@@ -139,7 +158,7 @@ def show_report(report: dict[str, Any]) -> None:
             st.subheader("Candidate levels and approved option strikes")
             st.caption("This section includes both executable trades and watchlist candidates. "
                        "Only rows marked TRADE / Executable trade YES are actionable paper-trade plans.")
-            selected_stock_details(report)
+            selected_stock_details(report, database)
     with tabs[1]:
         market = report.get("market", {})
         st.subheader("Global markets")
@@ -312,7 +331,7 @@ def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> No
                 st.error(str(exc))
     report = st.session_state.get("current_report")
     if report:
-        show_report(report)
+        show_report(report, database)
 
 
 def analyze_page(platform: TradingPlatform) -> None:
@@ -341,19 +360,30 @@ def history_page(database: ReportDatabase) -> None:
         return
     st.dataframe(pd.DataFrame(history), width="stretch", hide_index=True)
     labels = {f"#{row['id']} — {row['generated_at']} — {row['market_regime']}": row["id"] for row in history}
+    st.subheader("Delete report history")
+    delete_scope = st.radio("Deletion scope", ("Selected reports", "All reports"), horizontal=True)
+    selected_for_deletion = (
+        st.multiselect("Reports to delete", list(labels)) if delete_scope == "Selected reports"
+        else list(labels)
+    )
+    delete_count = len(selected_for_deletion)
+    confirmed = st.checkbox(
+        f"I confirm permanent deletion of {delete_count} report(s)",
+        key="confirm-bulk-report-delete",
+    )
+    if st.button("Delete report history", type="secondary",
+                 disabled=not confirmed or delete_count == 0):
+        deleted = database.delete_reports([labels[label] for label in selected_for_deletion])
+        st.success(f"Deleted {deleted} report(s). This cannot be undone.")
+        st.rerun()
+
+    st.subheader("Open a saved report")
     selected = st.selectbox("Open saved report", list(labels))
     if selected:
         report_id = labels[selected]
-        delete_columns = st.columns([1, 2])
-        confirmed = delete_columns[0].checkbox("Confirm deletion", key=f"confirm-report-{report_id}")
-        if delete_columns[1].button("Delete selected report", type="secondary",
-                                    disabled=not confirmed):
-            if database.delete_report(report_id):
-                st.success(f"Deleted report #{report_id}. This cannot be undone.")
-                st.rerun()
         report = database.get_report(report_id)
         if report:
-            show_report(report)
+            show_report(report, database)
 
 
 def trade_tracker_page(database: ReportDatabase) -> None:
