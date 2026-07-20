@@ -324,13 +324,8 @@
     "outcome": null
   },
   {
-<<<<<<< Updated upstream
-    "id": "UNIONBANK-20260720135926630149",
-    "created_at": "2026-07-20T13:59:26.630168+00:00",
-=======
     "id": "UNIONBANK-20260720140305862516",
     "created_at": "2026-07-20T14:03:05.862568+00:00",
->>>>>>> Stashed changes
     "symbol": "UNIONBANK",
     "strategy": "Bull Call Spread",
     "setup": "BREAKOUT",
@@ -339,87 +334,6 @@
     "direction": "BULLISH",
     "ai_score": 79.31,
     "estimated_probability": 91.55,
-    "option_strategy": "BULL_PUT_SPREAD",
-    "option_approved": true,
-    "option_expiry": "2026-07-28",
-    "option_strike": 165.0,
-    "option_delta": -0.10225669660980286,
-    "option_iv": 35.17,
-    "option_probability": 88.81,
-    "option_net_credit": 0.14,
-    "outcome": null
-  },
-  {
-<<<<<<< Updated upstream
-    "id": "UNIONBANK-20260720142056595304",
-    "created_at": "2026-07-20T14:20:56.595329+00:00",
-=======
-    "id": "UNIONBANK-20260720141340194839",
-    "created_at": "2026-07-20T14:13:40.194883+00:00",
->>>>>>> Stashed changes
-    "symbol": "UNIONBANK",
-    "strategy": "Bull Call Spread",
-    "setup": "BREAKOUT",
-    "market_regime": "UNCERTAIN_BEARISH",
-    "sector": "DIVERSIFIED",
-    "direction": "BULLISH",
-    "ai_score": 79.31,
-<<<<<<< Updated upstream
-    "estimated_probability": 91.55,
-=======
-    "estimated_probability": 92.7,
->>>>>>> Stashed changes
-    "option_strategy": "BULL_PUT_SPREAD",
-    "option_approved": true,
-    "option_expiry": "2026-07-28",
-    "option_strike": 165.0,
-    "option_delta": -0.10225669660980286,
-    "option_iv": 35.17,
-    "option_probability": 88.81,
-    "option_net_credit": 0.14,
-    "outcome": null
-  },
-  {
-<<<<<<< Updated upstream
-    "id": "UNIONBANK-20260720142253864344",
-    "created_at": "2026-07-20T14:22:53.864364+00:00",
-=======
-    "id": "UNIONBANK-20260720141440087215",
-    "created_at": "2026-07-20T14:14:40.087293+00:00",
->>>>>>> Stashed changes
-    "symbol": "UNIONBANK",
-    "strategy": "Bull Call Spread",
-    "setup": "BREAKOUT",
-    "market_regime": "UNCERTAIN_BEARISH",
-    "sector": "DIVERSIFIED",
-    "direction": "BULLISH",
-    "ai_score": 79.31,
-<<<<<<< Updated upstream
-    "estimated_probability": 91.55,
-=======
-    "estimated_probability": 92.7,
-    "option_strategy": "BULL_PUT_SPREAD",
-    "option_approved": true,
-    "option_expiry": "2026-07-28",
-    "option_strike": 165.0,
-    "option_delta": -0.10225669660980286,
-    "option_iv": 35.17,
-    "option_probability": 88.81,
-    "option_net_credit": 0.14,
-    "outcome": null
-  },
-  {
-    "id": "UNIONBANK-20260720142124619174",
-    "created_at": "2026-07-20T14:21:24.619217+00:00",
-    "symbol": "UNIONBANK",
-    "strategy": "Bull Call Spread",
-    "setup": "BREAKOUT",
-    "market_regime": "UNCERTAIN_BEARISH",
-    "sector": "DIVERSIFIED",
-    "direction": "BULLISH",
-    "ai_score": 79.31,
-    "estimated_probability": 92.7,
->>>>>>> Stashed changes
     "option_strategy": "BULL_PUT_SPREAD",
     "option_approved": true,
     "option_expiry": "2026-07-28",
