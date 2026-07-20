@@ -77,7 +77,7 @@ def show_report(report: dict[str, Any]) -> None:
     tabs = st.tabs(["Candidates", "Market & context", "Rejected", "Complete report", "JSON"])
     with tabs[0]:
         rows = candidate_rows(report)
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True) if rows else st.info(
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True) if rows else st.info(
             "No executable or watchlist candidates were produced. Review rejected candidates for exact reasons."
         )
     with tabs[1]:
@@ -85,22 +85,22 @@ def show_report(report: dict[str, Any]) -> None:
         st.subheader("Global markets")
         global_rows = snapshot_rows(market.get("global", {}))
         if global_rows:
-            st.dataframe(pd.DataFrame(global_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(global_rows), width="stretch", hide_index=True)
         else:
             st.info("Global market data is unavailable for this run. Live Kite mode still depends on Yahoo global-index connectivity.")
         context_columns = st.columns(2)
         with context_columns[0]:
             st.subheader("Commodities")
             commodity_rows = snapshot_rows(market.get("commodities", {}))
-            st.dataframe(pd.DataFrame(commodity_rows), use_container_width=True,
+            st.dataframe(pd.DataFrame(commodity_rows), width="stretch",
                          hide_index=True) if commodity_rows else st.info("Commodity data unavailable.")
         with context_columns[1]:
             st.subheader("Forex")
             forex_rows = snapshot_rows(market.get("forex", {}))
-            st.dataframe(pd.DataFrame(forex_rows), use_container_width=True,
+            st.dataframe(pd.DataFrame(forex_rows), width="stretch",
                          hide_index=True) if forex_rows else st.info("Forex data unavailable.")
         st.subheader("Sector context")
-        st.dataframe(pd.DataFrame(report.get("sector_ranking", [])), use_container_width=True,
+        st.dataframe(pd.DataFrame(report.get("sector_ranking", [])), width="stretch",
                      hide_index=True)
         st.subheader("Context availability")
         st.json(report.get("context_statistics", {}), expanded=True)
@@ -135,7 +135,7 @@ def dashboard(platform: TradingPlatform, database: ReportDatabase) -> None:
     history = database.list_reports(10)
     st.subheader("Recent reports")
     if history:
-        st.dataframe(pd.DataFrame(history), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(history), width="stretch", hide_index=True)
     else:
         st.info("Generate the first daily report from the Daily report page.")
 
@@ -186,7 +186,7 @@ def history_page(database: ReportDatabase) -> None:
     if not history:
         st.info("No reports have been saved yet.")
         return
-    st.dataframe(pd.DataFrame(history), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(history), width="stretch", hide_index=True)
     labels = {f"#{row['id']} — {row['generated_at']} — {row['market_regime']}": row["id"] for row in history}
     selected = st.selectbox("Open saved report", list(labels))
     if selected:
