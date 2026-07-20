@@ -41,7 +41,7 @@ class SectorStrength(BaseMarketProvider):
 
             if data is None:
 
-                report[sector] = {"available": False, "score": 50,
+                report[sector] = {"available": False, "status": "UNAVAILABLE", "score": None,
                                   "rating": "UNAVAILABLE", "reason": f"No index data for {symbol}"}
 
                 continue
@@ -75,6 +75,7 @@ class SectorStrength(BaseMarketProvider):
             report[sector] = {
 
                 "available": True,
+                "status": "AVAILABLE",
 
                 "price": data["price"],
 

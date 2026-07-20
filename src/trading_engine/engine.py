@@ -29,9 +29,10 @@ class TradingEngine:
             "realized_volatility_percent": round(float(returns.std() * (252 ** .5) * 100), 2) if not returns.empty else 0,
         }
 
-    def __init__(self, provider=None):
+    def __init__(self, provider=None, settings=None):
 
         self.provider = provider or DataProvider()
+        self.settings = settings
 
     def analyze(self, symbol: str):
 
@@ -75,7 +76,7 @@ class TradingEngine:
         candlestick = PatternDetector.detect(df)
 
         setup_evaluation = SetupEntryEvaluator.evaluate(
-            df, analysis, entry, breakout, candlestick
+            df, analysis, entry, breakout, candlestick, settings=self.settings
         )
 
         # --------------------------------------------------

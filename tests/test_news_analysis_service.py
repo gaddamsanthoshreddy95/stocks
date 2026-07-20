@@ -57,7 +57,8 @@ class NewsAnalysisServiceTests(unittest.TestCase):
         result = NewsAnalysisService.analyze("SBIN", analyzer=analyzer)
 
         self.assertFalse(result["available"])
-        self.assertEqual(result["sentiment"], "NEUTRAL")
+        self.assertEqual(result["sentiment"], "UNAVAILABLE")
+        self.assertEqual(result["news_state"], "FETCH_FAILED")
         self.assertEqual(result["score"], 0)
         self.assertEqual(result["analysis_method"], "AI_UNAVAILABLE")
 
@@ -115,6 +116,19 @@ class NewsAnalysisServiceTests(unittest.TestCase):
             ["First article", "Second article"], top_k=None, truncation=True, batch_size=2
         )
         nlp.pipe.assert_called_once_with(["First article", "Second article"], batch_size=2)
+
+    @patch("spacy.load", side_effect=OSError("model missing"))
+    def test_missing_spacy_does_not_disable_finbert_sentiment(self, _load):
+        sentiment_pipeline = Mock(return_value=[
+            {"label": "positive", "score": .8},
+            {"label": "negative", "score": .1},
+            {"label": "neutral", "score": .1},
+        ])
+        analyzer = AISentimentAnalyzer(sentiment_pipeline=sentiment_pipeline, nlp=None)
+        result = analyzer.analyze("SBIN", [{"title": "Results", "description": "Update"}])
+        self.assertEqual(result["sentiment"], "BULLISH")
+        self.assertEqual(result["analysis_provider"], "LOCAL_FINBERT")
+        self.assertEqual(result["entities"], [])
 
     @patch("src.news.analysis_service.requests.get")
     def test_default_news_analysis_is_cached_across_requests(self, get):

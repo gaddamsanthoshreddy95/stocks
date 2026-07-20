@@ -30,7 +30,9 @@ class DecisionEngine:
         # --------------------------------------------------
 
         category = setup.get("stage_1", {}).get("category", "REJECT")
-        confirmed = setup.get("stage_2", {}).get("eligible", False)
+        confirmed = bool((setup.get("entry_confirmation") or {}).get(
+            "passed", setup.get("stage_2", {}).get("eligible", False)
+        ))
 
         if category == "REJECT" or score < 40:
 

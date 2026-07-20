@@ -8,6 +8,7 @@ except ImportError as exc:  # Keeps importing the analysis package dependency-li
 
 from src.application.errors import PlatformError
 from src.application.platform import TradingPlatform
+from src.news.ai_sentiment import AISentimentAnalyzer
 
 app = FastAPI(title="AI Quantitative Trading Platform", version="1.0.0")
 platform = TradingPlatform()
@@ -39,8 +40,9 @@ def _call(operation):
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "mode": "paper"}
+def health() -> dict:
+    return {"status": "ok", "mode": "paper",
+            "dependencies": AISentimentAnalyzer().dependency_health()}
 
 
 @app.post("/analyze")
@@ -54,8 +56,9 @@ def suggestions(limit: int = 5, minimum_score: int = 40):
 
 
 @app.get("/daily-report")
-def daily_report(limit: int = 5, minimum_score: int = 40):
-    return _call(lambda: platform.daily_report(limit, minimum_score))
+def daily_report(limit: int = 5, minimum_score: int = 40,
+                 option_month: str | None = None):
+    return _call(lambda: platform.daily_report(limit, minimum_score, option_month))
 
 
 @app.post("/backtest")

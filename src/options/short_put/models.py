@@ -116,3 +116,4 @@ class ShortPutStrategyPlan:
     strike_search: dict = field(default_factory=dict)
     annualized_return_on_margin_percent: float = 0.0
     actionable_recommendations: list[str] = field(default_factory=list)
+    best_rejected_candidate: dict | None = None

@@ -80,7 +80,7 @@ class NewsAnalysisService:
             return {
                 "available": False,
                 "score": 0,
-                "sentiment": "NEUTRAL",
+                "sentiment": "UNAVAILABLE",
                 "confidence": 0,
                 "article_count": 0,
                 "events": [],
@@ -88,6 +88,9 @@ class NewsAnalysisService:
                 "reasons": [f"News feed unavailable: {exc.__class__.__name__}."],
                 "analysis_method": "UNAVAILABLE",
                 "score_impact": 0,
+                "requested": True, "fetch_failed": True,
+                "collection_state": "FETCH_FAILED", "analysis_state": "FETCH_FAILED",
+                "news_state": "FETCH_FAILED",
                 "timings": {"network_seconds": round(perf_counter() - network_started, 3),
                             "model_load_seconds": 0, "inference_seconds": 0},
             }
@@ -107,26 +110,32 @@ class NewsAnalysisService:
 
         count = len(articles)
         if not articles:
-            return {"available": False, "score": 0, "sentiment": "NEUTRAL", "confidence": 0,
+            return {"available": False, "score": 0, "sentiment": "UNAVAILABLE", "confidence": 0,
                     "article_count": 0, "events": [], "headlines": [], "materiality": "NONE",
                     "trade_impact": "NONE", "analysis_method": "UNAVAILABLE", "score_impact": 0,
-                    "reasons": ["No news articles were available for AI analysis; score impact is neutral."],
+                    "requested": True, "collection_state": "FETCHED",
+                    "analysis_state": "NO_RELEVANT_NEWS", "news_state": "NO_RELEVANT_NEWS",
+                    "reasons": ["No relevant news articles were available for analysis."],
                     "timings": {"network_seconds": round(network_seconds, 3),
                                 "model_load_seconds": 0, "inference_seconds": 0}}
         ai_analyzer = analyzer or cls._shared_analyzer()
         try:
             assessment = ai_analyzer.analyze(symbol, articles)
         except AISentimentError as exc:
-            return {"available": False, "score": 0, "sentiment": "NEUTRAL", "confidence": 0,
+            return {"available": False, "score": 0, "sentiment": "UNAVAILABLE", "confidence": 0,
                     "article_count": count, "events": [], "headlines": articles[:3],
                     "materiality": "NONE", "trade_impact": "NONE",
                     "score_impact": 0,
-                    "reasons": [f"{exc} Score impact is neutral."], "analysis_method": "AI_UNAVAILABLE",
+                    "requested": True, "fetch_failed": True, "collection_state": "FETCHED",
+                    "analysis_state": "FETCH_FAILED", "news_state": "FETCH_FAILED",
+                    "reasons": [str(exc)], "analysis_method": "AI_UNAVAILABLE",
                     "timings": {"network_seconds": round(network_seconds, 3),
                                 "model_load_seconds": 0, "inference_seconds": 0}}
         ai_timings = assessment.get("timings", {})
         result = {
             "available": True,
+            "requested": True, "collection_state": "FETCHED",
+            "analysis_state": "ANALYZED", "news_state": "ANALYZED",
             "score": round(float(assessment["score"]), 2),
             "sentiment": assessment["sentiment"],
             "confidence": round(float(assessment["confidence"]), 2),
@@ -138,6 +147,7 @@ class NewsAnalysisService:
             "reasons": assessment["reasoning"],
             "article_assessments": assessment["article_assessments"],
             "entities": assessment.get("entities", []),
+            "entity_model_available": bool(assessment.get("entity_model_available", False)),
             "analysis_method": assessment.get("analysis_provider", "LOCAL_AI_MODEL"),
             "model": ai_analyzer.model,
             "generated_at": datetime.now(timezone.utc).isoformat(),

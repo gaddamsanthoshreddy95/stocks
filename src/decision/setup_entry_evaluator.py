@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.config.trading_config import EQUITY_MIN_RISK_REWARD
+from src.workflow.final_decision import EntryConfirmationResult
 
 
 class SetupEntryEvaluator:
     @staticmethod
     def evaluate(df: pd.DataFrame, analysis, entry: dict, breakout: dict,
-                 candlestick: dict) -> dict:
+                 candlestick: dict, settings=None) -> dict:
+        if settings is None:
+            from src.application.settings import PlatformSettings
+            settings = PlatformSettings()
         latest = df.iloc[-1]
         close = float(latest["Close"])
         ema20, ema50, ema200 = (float(latest[name]) for name in ("EMA20", "EMA50", "EMA200"))
@@ -24,17 +27,18 @@ class SetupEntryEvaluator:
             float(previous["MACD"]) - float(previous["MACD_SIGNAL"]),
         ))
         support = entry.get("support")
-        support_nearby = bool(support and close > 0 and 0 <= (close - support) / close <= .04)
+        support_nearby = bool(support and close > 0 and
+                              0 <= (close - support) / close <= settings.setup_support_near_percent / 100)
 
         bullish_candle = candlestick.get("signal") == "BUY"
         macd_above_signal = macd > macd_signal
         macd_turning_up = macd_above_signal and histogram >= previous_histogram
-        volume_expansion = rvol >= 1.2
+        volume_expansion = rvol >= settings.entry_confirmation_relative_volume
         above_ema20 = close > ema20
         bullish_stack = close > ema20 > ema50 > ema200
         long_trend_intact = ema50 > ema200 and close > ema200
-        good_risk_reward = (entry.get("risk_reward") or 0) >= EQUITY_MIN_RISK_REWARD
-        reversal_setup = rsi < 35 and macd_turning_up and support_nearby and good_risk_reward
+        good_risk_reward = (entry.get("risk_reward") or 0) >= settings.equity_min_risk_reward
+        reversal_setup = rsi < settings.setup_reversal_rsi and macd_turning_up and support_nearby and good_risk_reward
         higher_highs_and_lows = False
         if len(df) >= 8 and {"High", "Low"}.issubset(df.columns):
             highs = pd.to_numeric(df["High"], errors="coerce")
@@ -56,7 +60,7 @@ class SetupEntryEvaluator:
             category = "REVERSAL CANDIDATE"
         elif long_trend_intact and close <= ema20 and support_nearby:
             category = "PULLBACK"
-        elif analysis.score >= 55:
+        elif analysis.score >= settings.setup_min_technical_score:
             category = "WATCHLIST"
         else:
             category = "REJECT"
@@ -71,8 +75,9 @@ class SetupEntryEvaluator:
             confirmation_checks["resistance_broken"] = bool(breakout.get("confirmed"))
 
         eligible = category != "REJECT" and all(confirmation_checks.values())
+        confirmation = EntryConfirmationResult.from_checks(confirmation_checks, required=True)
         setup_evidence = {
-            "oversold_rsi": rsi < 35,
+            "oversold_rsi": rsi < settings.setup_reversal_rsi,
             "macd_turning_up": macd_turning_up,
             "support_nearby": support_nearby,
             "risk_reward_at_least_1_5": good_risk_reward,
@@ -84,7 +89,8 @@ class SetupEntryEvaluator:
             "stage_2": {"eligible": eligible, "status": "TRADE_ELIGIBLE" if eligible else "WAIT",
                         "checks": confirmation_checks,
                         "missing": [name for name, passed in confirmation_checks.items() if not passed]},
-            "momentum_label": ("EARLY REVERSAL" if rsi < 35 and macd_turning_up
+            "entry_confirmation": confirmation.to_dict(),
+            "momentum_label": ("EARLY REVERSAL" if rsi < settings.setup_reversal_rsi and macd_turning_up
                                else "STRONG BULLISH" if bullish_stack and volume_expansion and higher_highs_and_lows
                                else "BULLISH" if above_ema20 and macd_above_signal else "BEARISH"),
         }

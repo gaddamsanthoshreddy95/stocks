@@ -64,7 +64,7 @@ class TradingPlatform:
             if self.settings.market_data_source == "kite"
             else DataProvider()
         )
-        self.engine = TradingEngine(provider=self.provider)
+        self.engine = TradingEngine(provider=self.provider, settings=self.settings)
         self.paper_broker = paper_broker or PaperBroker(starting_cash=self.settings.capital)
         self._option_chain_provider = None
         self._option_cache: dict[tuple, tuple[float, dict[str, Any]]] = {}
@@ -167,13 +167,13 @@ class TradingPlatform:
         try:
             report = self.engine.analyze(symbol)
         except TokenException as exc:
-            logger.error("Option authentication failed for %s: %s", candidate["symbol"], exc)
+            logger.error("Market-data authentication failed for %s: %s", symbol, exc)
             raise AuthenticationError(
                 "Zerodha Kite authentication failed. Update KITE_API_KEY and "
                 "generate a fresh KITE_ACCESS_TOKEN before running the platform."
             ) from exc
         except RequestException as exc:
-            logger.error("Option network request failed for %s: %s", candidate["symbol"], exc)
+            logger.error("Market-data network request failed for %s: %s", symbol, exc)
             raise DataUnavailableError(
                 "Unable to reach Zerodha Kite. Check your network connection and try again."
             ) from exc
@@ -241,13 +241,13 @@ class TradingPlatform:
             return []
         return sorted(path.name.removesuffix(".NS.csv") for path in Path(DATA_FOLDER).glob("*.NS.csv"))
 
-    def enrich_candidate(self, candidate: dict[str, Any]) -> dict[str, Any]:
+    def enrich_candidate(self, candidate: dict[str, Any], option_month: str | None = None) -> dict[str, Any]:
         """Add expensive long-history and option context to one finalist."""
         candidate = deepcopy(candidate)
         historical = self._historical_context(candidate["symbol"])
         candidate["current_month_seasonality"] = historical["current_month"]
         candidate["regime_history"] = historical["regime"]
-        candidate["options"] = self._option_trade_plan(candidate)
+        candidate["options"] = self._option_trade_plan(candidate, option_month)
         option_confidence = candidate["options"].get("confidence", 0)
         candidate["probability"] = round(min(
             95,
@@ -307,11 +307,11 @@ class TradingPlatform:
             liquidity = self._stock_liquidity(analysis)
             # Avoid names that are hard to enter/exit even if their chart score
             # is attractive. The threshold is deliberately modest for F&O names.
-            if liquidity["score"] < 40:
+            if liquidity["score"] < self.settings.candidate_min_liquidity_score:
                 return None
             increment("liquidity_passed")
             trust = self._trust_score(analysis, liquidity, report["market_quality"])
-            if trust["score"] < 55:
+            if trust["score"] < self.settings.candidate_min_trust_score:
                 return None
             increment("trust_passed")
             return {
@@ -323,6 +323,7 @@ class TradingPlatform:
                 "current_price": analysis["current_price"],
                 "stock_liquidity": liquidity,
                 "trust": trust,
+                "historical_gap_factor": round(1 + min(1, report["market_quality"].get("large_gap_days", 0) / 10), 3),
                 "risk_reward": report["trade_plan"]["risk_reward"],
                 "candlestick": report["candlestick"],
                 "setup_evaluation": report["setup_evaluation"],
@@ -394,20 +395,20 @@ class TradingPlatform:
             ),
         }
 
-    def _option_trade_plan(self, candidate: dict[str, Any]) -> dict[str, Any]:
+    def _option_trade_plan(self, candidate: dict[str, Any], option_month: str | None = None) -> dict[str, Any]:
         key = (
             candidate["symbol"], round(float(candidate["current_price"]), 1),
-            self.settings.trading_strategy_mode,
+            self.settings.trading_strategy_mode, option_month,
         )
         with self._option_cache_lock:
             cached = self._option_cache.get(key)
             if cached and monotonic() - cached[0] < self._option_cache_ttl_seconds:
                 return deepcopy(cached[1])
-            result = self._option_trade_plan_uncached(candidate)
+            result = self._option_trade_plan_uncached(candidate, option_month)
             self._option_cache[key] = (monotonic(), deepcopy(result))
             return result
 
-    def _option_trade_plan_uncached(self, candidate: dict[str, Any]) -> dict[str, Any]:
+    def _option_trade_plan_uncached(self, candidate: dict[str, Any], option_month: str | None = None) -> dict[str, Any]:
         """Enrich only final candidates with live option-chain intelligence."""
         if self.settings.market_data_source != "kite":
             return {"available": False, "error_type": "DATA_SOURCE",
@@ -424,7 +425,7 @@ class TradingPlatform:
                     self.provider.provider.kite, instruments=instruments
                 )
             chain = self._option_chain_provider.get_chain(
-                candidate["symbol"], candidate["current_price"]
+                candidate["symbol"], candidate["current_price"], expiry_month=option_month
             )
             short_put = {"available": False, "rejection_code": "STRATEGY_MODE_DISABLED",
                          "rejection_reasons": ["Short-Put mode is disabled."]}
@@ -432,6 +433,7 @@ class TradingPlatform:
                 chains = self._option_chain_provider.get_chains(
                     candidate["symbol"], candidate["current_price"],
                     self.settings.short_put_min_dte, self.settings.short_put_max_dte,
+                    expiry_month=option_month,
                 )
                 portfolio = self.paper_broker.portfolio()
                 invested = float(portfolio.get("invested_cost", 0))
@@ -500,7 +502,7 @@ class TradingPlatform:
                 risk_budget=self.settings.option_risk_per_trade,
                 capital_available=self.settings.option_capital,
             )
-            validation = OptionEntryValidator.validate(chain, trade, direction)
+            validation = OptionEntryValidator.validate(chain, trade, direction, self.settings)
             rejection = trade.get("rejection")
             if trade["available"] and not validation["approved"]:
                 rejection = {"code": "ENTRY_VALIDATION_FAILED", "category": "EXECUTION",
@@ -622,7 +624,8 @@ class TradingPlatform:
     def portfolio(self) -> dict[str, Any]:
         return self._serialize(self.paper_broker.portfolio())
 
-    def daily_report(self, limit: int = 5, minimum_score: int = 40) -> dict[str, Any]:
+    def daily_report(self, limit: int = 5, minimum_score: int = 40,
+                     option_month: str | None = None) -> dict[str, Any]:
         """Generate the final ranked daily trade report.
 
         This is a research/paper-trading recommendation only.  It never sends
@@ -632,7 +635,12 @@ class TradingPlatform:
             raise ValidationError("limit must be an integer between 1 and 20")
         if not isinstance(minimum_score, int) or not 0 <= minimum_score <= 100:
             raise ValidationError("minimum_score must be an integer between 0 and 100")
-        return self._serialize(DailyTradingAssistant(self).generate(limit, minimum_score))
+        if option_month is not None:
+            if not isinstance(option_month, str) or not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", option_month):
+                raise ValidationError("option_month must use YYYY-MM format")
+        return self._serialize(
+            DailyTradingAssistant(self, option_month=option_month).generate(limit, minimum_score)
+        )
 
     def record_trade_outcome(self, recommendation_id: str, won: bool,
                              return_percent: float | None = None,

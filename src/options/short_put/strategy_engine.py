@@ -10,6 +10,7 @@ from src.options.short_put.models import (
     ShortPutRejectionCode, ShortPutStrategyPlan,
 )
 from src.options.short_put.strike_selector import ShortPutStrikeSelector
+from src.workflow.final_decision import EntryConfirmationResult
 from src.options.black_scholes import price_and_greeks, probability_expiring_otm
 from src.options.short_put.event_risk import ShortPutEventRiskEvaluator
 
@@ -29,6 +30,7 @@ class ShortPutStrategyEngine:
     @staticmethod
     def _underlying_eligible(analysis: dict) -> tuple[bool, str, str | None]:
         setup_eval = analysis.get("setup_evaluation", {})
+        confirmation = EntryConfirmationResult.from_setup(setup_eval, required=True)
         category = setup_eval.get("stage_1", {}).get("category", "WATCHLIST")
         technical = analysis.get("analysis", {})
         trend = technical.get("trend", "NEUTRAL")
@@ -36,7 +38,8 @@ class ShortPutStrategyEngine:
         price_structure_ok = float(technical.get("current_price", 0)) >= float(technical.get("ema50", float("inf")))
         momentum_ok = float(technical.get("macd", 0)) > float(technical.get("macd_signal_line", 0))
         volume_ok = float(technical.get("relative_volume", 0)) >= .75
-        if category in eligible_categories and "BULLISH" in trend and price_structure_ok and momentum_ok and volume_ok:
+        if (category in eligible_categories and confirmation.passed and "BULLISH" in trend
+                and price_structure_ok and momentum_ok and volume_ok):
             return True, category, None
         if category == "REVERSAL CANDIDATE":
             checks = setup_eval.get("stage_2", {}).get("checks", {})
@@ -177,11 +180,15 @@ class ShortPutStrategyEngine:
             ),
         )
         strike_evaluations = [evaluation for _, evaluation in evaluated_rows]
+        all_strikes_rejected = not any(item["result"] == "PASS" for item in strike_evaluations)
         *_, chain, dte, sold = selected_row
         strike_search = {
             "evaluated": len(ranked_strikes),
             "band": {"lower": round(strike_band[0], 2), "upper": round(strike_band[1], 2)},
-            "selected_strike": sold.strike,
+            "selected_strike": None if all_strikes_rejected else sold.strike,
+            "best_rejected_candidate": (next(evaluation for row, evaluation in evaluated_rows
+                                               if row is selected_row)
+                                        if all_strikes_rejected else None),
             "selection_rule": "Fewest eligibility failures, then delta fit, probability, spread, OI, volume and executable premium.",
             "exhaustive_within_band": True,
             "includes_adjacent_strikes": any(
@@ -307,4 +314,9 @@ class ShortPutStrategyEngine:
             margin_source, "PORTFOLIO_SECTOR_AND_CAPITAL_CHECKED", strike_search,
             round(annualized_rom, 2), actionable_recommendations,
         )
+        if all_strikes_rejected:
+            plan.best_rejected_candidate = strike_search["best_rejected_candidate"]
+            plan.candidate = None
+            plan.sold_leg = None
+            plan.hedge_leg = None
         return asdict(plan)

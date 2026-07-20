@@ -27,7 +27,9 @@ class DailyReportContractTests(unittest.TestCase):
             "headlines": [{"title": "Results"}], "analysis_method": "AI_UNAVAILABLE",
         })
         self.assertEqual(news["collection_state"], "FETCHED")
-        self.assertEqual(news["analysis_state"], "FAILED")
+        self.assertEqual(news["analysis_state"], "FETCH_FAILED")
+        self.assertEqual(news["score_impact"], 0)
+        self.assertEqual(news["readiness_impact"], "UNKNOWN")
 
     @patch("src.workflow.daily_trading_assistant.OutcomeRepository")
     def test_cache_report_contains_actionable_trade_fields(self, outcome_repository):
@@ -50,6 +52,10 @@ class DailyReportContractTests(unittest.TestCase):
         self.assertIn("news_model_load_seconds", report["timings"])
         self.assertIn("news_inference_seconds", report["timings"])
         self.assertIn("news_network_seconds", report["timings"])
+        self.assertIn("event_total_seconds", report["timings"])
+        self.assertIn("event_candidate_scoring_seconds", report["timings"])
+        self.assertIn("event_context", report)
+        self.assertEqual(report["summary"]["event_risk_reviewed"], report["summary"]["context_reviewed"])
         self.assertLessEqual(report["timings"]["candidates_enriched"], 20)
         self.assertEqual(report["timings"]["news_stocks_requested"], 0)
         self.assertEqual(
@@ -69,11 +75,30 @@ class DailyReportContractTests(unittest.TestCase):
             self.assertIn("risk_reward_policy", trade)
             self.assertIn("expected_value", trade)
             self.assertIn("market_policy", trade)
+            self.assertIn("execution_score", trade)
+            self.assertIn("quality_score", trade)
+            self.assertIn("quality_grade", trade)
+            self.assertIn("quality_label", trade)
+            self.assertEqual(trade["confidence_grade"]["grade"], trade["quality_grade"])
+            self.assertTrue(trade["confidence_grade"]["deprecated"])
+            self.assertIn("execution_readiness_score", trade)
+            self.assertIn("execution_status", trade)
+            self.assertIn("execution_label", trade)
             self.assertIn(trade["trade_readiness"]["classification"], {
-                "EXECUTE", "PREPARE_ORDER", "WATCH_INTRADAY", "IGNORE",
+                "EXECUTE", "PREPARE", "WATCH_INTRADAY", "WAIT", "IGNORE",
             })
             self.assertIn("collection_state", trade["news"])
             self.assertIn("analysis_state", trade["news"])
+            self.assertIn("event_risk", trade)
+            self.assertIn("base_readiness", trade["event_risk"])
+            self.assertIn("adjusted_readiness", trade["event_risk"])
+            self.assertEqual(trade["execution_readiness_score"],
+                             trade["event_risk"]["adjusted_readiness"])
+            self.assertIn("event_position_multiplier", trade["risk"])
+            self.assertLessEqual(trade["risk"]["quantity"],
+                                 trade["risk"]["base_market_adjusted_quantity"])
+            self.assertIn("overnight_hold_allowed", trade)
+            self.assertIn("strategy_restrictions", trade)
             self.assertIn("current_month_seasonality", trade)
             self.assertTrue(trade["option_budget_policy"]["stock_eligibility_independent"])
         self.assertIn("TODAY'S MARKET SUMMARY", DailyReportPresenter.render(report))

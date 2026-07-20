@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-20T19:53:37.789386+00:00",
+  "events": [
+    {
+      "event_id": "MARKET-WIDE-20260720",
+      "title": "Market-wide HIGH_VOLATILITY risk",
+      "normalized_event_type": "MARKET_WIDE_STRESS",
+      "category": "MARKET_WIDE",
+      "severity": "HIGH",
+      "direction": "VOLATILITY_ONLY",
+      "status": "STALE",
+      "source_type": "CACHED_SOURCE",
+      "detected_at": "2026-07-20T08:00:00+00:00",
+      "last_updated_at": "2026-07-20T08:00:00+00:00",
+      "event_start": "2026-07-20T08:00:00+00:00",
+      "event_end": null,
+      "expected_duration": "ONE_TO_THREE_DAYS",
+      "raw_score": 70.0,
+      "decayed_score": 49.65,
+      "confidence": 0.95,
+      "freshness_score": 25,
+      "materiality": 1.0,
+      "gap_risk": 70.0,
+      "affected_sectors": [],
+      "affected_symbols": [],
+      "affected_regions": [],
+      "affected_commodities": [],
+      "reasons": [
+        "Existing regime HIGH_VOLATILITY; VIX 0.0."
+      ],
+      "source_titles": [],
+      "source_urls_or_ids": [],
+      "is_scheduled": false,
+      "is_confirmed": true,
+      "is_duplicate": false,
+      "duplicate_of": null,
+      "half_life_hours": 24.0,
+      "decay_model": "EXPONENTIAL",
+      "expiry_time": null,
+      "canonical_event_id": "6808812b9908a648",
+      "related_article_ids": [
+        "MARKET-WIDE-20260720"
+      ],
+      "event_version": 1,
+      "meaningful_update_count": 0
+    }
+  ]
+}

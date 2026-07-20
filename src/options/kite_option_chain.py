@@ -39,24 +39,34 @@ class KiteOptionChainProvider:
         except (OSError, json.JSONDecodeError):
             return {}
 
+    @staticmethod
+    def _matches_month(expiry: date, expiry_month: str | None) -> bool:
+        return expiry_month is None or expiry.strftime("%Y-%m") == expiry_month
+
     def _save_oi(self, values):
         self.oi_cache_path.parent.mkdir(parents=True, exist_ok=True)
         self.oi_cache_path.write_text(json.dumps(values))
 
     def get_chains(self, symbol: str, spot_price: float, min_dte: int = 7,
-                   max_dte: int = 35, width: float = 0.15) -> list[OptionChain]:
+                   max_dte: int = 35, width: float = 0.15,
+                   expiry_month: str | None = None) -> list[OptionChain]:
         today = date.today()
         expiries = sorted({
             item["expiry"] for item in self._load_instruments()
             if item.get("name", "").upper() == symbol.upper()
             and item.get("instrument_type") in {"CE", "PE"}
             and item.get("expiry")
+            and self._matches_month(item["expiry"], expiry_month)
             and today + timedelta(days=min_dte) <= item["expiry"] <= today + timedelta(days=max_dte)
         })
+        if expiry_month and not expiries:
+            raise OptionInstrumentLookupError(
+                f"No {symbol} option expiries in requested month {expiry_month} within the configured DTE range"
+            )
         return [self.get_chain(symbol, spot_price, width, expiry) for expiry in expiries]
 
     def get_chain(self, symbol: str, spot_price: float, width: float = 0.15,
-                  selected_expiry=None) -> OptionChain:
+                  selected_expiry=None, expiry_month: str | None = None) -> OptionChain:
         symbol = symbol.upper()
         today = date.today()
         instruments = [
@@ -65,9 +75,11 @@ class KiteOptionChainProvider:
             and item.get("instrument_type") in {"CE", "PE"}
             and item.get("expiry")
             and item["expiry"] >= today
+            and self._matches_month(item["expiry"], expiry_month)
         ]
         if not instruments:
-            raise OptionInstrumentLookupError(f"No live option instruments found for {symbol}")
+            suffix = f" in requested month {expiry_month}" if expiry_month else ""
+            raise OptionInstrumentLookupError(f"No live option instruments found for {symbol}{suffix}")
         expiry = selected_expiry or min(item["expiry"] for item in instruments)
         cache_key = (symbol, round(float(spot_price), 2), width, str(expiry))
         if cache_key in self._chain_cache:

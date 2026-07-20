@@ -19,6 +19,93 @@ class PlatformSettings:
     equity_b_grade_min_risk_reward: float = 1.3
     equity_watchlist_min_risk_reward: float = 1.2
     ranking_shortlist_size: int = 20
+    candidate_ranking_mode: str = "EXPECTED_VALUE"
+    quality_grade_a_plus: float = 92.0
+    quality_grade_a: float = 85.0
+    quality_grade_b_plus: float = 80.0
+    quality_grade_b: float = 75.0
+    quality_grade_c_plus: float = 70.0
+    quality_grade_c: float = 65.0
+    readiness_execute_bullish: float = 75.0
+    readiness_execute_neutral: float = 80.0
+    readiness_execute_cautious: float = 85.0
+    readiness_execute_strong_bearish: float = 90.0
+    readiness_prepare: float = 70.0
+    readiness_watch_intraday: float = 55.0
+    readiness_wait: float = 40.0
+    option_approval_min_readiness: float = 75.0
+    option_min_payoff_risk_reward: float = 1.0
+    option_min_open_interest: int = 10_000
+    option_min_volume: int = 1_000
+    option_max_bid_ask_spread_percent: float = 5.0
+    option_max_implied_volatility: float = 100.0
+    option_max_quote_age_seconds: float = 120.0
+    resistance_clearance_min_atr: float = 0.35
+    entry_min_technical_score: float = 55.0
+    entry_min_relative_volume: float = 0.75
+    entry_min_sector_score: float = 50.0
+    bearish_bullish_trade_min_relative_strength: float = 80.0
+    uncertain_bullish_trade_min_relative_strength: float = 65.0
+    stock_trade_absolute_rr_floor: float = 1.0
+    candidate_min_liquidity_score: float = 40.0
+    candidate_min_trust_score: float = 55.0
+    setup_min_technical_score: float = 55.0
+    setup_support_near_percent: float = 4.0
+    setup_reversal_rsi: float = 35.0
+    entry_confirmation_relative_volume: float = 1.2
+    option_call_resistance_near_percent: float = 1.5
+    option_long_delta_min: float = 0.35
+    option_long_delta_max: float = 0.70
+    option_max_theta_premium_ratio: float = 0.08
+    option_high_iv_warning: float = 55.0
+    market_low_confidence_threshold: float = 50.0
+    market_confirmed_confidence_threshold: float = 65.0
+    news_analysis_required_for_execution: bool = True
+    calibration_min_outcomes: int = 200
+    event_risk_enabled: bool = True
+    event_very_low_max: float = 20.0
+    event_low_max: float = 40.0
+    event_medium_max: float = 60.0
+    event_extreme_min: float = 81.0
+    crude_daily_move_warning: float = 3.0
+    crude_daily_move_high: float = 5.0
+    crude_daily_move_extreme: float = 8.0
+    commodity_zscore_high: float = 2.0
+    commodity_zscore_extreme: float = 3.0
+    commodity_multiday_move_high: float = 6.0
+    event_medium_position_multiplier: float = 0.75
+    event_high_position_multiplier: float = 0.50
+    event_extreme_position_multiplier: float = 0.25
+    event_extreme_block_new_trades: bool = True
+    event_extreme_block_overnight: bool = True
+    earnings_same_day_block: bool = True
+    event_data_unavailable_readiness_penalty: float = 5.0
+    event_data_stale_readiness_penalty: float = 8.0
+    event_data_complete_no_match_penalty: float = 0.0
+    event_data_partial_coverage_penalty: float = 2.0
+    event_data_not_requested_penalty: float = 0.0
+    event_data_primary_unavailable_penalty: float = 3.0
+    event_data_all_unavailable_penalty: float = 5.0
+    event_data_fetch_failed_penalty: float = 8.0
+    event_penalty_max_very_low: float = 5.0
+    event_penalty_max_low: float = 10.0
+    event_penalty_max_medium: float = 20.0
+    event_penalty_max_high: float = 40.0
+    event_penalty_max_extreme: float = 60.0
+    event_data_max_age_minutes: float = 60.0
+    event_stale_after_minutes: float = 180.0
+    event_fresh_multiplier: float = 1.0
+    event_delayed_multiplier: float = 0.8
+    event_stale_multiplier: float = 0.5
+    event_default_half_life_hours: float = 24.0
+    geopolitical_half_life_hours: float = 72.0
+    earnings_half_life_hours: float = 48.0
+    commodity_shock_half_life_hours: float = 36.0
+    event_risk_hard_block_score: float = 90.0
+    event_gap_risk_hard_block_score: float = 90.0
+    event_allow_intraday_exception: bool = True
+    event_defined_risk_options_only_at_high: bool = True
+    event_allow_test_overrides: bool = False
     short_put_min_otm_percent: float = 8.0
     short_put_max_otm_percent: float = 10.0
     short_put_min_dte: int = 7
@@ -56,6 +143,67 @@ class PlatformSettings:
             raise ValueError("Equity risk/reward thresholds must satisfy C <= B <= A")
         if not 1 <= self.ranking_shortlist_size <= 30:
             raise ValueError("RANKING_SHORTLIST_SIZE must be between 1 and 30")
+        if self.candidate_ranking_mode not in {"EXPECTED_VALUE", "QUALITY_SCORE", "AI_SCORE", "READINESS"}:
+            raise ValueError("CANDIDATE_RANKING_MODE is invalid")
+        grade_thresholds = (self.quality_grade_a_plus, self.quality_grade_a,
+                            self.quality_grade_b_plus, self.quality_grade_b,
+                            self.quality_grade_c_plus, self.quality_grade_c)
+        if not all(0 <= value <= 100 for value in grade_thresholds) or any(
+                left < right for left, right in zip(grade_thresholds, grade_thresholds[1:])):
+            raise ValueError("Quality grade thresholds must descend from A+ through C")
+        if self.calibration_min_outcomes < 1:
+            raise ValueError("CALIBRATION_MIN_OUTCOMES must be positive")
+        readiness_values = (self.readiness_execute_bullish, self.readiness_execute_neutral,
+                            self.readiness_execute_cautious, self.readiness_execute_strong_bearish,
+                            self.readiness_prepare, self.readiness_watch_intraday, self.readiness_wait)
+        if not all(0 <= value <= 100 for value in readiness_values):
+            raise ValueError("Readiness thresholds must be between 0 and 100")
+        if not (self.readiness_prepare >= self.readiness_watch_intraday >= self.readiness_wait):
+            raise ValueError("Readiness PREPARE/WATCH/WAIT thresholds must descend")
+        if not 0 <= self.option_approval_min_readiness <= 100:
+            raise ValueError("OPTION_APPROVAL_MIN_READINESS must be between 0 and 100")
+        if self.resistance_clearance_min_atr < 0:
+            raise ValueError("RESISTANCE_CLEARANCE_MIN_ATR cannot be negative")
+        if self.option_min_payoff_risk_reward <= 0 or self.stock_trade_absolute_rr_floor <= 0:
+            raise ValueError("Configured risk/reward floors must be positive")
+        if self.option_min_open_interest < 0 or self.option_min_volume < 0:
+            raise ValueError("Option liquidity thresholds cannot be negative")
+        if self.option_max_bid_ask_spread_percent <= 0 or self.option_max_quote_age_seconds <= 0:
+            raise ValueError("Option quote thresholds must be positive")
+        for value in (self.entry_min_technical_score, self.entry_min_sector_score,
+                      self.setup_min_technical_score, self.setup_reversal_rsi,
+                      self.bearish_bullish_trade_min_relative_strength,
+                      self.uncertain_bullish_trade_min_relative_strength):
+            if not 0 <= value <= 100:
+                raise ValueError("Entry and relative-strength thresholds must be between 0 and 100")
+        if not 0 <= self.candidate_min_liquidity_score <= 100 or not 0 <= self.candidate_min_trust_score <= 100:
+            raise ValueError("Candidate quality gates must be between 0 and 100")
+        if not 0 <= self.option_long_delta_min <= self.option_long_delta_max <= 1:
+            raise ValueError("Option long delta range is invalid")
+        if self.setup_support_near_percent < 0 or self.entry_confirmation_relative_volume < 0:
+            raise ValueError("Setup proximity and volume thresholds cannot be negative")
+        if not 0 <= self.market_low_confidence_threshold <= self.market_confirmed_confidence_threshold <= 100:
+            raise ValueError("Market confidence thresholds are invalid")
+        if not (0 <= self.event_stale_multiplier <= self.event_delayed_multiplier
+                <= self.event_fresh_multiplier <= 1):
+            raise ValueError("Event freshness multipliers must satisfy stale <= delayed <= fresh <= 1")
+        event_penalties = (
+            self.event_data_complete_no_match_penalty, self.event_data_partial_coverage_penalty,
+            self.event_data_not_requested_penalty, self.event_data_primary_unavailable_penalty,
+            self.event_data_all_unavailable_penalty, self.event_data_fetch_failed_penalty,
+        )
+        if any(value < 0 for value in event_penalties):
+            raise ValueError("Event data uncertainty penalties cannot be negative")
+        event_caps = (self.event_penalty_max_very_low, self.event_penalty_max_low,
+                      self.event_penalty_max_medium, self.event_penalty_max_high,
+                      self.event_penalty_max_extreme)
+        if any(value < 0 for value in event_caps) or any(
+                left > right for left, right in zip(event_caps, event_caps[1:])):
+            raise ValueError("Event penalty bounds must be non-negative and ascending")
+        for value in (self.event_medium_position_multiplier, self.event_high_position_multiplier,
+                      self.event_extreme_position_multiplier):
+            if not 0 <= value <= 1:
+                raise ValueError("Event position multipliers must be between 0 and 1")
         if not 0 < self.short_put_min_otm_percent <= self.short_put_max_otm_percent < 100:
             raise ValueError("Short-Put OTM range is invalid")
         if not 0 <= self.short_put_min_dte <= self.short_put_max_dte:
@@ -116,6 +264,93 @@ class PlatformSettings:
             equity_b_grade_min_risk_reward=env_float("EQUITY_B_GRADE_MIN_RISK_REWARD", 1.3),
             equity_watchlist_min_risk_reward=env_float("EQUITY_WATCHLIST_MIN_RISK_REWARD", 1.2),
             ranking_shortlist_size=env_int("RANKING_SHORTLIST_SIZE", 20),
+            candidate_ranking_mode=os.getenv("CANDIDATE_RANKING_MODE", "EXPECTED_VALUE").upper(),
+            quality_grade_a_plus=env_float("QUALITY_GRADE_A_PLUS", 92),
+            quality_grade_a=env_float("QUALITY_GRADE_A", 85),
+            quality_grade_b_plus=env_float("QUALITY_GRADE_B_PLUS", 80),
+            quality_grade_b=env_float("QUALITY_GRADE_B", 75),
+            quality_grade_c_plus=env_float("QUALITY_GRADE_C_PLUS", 70),
+            quality_grade_c=env_float("QUALITY_GRADE_C", 65),
+            readiness_execute_bullish=env_float("READINESS_EXECUTE_BULLISH", 75),
+            readiness_execute_neutral=env_float("READINESS_EXECUTE_NEUTRAL", 80),
+            readiness_execute_cautious=env_float("READINESS_EXECUTE_CAUTIOUS", 85),
+            readiness_execute_strong_bearish=env_float("READINESS_EXECUTE_STRONG_BEARISH", 90),
+            readiness_prepare=env_float("READINESS_PREPARE", 70),
+            readiness_watch_intraday=env_float("READINESS_WATCH_INTRADAY", 55),
+            readiness_wait=env_float("READINESS_WAIT", 40),
+            option_approval_min_readiness=env_float("OPTION_APPROVAL_MIN_READINESS", 75),
+            option_min_payoff_risk_reward=env_float("OPTION_MIN_PAYOFF_RISK_REWARD", 1),
+            option_min_open_interest=env_int("OPTION_MIN_OPEN_INTEREST", 10000),
+            option_min_volume=env_int("OPTION_MIN_VOLUME", 1000),
+            option_max_bid_ask_spread_percent=env_float("OPTION_MAX_BID_ASK_SPREAD_PERCENT", 5),
+            option_max_implied_volatility=env_float("OPTION_MAX_IMPLIED_VOLATILITY", 100),
+            option_max_quote_age_seconds=env_float("OPTION_MAX_QUOTE_AGE_SECONDS", 120),
+            resistance_clearance_min_atr=env_float("RESISTANCE_CLEARANCE_MIN_ATR", .35),
+            entry_min_technical_score=env_float("ENTRY_MIN_TECHNICAL_SCORE", 55),
+            entry_min_relative_volume=env_float("ENTRY_MIN_RELATIVE_VOLUME", .75),
+            entry_min_sector_score=env_float("ENTRY_MIN_SECTOR_SCORE", 50),
+            bearish_bullish_trade_min_relative_strength=env_float("BEARISH_BULLISH_TRADE_MIN_RELATIVE_STRENGTH", 80),
+            uncertain_bullish_trade_min_relative_strength=env_float("UNCERTAIN_BULLISH_TRADE_MIN_RELATIVE_STRENGTH", 65),
+            stock_trade_absolute_rr_floor=env_float("STOCK_TRADE_ABSOLUTE_RR_FLOOR", 1),
+            candidate_min_liquidity_score=env_float("CANDIDATE_MIN_LIQUIDITY_SCORE", 40),
+            candidate_min_trust_score=env_float("CANDIDATE_MIN_TRUST_SCORE", 55),
+            setup_min_technical_score=env_float("SETUP_MIN_TECHNICAL_SCORE", 55),
+            setup_support_near_percent=env_float("SETUP_SUPPORT_NEAR_PERCENT", 4),
+            setup_reversal_rsi=env_float("SETUP_REVERSAL_RSI", 35),
+            entry_confirmation_relative_volume=env_float("ENTRY_CONFIRMATION_RELATIVE_VOLUME", 1.2),
+            option_call_resistance_near_percent=env_float("OPTION_CALL_RESISTANCE_NEAR_PERCENT", 1.5),
+            option_long_delta_min=env_float("OPTION_LONG_DELTA_MIN", .35),
+            option_long_delta_max=env_float("OPTION_LONG_DELTA_MAX", .70),
+            option_max_theta_premium_ratio=env_float("OPTION_MAX_THETA_PREMIUM_RATIO", .08),
+            option_high_iv_warning=env_float("OPTION_HIGH_IV_WARNING", 55),
+            market_low_confidence_threshold=env_float("MARKET_LOW_CONFIDENCE_THRESHOLD", 50),
+            market_confirmed_confidence_threshold=env_float("MARKET_CONFIRMED_CONFIDENCE_THRESHOLD", 65),
+            news_analysis_required_for_execution=env_bool("NEWS_ANALYSIS_REQUIRED_FOR_EXECUTION", True),
+            calibration_min_outcomes=env_int("CALIBRATION_MIN_OUTCOMES", 200),
+            event_risk_enabled=env_bool("EVENT_RISK_ENABLED", True),
+            event_very_low_max=env_float("EVENT_VERY_LOW_MAX", 20),
+            event_low_max=env_float("EVENT_LOW_MAX", 40),
+            event_medium_max=env_float("EVENT_MEDIUM_MAX", 60),
+            event_extreme_min=env_float("EVENT_EXTREME_MIN", 81),
+            crude_daily_move_warning=env_float("CRUDE_DAILY_MOVE_WARNING", 3),
+            crude_daily_move_high=env_float("CRUDE_DAILY_MOVE_HIGH", 5),
+            crude_daily_move_extreme=env_float("CRUDE_DAILY_MOVE_EXTREME", 8),
+            commodity_zscore_high=env_float("COMMODITY_ZSCORE_HIGH", 2),
+            commodity_zscore_extreme=env_float("COMMODITY_ZSCORE_EXTREME", 3),
+            commodity_multiday_move_high=env_float("COMMODITY_MULTIDAY_MOVE_HIGH", 6),
+            event_medium_position_multiplier=env_float("EVENT_MEDIUM_POSITION_MULTIPLIER", .75),
+            event_high_position_multiplier=env_float("EVENT_HIGH_POSITION_MULTIPLIER", .5),
+            event_extreme_position_multiplier=env_float("EVENT_EXTREME_POSITION_MULTIPLIER", .25),
+            event_extreme_block_new_trades=env_bool("EVENT_EXTREME_BLOCK_NEW_TRADES", True),
+            event_extreme_block_overnight=env_bool("EVENT_EXTREME_BLOCK_OVERNIGHT", True),
+            earnings_same_day_block=env_bool("EARNINGS_SAME_DAY_BLOCK", True),
+            event_data_unavailable_readiness_penalty=env_float("EVENT_DATA_UNAVAILABLE_READINESS_PENALTY", 5),
+            event_data_stale_readiness_penalty=env_float("EVENT_DATA_STALE_READINESS_PENALTY", 8),
+            event_data_complete_no_match_penalty=env_float("EVENT_DATA_COMPLETE_NO_MATCH_PENALTY", 0),
+            event_data_partial_coverage_penalty=env_float("EVENT_DATA_PARTIAL_COVERAGE_PENALTY", 2),
+            event_data_not_requested_penalty=env_float("EVENT_DATA_NOT_REQUESTED_PENALTY", 0),
+            event_data_primary_unavailable_penalty=env_float("EVENT_DATA_PRIMARY_UNAVAILABLE_PENALTY", 3),
+            event_data_all_unavailable_penalty=env_float("EVENT_DATA_ALL_UNAVAILABLE_PENALTY", 5),
+            event_data_fetch_failed_penalty=env_float("EVENT_DATA_FETCH_FAILED_PENALTY", 8),
+            event_penalty_max_very_low=env_float("EVENT_PENALTY_MAX_VERY_LOW", 5),
+            event_penalty_max_low=env_float("EVENT_PENALTY_MAX_LOW", 10),
+            event_penalty_max_medium=env_float("EVENT_PENALTY_MAX_MEDIUM", 20),
+            event_penalty_max_high=env_float("EVENT_PENALTY_MAX_HIGH", 40),
+            event_penalty_max_extreme=env_float("EVENT_PENALTY_MAX_EXTREME", 60),
+            event_data_max_age_minutes=env_float("EVENT_DATA_MAX_AGE_MINUTES", 60),
+            event_stale_after_minutes=env_float("EVENT_STALE_AFTER_MINUTES", 180),
+            event_fresh_multiplier=env_float("EVENT_FRESH_MULTIPLIER", 1),
+            event_delayed_multiplier=env_float("EVENT_DELAYED_MULTIPLIER", .8),
+            event_stale_multiplier=env_float("EVENT_STALE_MULTIPLIER", .5),
+            event_default_half_life_hours=env_float("EVENT_DEFAULT_HALF_LIFE_HOURS", 24),
+            geopolitical_half_life_hours=env_float("GEOPOLITICAL_HALF_LIFE_HOURS", 72),
+            earnings_half_life_hours=env_float("EARNINGS_HALF_LIFE_HOURS", 48),
+            commodity_shock_half_life_hours=env_float("COMMODITY_SHOCK_HALF_LIFE_HOURS", 36),
+            event_risk_hard_block_score=env_float("EVENT_RISK_HARD_BLOCK_SCORE", 90),
+            event_gap_risk_hard_block_score=env_float("EVENT_GAP_RISK_HARD_BLOCK_SCORE", 90),
+            event_allow_intraday_exception=env_bool("EVENT_ALLOW_INTRADAY_EXCEPTION", True),
+            event_defined_risk_options_only_at_high=env_bool("EVENT_DEFINED_RISK_OPTIONS_ONLY_AT_HIGH", True),
+            event_allow_test_overrides=env_bool("EVENT_ALLOW_TEST_OVERRIDES", False),
             short_put_min_otm_percent=min_otm,
             short_put_max_otm_percent=max_otm,
             short_put_min_dte=min_dte,

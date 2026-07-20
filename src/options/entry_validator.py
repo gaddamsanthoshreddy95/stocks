@@ -7,7 +7,10 @@ class OptionEntryValidator:
     """Turn option-chain context into explicit go/no-go conditions."""
 
     @staticmethod
-    def validate(chain, trade: dict, direction: str) -> dict:
+    def validate(chain, trade: dict, direction: str, settings=None) -> dict:
+        if settings is None:
+            from src.application.settings import PlatformSettings
+            settings = PlatformSettings()
         reasons, warnings = [], []
         approved = True
         calls = chain.calls
@@ -15,7 +18,7 @@ class OptionEntryValidator:
         spot = chain.spot_price
         if direction == "BULLISH" and call_resistance:
             distance = (call_resistance.strike - spot) / spot * 100
-            if 0 <= distance <= 1.5:
+            if 0 <= distance <= settings.option_call_resistance_near_percent:
                 approved = False
                 reasons.append(f"spot is {distance:.2f}% below high Call-OI resistance {call_resistance.strike}")
             elif spot > call_resistance.strike and call_resistance.change_in_oi < 0:
@@ -29,13 +32,13 @@ class OptionEntryValidator:
             theta = long_leg.get("theta")
             premium = long_leg.get("premium", 0)
             iv = long_leg.get("implied_volatility", 0)
-            if delta is not None and not .35 <= abs(delta) <= .70:
+            if delta is not None and not settings.option_long_delta_min <= abs(delta) <= settings.option_long_delta_max:
                 approved = False
                 reasons.append(f"long-leg delta {delta:.2f} is outside the 0.35-0.70 target range")
-            if theta is not None and premium and abs(theta) / premium > .08:
+            if theta is not None and premium and abs(theta) / premium > settings.option_max_theta_premium_ratio:
                 approved = False
                 reasons.append("theta decay exceeds 8% of premium per day")
-            if iv and iv >= 55:
+            if iv and iv >= settings.option_high_iv_warning:
                 warnings.append(f"high implied volatility ({iv:.1f}%) increases premium/vega risk")
             if long_leg.get("price_change") is not None and long_leg["price_change"] < 0:
                 warnings.append("long option premium is falling")

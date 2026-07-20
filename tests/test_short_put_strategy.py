@@ -192,8 +192,10 @@ class ShortPutStrategyTests(unittest.TestCase):
             chain.puts[index] = contract(chain.puts[index].strike, delta=None, iv=0)
             chain.puts[index].expiry = chain.expiry
         plan = ShortPutStrategyEngine.evaluate("TEST", bullish_analysis(), [chain], self.settings)
-        self.assertEqual(plan["candidate"]["probability_source"], "ATR_FALLBACK")
-        self.assertEqual(plan["candidate"]["probability_quality"], "LOW")
+        self.assertIsNone(plan["candidate"])
+        self.assertEqual(plan["best_rejected_candidate"]["probability_source"], "ATR_FALLBACK")
+        self.assertEqual(plan["best_rejected_candidate"]["probability_quality"], "LOW")
+        self.assertIsNone(plan["strike_search"]["selected_strike"])
 
     def test_monthly_expiry_is_preferred_within_same_month(self):
         earlier, later = fixture_chain(14), fixture_chain(21)

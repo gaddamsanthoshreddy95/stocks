@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import importlib.util
 from functools import lru_cache
 import logging
 from pathlib import Path
@@ -13,6 +14,20 @@ from typing import Any
 
 
 logger = logging.getLogger(__name__)
+
+
+class _EntityFreeNLP:
+    """Keep FinBERT sentiment available when optional spaCy NER is absent."""
+
+    @staticmethod
+    def _document():
+        return type("EntityFreeDocument", (), {"ents": ()})()
+
+    def __call__(self, _text):
+        return self._document()
+
+    def pipe(self, texts, **_kwargs):
+        return (self._document() for _ in texts)
 
 
 def _cached_safetensors_snapshots(model_name: str) -> list[Path]:
@@ -79,6 +94,7 @@ class AISentimentAnalyzer:
         self.spacy_model = spacy_model or os.getenv("NEWS_SPACY_MODEL", "en_core_web_sm")
         self._sentiment_pipeline = sentiment_pipeline
         self._nlp = nlp
+        self._entity_model_available = nlp is not None
         self._model_lock = RLock()
 
     def load_finbert(self) -> float:
@@ -99,6 +115,17 @@ class AISentimentAnalyzer:
             logger.info("FinBERT model load time: %.3fs (local cache)", elapsed)
         return elapsed
 
+    def dependency_health(self) -> dict[str, Any]:
+        """Report entity-model readiness without triggering model downloads."""
+        spacy_installed = importlib.util.find_spec("spacy") is not None
+        entity_model_installed = importlib.util.find_spec(self.spacy_model) is not None
+        return {
+            "spacy": "AVAILABLE" if spacy_installed else "MISSING",
+            "entity_model": self.spacy_model,
+            "entity_model_status": "AVAILABLE" if entity_model_installed else "MISSING",
+            "entity_dependent_classification": "ENABLED" if entity_model_installed else "DISABLED_SAFE",
+        }
+
     def _load(self) -> float:
         model_load_seconds = self.load_finbert()
         with self._model_lock:
@@ -106,10 +133,14 @@ class AISentimentAnalyzer:
                 try:
                     import spacy
                     self._nlp = spacy.load(self.spacy_model)
+                    self._entity_model_available = True
                 except (ImportError, OSError) as exc:
-                    raise AISentimentError(
-                        f"spaCy model {self.spacy_model!r} is unavailable; run: python -m spacy download {self.spacy_model}"
-                    ) from exc
+                    logger.warning(
+                        "spaCy model %s unavailable; continuing with FinBERT sentiment and no entities: %s",
+                        self.spacy_model, exc,
+                    )
+                    self._nlp = _EntityFreeNLP()
+                    self._entity_model_available = False
         return model_load_seconds
 
     @staticmethod
@@ -207,7 +238,10 @@ class AISentimentAnalyzer:
                 f"spaCy extracted {len(all_entities)} named entities for report context.",
             ],
             "trade_impact": trade_impact, "article_assessments": assessments,
-            "entities": all_entities, "analysis_provider": "LOCAL_FINBERT_SPACY",
+            "entities": all_entities,
+            "entity_model_available": self._entity_model_available,
+            "analysis_provider": ("LOCAL_FINBERT_SPACY" if self._entity_model_available
+                                  else "LOCAL_FINBERT"),
             "timings": {
                 "model_load_seconds": round(model_load_seconds, 3),
                 "inference_seconds": round(inference_seconds, 6),
