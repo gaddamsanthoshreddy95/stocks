@@ -106,6 +106,7 @@ class NewsAnalysisService:
                 "description": description,
                 "source": cls._text(item.findtext("source", "Google News")),
                 "published": cls._published(item.findtext("pubDate", "")),
+                "url": cls._text(item.findtext("link", "")) or None,
             })
 
         count = len(articles)

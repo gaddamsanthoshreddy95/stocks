@@ -1,9 +1,33 @@
 import unittest
 
-from ui_app import candidate_rows, option_leg_rows, snapshot_rows
+from ui_app import (candidate_rows, likely_news_reaction, news_impact, news_rows,
+                    option_leg_rows, snapshot_rows)
 
 
 class UIMarketContextTests(unittest.TestCase):
+    def test_news_impact_labels_cover_positive_and_negative_strength(self):
+        self.assertEqual(news_impact(72), "SUPER POSITIVE")
+        self.assertEqual(news_impact(20), "POSITIVE")
+        self.assertEqual(news_impact(3), "NEUTRAL")
+        self.assertEqual(news_impact(-20), "NEGATIVE")
+        self.assertEqual(news_impact(-72), "SUPER NEGATIVE")
+
+    def test_news_rows_show_each_headline_and_likely_reaction(self):
+        report = {"trades": [{"symbol": "SBIN", "news": {
+            "score": 40, "materiality": "MEDIUM",
+            "headlines": [{"title": "SBIN profit beats estimates", "source": "Example",
+                           "published": "2026-07-20T10:00:00+00:00"}],
+            "article_assessments": [{
+                "title": "SBIN profit beats estimates", "materiality": "HIGH",
+                "probabilities": {"positive": 82, "negative": 5, "neutral": 13},
+            }],
+        }}]}
+        rows = news_rows(report)
+        self.assertEqual(rows[0]["Stock"], "SBIN")
+        self.assertEqual(rows[0]["Impact"], "SUPER POSITIVE")
+        self.assertIn("buying interest", rows[0]["Likely stock reaction"])
+        self.assertIn("upward", likely_news_reaction("SUPER POSITIVE", "HIGH"))
+
     def test_snapshot_rows_preserve_global_quote_status(self):
         rows = snapshot_rows({"sp500_futures": {"price": 6000, "change": -10,
                                                  "change_percent": -.17}})

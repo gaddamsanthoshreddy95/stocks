@@ -150,9 +150,99 @@ def snapshot_rows(group: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def news_impact(score: float | int | None) -> str:
+    """Convert the signed FinBERT score into a user-facing impact label."""
+    numeric_score = float(score or 0)
+    if numeric_score >= 60:
+        return "SUPER POSITIVE"
+    if numeric_score >= 15:
+        return "POSITIVE"
+    if numeric_score <= -60:
+        return "SUPER NEGATIVE"
+    if numeric_score <= -15:
+        return "NEGATIVE"
+    return "NEUTRAL"
+
+
+def likely_news_reaction(impact: str, materiality: str = "LOW") -> str:
+    strength = "strong " if str(materiality).upper() == "HIGH" else ""
+    reactions = {
+        "SUPER POSITIVE": f"Could trigger {strength}buying interest and upward volatility.",
+        "POSITIVE": "May support the price or improve buying interest.",
+        "NEUTRAL": "Limited directional effect is likely unless new details emerge.",
+        "NEGATIVE": "May create selling pressure or weaken buying interest.",
+        "SUPER NEGATIVE": f"Could trigger {strength}selling pressure and downward volatility.",
+    }
+    return reactions.get(impact, reactions["NEUTRAL"])
+
+
+def news_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten report news into one readable row per stock headline."""
+    rows: list[dict[str, Any]] = []
+    candidates = [*report.get("trades", []), *report.get("watchlist", []),
+                  *report.get("rejected", [])]
+    seen: set[tuple[str, str]] = set()
+    for candidate in candidates:
+        symbol = str(candidate.get("symbol", "UNKNOWN"))
+        news = candidate.get("news") or {}
+        assessments = {
+            str(item.get("title", "")): item
+            for item in news.get("article_assessments", []) if isinstance(item, dict)
+        }
+        for headline in news.get("headlines", []):
+            if not isinstance(headline, dict):
+                continue
+            title = str(headline.get("title", "")).strip()
+            if not title or (symbol, title) in seen:
+                continue
+            seen.add((symbol, title))
+            assessment = assessments.get(title, {})
+            probabilities = assessment.get("probabilities", {})
+            article_score = (float(probabilities.get("positive", 0))
+                             - float(probabilities.get("negative", 0)))
+            score = article_score if probabilities else float(news.get("score", 0) or 0)
+            impact = news_impact(score)
+            rows.append({
+                "Stock": symbol,
+                "News": title,
+                "Source": headline.get("source") or "Unknown",
+                "Read": headline.get("url"),
+                "Published": headline.get("published") or "N/A",
+                "Impact": impact,
+                "Sentiment score": round(score, 2),
+                "Likely stock reaction": likely_news_reaction(
+                    impact, str(assessment.get("materiality", news.get("materiality", "LOW")))
+                ),
+            })
+    return rows
+
+
+def show_news(report: dict[str, Any]) -> None:
+    rows = news_rows(report)
+    st.subheader("Stocks in the news")
+    st.caption("Impact is AI-estimated from headline sentiment. It indicates possible short-term "
+               "pressure, not a guaranteed price move or trade recommendation.")
+    if not rows:
+        st.info("No analyzed stock headlines are available in this report. News is fetched only "
+                "for the final shortlist when live news analysis is enabled.")
+        return
+    counts = pd.DataFrame(rows).groupby(["Stock", "Impact"]).size().unstack(fill_value=0)
+    st.dataframe(counts.reset_index(), width="stretch", hide_index=True)
+    st.dataframe(
+        pd.DataFrame(rows), width="stretch", hide_index=True,
+        column_config={
+            "Sentiment score": st.column_config.NumberColumn(format="%.1f", help="-100 to +100"),
+            "News": st.column_config.TextColumn(width="large"),
+            "Read": st.column_config.LinkColumn(display_text="Open article"),
+            "Likely stock reaction": st.column_config.TextColumn(width="large"),
+        },
+    )
+
+
 def show_report(report: dict[str, Any], database: ReportDatabase | None = None) -> None:
     summary_cards(report)
-    tabs = st.tabs(["Candidates", "Market & context", "Rejected", "Complete report", "JSON"])
+    tabs = st.tabs(["Candidates", "Stocks in news", "Market & context", "Rejected",
+                    "Complete report", "JSON"])
     with tabs[0]:
         marks = (database.get_candidate_executions(str(report.get("run_id")))
                  if database and report.get("run_id") else {})
@@ -166,6 +256,8 @@ def show_report(report: dict[str, Any], database: ReportDatabase | None = None) 
                        "Only rows marked TRADE / Executable trade YES are actionable paper-trade plans.")
             selected_stock_details(report, database)
     with tabs[1]:
+        show_news(report)
+    with tabs[2]:
         market = report.get("market", {})
         st.subheader("Global markets")
         global_rows = snapshot_rows(market.get("global", {}))
@@ -191,7 +283,7 @@ def show_report(report: dict[str, Any], database: ReportDatabase | None = None) 
         st.json(report.get("context_statistics", {}), expanded=True)
         st.subheader("Dependency health")
         st.json(report.get("dependency_health", {}), expanded=True)
-    with tabs[2]:
+    with tabs[3]:
         rejected = report.get("rejected", [])
         if rejected:
             run_id = str(report.get("run_id", ""))
@@ -208,9 +300,9 @@ def show_report(report: dict[str, Any], database: ReportDatabase | None = None) 
                         st.write(f"• {reason}")
         else:
             st.success("No candidates were rejected.")
-    with tabs[3]:
-        st.code(DailyReportPresenter.render(report), language="text")
     with tabs[4]:
+        st.code(DailyReportPresenter.render(report), language="text")
+    with tabs[5]:
         st.download_button("Download report JSON", json.dumps(report, indent=2, default=str),
                            file_name=f"daily-report-{report.get('date', 'latest')}.json",
                            mime="application/json")
