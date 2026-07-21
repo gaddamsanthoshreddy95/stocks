@@ -62,7 +62,9 @@ class ReportDatabase:
                     exit_price REAL,
                     fees REAL NOT NULL DEFAULT 0,
                     realized_pnl REAL,
-                    notes TEXT
+                    notes TEXT,
+                    recommendation_run_id TEXT,
+                    hold_until TEXT
                 );
                 CREATE INDEX IF NOT EXISTS idx_actual_trades_status
                     ON actual_trades(status, entry_date DESC);
@@ -75,6 +77,12 @@ class ReportDatabase:
                 );
                 """
             )
+            # Lightweight migrations for databases created by older UI versions.
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(actual_trades)")}
+            if "recommendation_run_id" not in columns:
+                connection.execute("ALTER TABLE actual_trades ADD COLUMN recommendation_run_id TEXT")
+            if "hold_until" not in columns:
+                connection.execute("ALTER TABLE actual_trades ADD COLUMN hold_until TEXT")
             connection.commit()
 
     def save_report(self, report: dict[str, Any], market_data_source: str) -> int:
@@ -158,6 +166,26 @@ class ReportDatabase:
             )
             connection.commit()
 
+    def candidate_has_open_trade(self, run_id: str, symbol: str) -> bool:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """SELECT 1 FROM actual_trades
+                   WHERE recommendation_run_id=? AND symbol=? AND status='OPEN' LIMIT 1""",
+                (str(run_id), str(symbol).strip().upper().removesuffix(".NS")),
+            ).fetchone()
+        return row is not None
+
+    def get_candidate_trade(self, run_id: str, symbol: str) -> dict[str, Any] | None:
+        """Return the latest journal position created from one recommendation."""
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """SELECT * FROM actual_trades
+                   WHERE recommendation_run_id=? AND symbol=?
+                   ORDER BY id DESC LIMIT 1""",
+                (str(run_id), str(symbol).strip().upper().removesuffix(".NS")),
+            ).fetchone()
+        return dict(row) if row else None
+
     def get_candidate_executions(self, run_id: str) -> dict[str, str]:
         with closing(self._connect()) as connection:
             rows = connection.execute(
@@ -189,6 +217,8 @@ class ReportDatabase:
                     original_status = str(candidate.get("status") or status)
                     break
             candidate = candidate or {}
+            tracked = self.get_candidate_trade(str(row["run_id"]), str(row["symbol"]))
+            realized = tracked.get("realized_pnl") if tracked else None
             results.append({
                 "report_id": int(row["report_id"]), "run_id": row["run_id"],
                 "report_date": row["report_date"], "report_generated_at": row["generated_at"],
@@ -199,6 +229,11 @@ class ReportDatabase:
                 "readiness": candidate.get("execution_readiness_score"),
                 "entry": (candidate.get("levels") or {}).get("entry"),
                 "option_approval": (candidate.get("option_trade_approval") or {}).get("status"),
+                "tracking_status": tracked.get("status") if tracked else "NOT_STARTED",
+                "hold_until": tracked.get("hold_until") if tracked else None,
+                "final_outcome": (None if realized is None else
+                                  "PROFIT" if float(realized) >= 0 else "LOSS"),
+                "realized_pnl": realized,
             })
         return results
 
@@ -220,8 +255,8 @@ class ReportDatabase:
                 """INSERT INTO actual_trades (
                     created_at, symbol, instrument_type, side, strategy, option_type,
                     strike, expiry, quantity, entry_date, entry_price, stop_loss,
-                    target_price, fees, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    target_price, fees, notes, recommendation_run_id, hold_until
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (datetime.now(timezone.utc).isoformat(), symbol, instrument, side,
                  str(trade.get("strategy") or ""), option_type,
                  float(trade["strike"]) if trade.get("strike") else None,
@@ -229,7 +264,9 @@ class ReportDatabase:
                  str(trade.get("entry_date")), entry_price,
                  float(trade["stop_loss"]) if trade.get("stop_loss") else None,
                  float(trade["target_price"]) if trade.get("target_price") else None,
-                 max(0.0, float(trade.get("fees") or 0)), str(trade.get("notes") or "")),
+                 max(0.0, float(trade.get("fees") or 0)), str(trade.get("notes") or ""),
+                 str(trade.get("recommendation_run_id") or "") or None,
+                 str(trade.get("hold_until") or "") or None),
             )
             connection.commit()
             return int(cursor.lastrowid)

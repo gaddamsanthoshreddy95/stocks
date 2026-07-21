@@ -55,6 +55,25 @@ class ReportDatabaseTests(unittest.TestCase):
             self.assertEqual(database.list_actual_trades()[0]["status"], "CLOSED")
             self.assertEqual(database.actual_trade_summary()["realized_pnl"], 85)
 
+    def test_recommended_trade_tracks_hold_date_until_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = ReportDatabase(Path(directory) / "reports.db")
+            trade_id = database.add_actual_trade({
+                "symbol": "SBIN", "instrument_type": "EQUITY", "side": "BUY",
+                "quantity": 2, "entry_date": "2026-07-20", "entry_price": 800,
+                "stop_loss": 780, "target_price": 850, "hold_until": "2026-08-01",
+                "recommendation_run_id": "daily-1",
+            })
+            self.assertTrue(database.candidate_has_open_trade("daily-1", "SBIN"))
+            trade = database.list_actual_trades("OPEN")[0]
+            self.assertEqual(trade["hold_until"], "2026-08-01")
+            self.assertEqual(database.get_candidate_trade("daily-1", "SBIN")["status"], "OPEN")
+            database.close_actual_trade(trade_id, "2026-07-25", 850)
+            self.assertFalse(database.candidate_has_open_trade("daily-1", "SBIN"))
+            completed = database.get_candidate_trade("daily-1", "SBIN")
+            self.assertEqual(completed["status"], "CLOSED")
+            self.assertEqual(completed["realized_pnl"], 100)
+
     def test_actual_sell_trade_pnl_and_delete(self):
         with tempfile.TemporaryDirectory() as directory:
             database = ReportDatabase(Path(directory) / "reports.db")

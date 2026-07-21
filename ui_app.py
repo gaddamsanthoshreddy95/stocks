@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import date
+from datetime import date, timedelta
 from threading import Lock
 from typing import Any
 from uuid import uuid4
@@ -239,6 +239,56 @@ def execution_mark_control(database: ReportDatabase | None, run_id: str, symbol:
         st.success(f"{symbol} saved as {mark}.")
 
 
+def start_recommended_trade_control(database: ReportDatabase, run_id: str,
+                                    trade: dict[str, Any]) -> None:
+    """Turn a recommendation into a durable open position from the report UI."""
+    symbol = str(trade.get("symbol", "")).upper().removesuffix(".NS")
+    tracked = database.get_candidate_trade(run_id, symbol)
+    if tracked and tracked["status"] == "OPEN":
+        st.success("ACTIVE TRADE — shown in Daily Status until you mark it completed.")
+        st.caption(f"Entry ₹{tracked['entry_price']:,.2f} · Quantity {tracked['quantity']} · "
+                   f"Hold until {tracked.get('hold_until') or 'target / stop-loss'}")
+        return
+    if tracked and tracked["status"] == "CLOSED":
+        outcome = "PROFIT" if float(tracked.get("realized_pnl") or 0) >= 0 else "LOSS"
+        st.success(f"COMPLETED · {outcome} · Final P&L ₹{float(tracked.get('realized_pnl') or 0):,.2f}")
+        st.caption(f"Exited on {tracked.get('exit_date')} at ₹{float(tracked.get('exit_price') or 0):,.2f}")
+        return
+    levels = trade.get("levels") or {}
+    suggested_entry = float(levels.get("entry") or trade.get("current_price") or 1)
+    suggested_hold = date.today() + timedelta(days=10)
+    with st.form(f"start-trade-{run_id}-{symbol}"):
+        st.markdown("**I traded this stock**")
+        st.caption("Saving here creates the active trade automatically; no separate Trade Tracker entry is needed.")
+        columns = st.columns(4)
+        quantity = columns[0].number_input("Quantity", min_value=1, value=1, step=1,
+                                           key=f"qty-{run_id}-{symbol}")
+        entry_price = columns[1].number_input("Actual entry price", min_value=0.01,
+                                              value=suggested_entry, step=0.05,
+                                              key=f"entry-{run_id}-{symbol}")
+        entry_date = columns[2].date_input("Trade date", value=date.today(),
+                                           key=f"entry-date-{run_id}-{symbol}")
+        hold_until = columns[3].date_input("Hold until (review date)", value=suggested_hold,
+                                           min_value=entry_date,
+                                           key=f"hold-{run_id}-{symbol}")
+        submitted = st.form_submit_button("Mark TRADED & start tracking", type="primary")
+    if submitted:
+        database.set_candidate_execution(run_id, symbol, True)
+        action = str(trade.get("final_action") or trade.get("action") or "BUY").upper()
+        database.add_actual_trade({
+            "symbol": symbol, "instrument_type": "EQUITY",
+            "side": "SELL" if action in {"SELL", "SHORT"} else "BUY",
+            "quantity": int(quantity), "entry_date": entry_date.isoformat(),
+            "entry_price": entry_price, "stop_loss": levels.get("stop_loss"),
+            "target_price": levels.get("target_1") or levels.get("target"),
+            "strategy": trade.get("strategy") or action,
+            "recommendation_run_id": run_id, "hold_until": hold_until.isoformat(),
+            "notes": "Created from daily-report recommendation",
+        })
+        st.success(f"{symbol} is now an active tracked trade.")
+        st.rerun()
+
+
 def selected_stock_details(report: dict[str, Any], database: ReportDatabase | None = None) -> None:
     selected = [*report.get("trades", []), *report.get("watchlist", [])]
     run_id = str(report.get("run_id", ""))
@@ -250,8 +300,11 @@ def selected_stock_details(report: dict[str, Any], database: ReportDatabase | No
         label = f"{trade.get('symbol')} — {trade.get('final_action')} — {trade.get('status')}"
         with st.expander(label):
             symbol = str(trade.get("symbol", ""))
-            execution_mark_control(database, run_id, symbol,
-                                   execution_marks.get(symbol, "NOT_TRADED"), "selected")
+            if database:
+                start_recommended_trade_control(database, run_id, trade)
+            else:
+                execution_mark_control(database, run_id, symbol,
+                                       execution_marks.get(symbol, "NOT_TRADED"), "selected")
             if trade.get("status") != "TRADE":
                 st.warning("Watchlist/research candidate only — this is not an executable trade. "
                            "Position quantity remains zero until every final gate passes.")
@@ -431,15 +484,13 @@ def show_report(report: dict[str, Any], database: ReportDatabase | None = None) 
         rejected = report.get("rejected", [])
         if rejected:
             run_id = str(report.get("run_id", ""))
-            execution_marks = (database.get_candidate_executions(run_id)
-                               if database and run_id else {})
             for item in rejected:
                 with st.expander(str(item.get("symbol", "UNKNOWN"))):
                     symbol = str(item.get("symbol", "UNKNOWN"))
                     st.error("Analytical status: REJECTED. Marking this as TRADED records your "
                              "actual action and does not convert it into an approved recommendation.")
-                    execution_mark_control(database, run_id, symbol,
-                                           execution_marks.get(symbol, "NOT_TRADED"), "rejected")
+                    if database:
+                        start_recommended_trade_control(database, run_id, item)
                     for reason in item.get("reasons", []):
                         st.write(f"• {reason}")
         else:
@@ -565,8 +616,95 @@ def bearish_options_page(platform: TradingPlatform) -> None:
         st.json(result.get("rejection_counts", {}), expanded=True)
 
 
+def _latest_trade_price(platform: TradingPlatform, trade: dict[str, Any]) -> float | None:
+    """Best available price for status display; failures never hide the position."""
+    symbol = str(trade.get("symbol", ""))
+    try:
+        live_provider = getattr(platform.provider, "provider", None)
+        if trade.get("instrument_type") == "EQUITY" and live_provider is not None:
+            price = live_provider.get_ltp(symbol)
+            return float(price) if price is not None else None
+        if trade.get("instrument_type") == "EQUITY":
+            history = platform.provider.get_data(symbol)
+            if history is not None and not history.empty:
+                return float(history["Close"].iloc[-1])
+    except Exception:
+        return None
+    return None
+
+
+def _trade_status(trade: dict[str, Any], current_price: float | None) -> dict[str, Any]:
+    entry = float(trade["entry_price"])
+    quantity = int(trade["quantity"])
+    direction = 1 if trade["side"] == "BUY" else -1
+    pnl = None if current_price is None else round(
+        (current_price - entry) * quantity * direction - float(trade.get("fees") or 0), 2
+    )
+    stop, target = trade.get("stop_loss"), trade.get("target_price")
+    stop_hit = current_price is not None and stop is not None and (
+        current_price <= float(stop) if direction == 1 else current_price >= float(stop)
+    )
+    target_hit = current_price is not None and target is not None and (
+        current_price >= float(target) if direction == 1 else current_price <= float(target)
+    )
+    review_due = bool(trade.get("hold_until") and date.today().isoformat() >= trade["hold_until"])
+    if stop_hit:
+        decision, reason = "EXIT", f"Stop-loss ₹{float(stop):,.2f} has been reached."
+    elif target_hit:
+        decision, reason = "EXIT / BOOK PROFIT", f"Target ₹{float(target):,.2f} has been reached."
+    elif review_due:
+        decision, reason = "REVIEW / EXIT", "The planned hold-until date has been reached."
+    else:
+        decision, reason = "HOLD", "Hold while price remains between stop-loss and target."
+    return {"pnl": pnl, "decision": decision, "reason": reason}
+
+
+def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabase) -> None:
+    """Persistent daily view for all trades that have not been completed."""
+    open_trades = database.list_actual_trades("OPEN")
+    st.subheader("Daily Status — Active Trades")
+    if not open_trades:
+        st.info("No active trades. Mark an approved recommendation as TRADED to start tracking it.")
+        return
+    st.caption("These trades remain here on every run until you mark them completed.")
+    for trade in open_trades:
+        current = _latest_trade_price(platform, trade)
+        status = _trade_status(trade, current)
+        pnl_label = "Price unavailable" if status["pnl"] is None else f"₹{status['pnl']:,.2f}"
+        result = "—" if status["pnl"] is None else ("PROFIT" if status["pnl"] >= 0 else "LOSS")
+        with st.container(border=True):
+            st.markdown(f"### {trade['symbol']} · {status['decision']}")
+            columns = st.columns(5)
+            columns[0].metric("Entry", f"₹{trade['entry_price']:,.2f}")
+            columns[1].metric("Current", "Unavailable" if current is None else f"₹{current:,.2f}")
+            columns[2].metric("Unrealized P&L", pnl_label)
+            columns[3].metric("Position", result)
+            columns[4].metric("Hold until", trade.get("hold_until") or "Target / stop")
+            st.write(status["reason"])
+            st.caption(f"Stop: {value(trade.get('stop_loss'))} · Target: "
+                       f"{value(trade.get('target_price'))} · Quantity: {trade['quantity']}")
+            with st.form(f"complete-active-{trade['id']}"):
+                finish = st.columns(3)
+                exit_price = finish[0].number_input(
+                    "Exit price", min_value=0.01, value=float(current or trade["entry_price"]),
+                    step=0.05, key=f"daily-exit-price-{trade['id']}")
+                exit_date = finish[1].date_input("Exit date", value=date.today(),
+                                                 key=f"daily-exit-date-{trade['id']}")
+                exit_fees = finish[2].number_input("Exit fees", min_value=0.0, value=0.0,
+                                                   key=f"daily-exit-fees-{trade['id']}")
+                completed = st.form_submit_button("Mark completed", type="primary")
+            if completed:
+                pnl = database.close_actual_trade(trade["id"], exit_date.isoformat(),
+                                                  exit_price, exit_fees)
+                outcome = "PROFIT" if pnl >= 0 else "LOSS"
+                st.success(f"Completed as {outcome}. Final P&L: ₹{pnl:,.2f}")
+                st.rerun()
+
+
 def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> None:
     st.title("Daily report")
+    active_trade_status_panel(platform, database)
+    st.divider()
     active_future = daily_report_jobs().future(st.session_state.get("daily_report_job_id"))
     job_running = active_future is not None and not active_future.done()
     with st.form("daily-report-form"):
@@ -647,7 +785,7 @@ def history_page(database: ReportDatabase) -> None:
             show_report(report, database)
 
 
-def trade_tracker_page(database: ReportDatabase) -> None:
+def trade_tracker_page(platform: TradingPlatform, database: ReportDatabase) -> None:
     st.title("Actual trade tracker")
     st.caption("Record trades you actually placed. This journal never sends broker orders.")
     st.subheader("All suggestions marked TRADED")
@@ -663,6 +801,7 @@ def trade_tracker_page(database: ReportDatabase) -> None:
     columns[1].metric("Open", summary["open"])
     columns[2].metric("Closed", summary["closed"])
     columns[3].metric("Realized P&L", f"₹{summary['realized_pnl']:,.2f}")
+    active_trade_status_panel(platform, database)
 
     with st.expander("Add an actual trade", expanded=not summary["total"]):
         with st.form("actual-trade-entry", clear_on_submit=True):
@@ -676,6 +815,8 @@ def trade_tracker_page(database: ReportDatabase) -> None:
             entry_price = second[1].number_input("Entry price", min_value=0.01, value=1.0, step=0.05)
             stop_loss = second[2].number_input("Stop loss (optional)", min_value=0.0, value=0.0)
             target = second[3].number_input("Target (optional)", min_value=0.0, value=0.0)
+            hold_until = st.date_input("Hold until / review date", value=date.today() + timedelta(days=10),
+                                       min_value=entry_date)
             third = st.columns(4)
             strategy = third[0].text_input("Strategy", placeholder="Swing / Long Call")
             option_type = third[1].selectbox("Option type", ("CE", "PE"),
@@ -696,6 +837,7 @@ def trade_tracker_page(database: ReportDatabase) -> None:
                     "strike": strike if instrument == "OPTION" else None,
                     "expiry": expiry.isoformat() if instrument == "OPTION" else None,
                     "fees": fees, "notes": notes,
+                    "hold_until": hold_until.isoformat(),
                 })
                 st.success(f"Actual trade #{trade_id} saved.")
                 st.rerun()
@@ -709,7 +851,13 @@ def trade_tracker_page(database: ReportDatabase) -> None:
     display_columns = ["id", "symbol", "instrument_type", "side", "strategy", "option_type",
                        "strike", "expiry", "quantity", "entry_date", "entry_price", "stop_loss",
                        "target_price", "status", "exit_date", "exit_price", "fees", "realized_pnl", "notes"]
-    st.dataframe(pd.DataFrame(trades)[display_columns], width="stretch", hide_index=True)
+    trade_frame = pd.DataFrame(trades)
+    trade_frame["outcome"] = trade_frame.apply(
+        lambda row: ("ACTIVE" if row["status"] == "OPEN" else
+                     "PROFIT" if float(row["realized_pnl"] or 0) >= 0 else "LOSS"), axis=1)
+    display_columns.insert(13, "hold_until")
+    display_columns.insert(15, "outcome")
+    st.dataframe(trade_frame[display_columns], width="stretch", hide_index=True)
 
     open_trades = [trade for trade in trades if trade["status"] == "OPEN"]
     if open_trades:
@@ -784,7 +932,7 @@ def main() -> None:
     elif page == "Bearish options":
         bearish_options_page(platform)
     elif page == "Trade tracker":
-        trade_tracker_page(database)
+        trade_tracker_page(platform, database)
     elif page == "History":
         history_page(database)
     else:
