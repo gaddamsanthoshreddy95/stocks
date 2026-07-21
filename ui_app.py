@@ -130,6 +130,7 @@ def start_feature_job(feature: str, task) -> None:
     st.session_state[f"{feature}_job_error"] = None
 
 
+@st.fragment(run_every=2)
 def daily_report_status() -> None:
     """Render cross-page status; called in the sidebar on every Streamlit rerun."""
     future, completed = sync_daily_report_job()
@@ -162,8 +163,11 @@ def daily_report_status() -> None:
             st.success(f"{label}: completed.")
     if ((future is not None and not future.done())
             or any(item is not None and not item.done() for item in generic_futures)):
-        if st.button("Refresh job status", key="refresh-background-job-status"):
-            st.rerun()
+        st.caption("Status refreshes automatically every 2 seconds.")
+    elif completed is not None:
+        # A fragment rerun only redraws the sidebar.  Trigger one full rerun so
+        # the newly synchronized report immediately replaces the page body.
+        st.rerun()
 
 
 def value(value: Any, fallback: str = "N/A") -> Any:
@@ -578,11 +582,14 @@ def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> No
         st.session_state["daily_report_job_id"] = job_id
         st.session_state["daily_report_synced_job_id"] = None
         st.session_state["daily_report_job_error"] = None
+        # Do not leave the previous report on screen while a fresh live-market
+        # report is running; it makes stale output appear to be the new result.
+        st.session_state.pop("current_report", None)
         st.success("Daily report started in the background. You can open History or any other page.")
         st.rerun()
     if job_running:
         st.info("A daily report is running in the background. Navigation will not stop it.")
-    report = st.session_state.get("current_report")
+    report = None if job_running else st.session_state.get("current_report")
     if report:
         show_report(report, database)
 

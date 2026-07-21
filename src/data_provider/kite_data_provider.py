@@ -34,6 +34,22 @@ class KiteDataProvider:
         self._long_history_cache_lock = RLock()
         self._history_cache_lock = RLock()
         self._nfo_instruments = None
+        self._live_refresh = False
+
+    def begin_live_refresh(self) -> None:
+        """Make subsequent reads fetch the current, still-forming NSE candle.
+
+        The UI keeps this provider alive with ``st.cache_resource``.  Without
+        explicitly starting a new snapshot, its in-memory history cache never
+        expires and later daily reports can keep using the first report's data.
+        """
+        with self._history_cache_lock:
+            self._history_cache.clear()
+            self._live_refresh = True
+
+    def end_live_refresh(self) -> None:
+        with self._history_cache_lock:
+            self._live_refresh = False
 
     @staticmethod
     def _merge_history(cached, fresh):
@@ -78,6 +94,7 @@ class KiteDataProvider:
             cache_is_fresh = (
                 cached is not None and not cached.empty
                 and self._history_cache_is_fresh(path)
+                and not self._live_refresh
             )
             if cache_is_fresh:
                 history = cached

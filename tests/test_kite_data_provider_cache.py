@@ -1,3 +1,5 @@
+from datetime import date
+
 import pandas as pd
 
 from src.data_provider.kite_data_provider import KiteDataProvider
@@ -50,3 +52,18 @@ def test_daily_history_is_reused_from_disk_on_same_day(tmp_path):
 
     assert provider.calls == [("RELIANCE", "1y")]
     pd.testing.assert_frame_equal(cached, downloaded)
+
+
+def test_live_refresh_bypasses_memory_and_fresh_disk_cache(tmp_path):
+    provider = FakeKiteProvider()
+    data = KiteDataProvider(provider, history_cache_directory=tmp_path)
+
+    data.get_data("RELIANCE")
+    data.begin_live_refresh()
+    data.get_data("RELIANCE")
+    data.end_live_refresh()
+
+    assert provider.calls == [
+        ("RELIANCE", "1y"),
+        ("RELIANCE", "1y", date(2026, 7, 17)),
+    ]

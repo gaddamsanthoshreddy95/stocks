@@ -741,9 +741,23 @@ class TradingPlatform:
         if option_month is not None:
             if not isinstance(option_month, str) or not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", option_month):
                 raise ValidationError("option_month must use YYYY-MM format")
-        return self._serialize(
-            DailyTradingAssistant(self, option_month=option_month).generate(limit, minimum_score)
-        )
+        # Streamlit caches this platform instance across button clicks.  A new
+        # report must therefore invalidate the prior analysis snapshot and,
+        # for Kite, bypass the on-disk TTL while today's candle is changing.
+        with self._analysis_cache_lock:
+            self._analysis_cache.clear()
+        begin_live_refresh = getattr(self.provider, "begin_live_refresh", None)
+        end_live_refresh = getattr(self.provider, "end_live_refresh", None)
+        if begin_live_refresh is not None:
+            begin_live_refresh()
+        try:
+            report = DailyTradingAssistant(self, option_month=option_month).generate(
+                limit, minimum_score
+            )
+            return self._serialize(report)
+        finally:
+            if end_live_refresh is not None:
+                end_live_refresh()
 
     def record_trade_outcome(self, recommendation_id: str, won: bool,
                              return_percent: float | None = None,
