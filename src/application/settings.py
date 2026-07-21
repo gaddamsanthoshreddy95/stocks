@@ -49,6 +49,11 @@ class PlatformSettings:
     stock_trade_absolute_rr_floor: float = 1.0
     candidate_min_liquidity_score: float = 40.0
     candidate_min_trust_score: float = 55.0
+    selection_max_trades_per_sector: int = 2
+    selection_stability_lookback_runs: int = 3
+    selection_stability_min_appearances: int = 2
+    entry_zone_below_atr: float = 0.25
+    entry_zone_above_atr: float = 0.50
     setup_min_technical_score: float = 55.0
     setup_support_near_percent: float = 4.0
     setup_reversal_rsi: float = 35.0
@@ -178,6 +183,12 @@ class PlatformSettings:
                 raise ValueError("Entry and relative-strength thresholds must be between 0 and 100")
         if not 0 <= self.candidate_min_liquidity_score <= 100 or not 0 <= self.candidate_min_trust_score <= 100:
             raise ValueError("Candidate quality gates must be between 0 and 100")
+        if (self.selection_max_trades_per_sector < 1
+                or self.selection_stability_lookback_runs < 1
+                or not 1 <= self.selection_stability_min_appearances <= self.selection_stability_lookback_runs):
+            raise ValueError("Selection sector and stability limits must be positive")
+        if self.entry_zone_below_atr < 0 or self.entry_zone_above_atr < 0:
+            raise ValueError("Entry-zone ATR allowances cannot be negative")
         if not 0 <= self.option_long_delta_min <= self.option_long_delta_max <= 1:
             raise ValueError("Option long delta range is invalid")
         if self.setup_support_near_percent < 0 or self.entry_confirmation_relative_volume < 0:
@@ -294,6 +305,11 @@ class PlatformSettings:
             stock_trade_absolute_rr_floor=env_float("STOCK_TRADE_ABSOLUTE_RR_FLOOR", 1),
             candidate_min_liquidity_score=env_float("CANDIDATE_MIN_LIQUIDITY_SCORE", 40),
             candidate_min_trust_score=env_float("CANDIDATE_MIN_TRUST_SCORE", 55),
+            selection_max_trades_per_sector=env_int("SELECTION_MAX_TRADES_PER_SECTOR", 2),
+            selection_stability_lookback_runs=env_int("SELECTION_STABILITY_LOOKBACK_RUNS", 3),
+            selection_stability_min_appearances=env_int("SELECTION_STABILITY_MIN_APPEARANCES", 2),
+            entry_zone_below_atr=env_float("ENTRY_ZONE_BELOW_ATR", .25),
+            entry_zone_above_atr=env_float("ENTRY_ZONE_ABOVE_ATR", .50),
             setup_min_technical_score=env_float("SETUP_MIN_TECHNICAL_SCORE", 55),
             setup_support_near_percent=env_float("SETUP_SUPPORT_NEAR_PERCENT", 4),
             setup_reversal_rsi=env_float("SETUP_REVERSAL_RSI", 35),

@@ -1,7 +1,10 @@
 import unittest
 
+import pandas as pd
+
 from ui_app import (candidate_rows, likely_news_reaction, news_impact, news_rows,
-                    option_leg_rows, snapshot_rows)
+                    decision_timeline, option_leg_rows, outcome_rows, price_figure,
+                    report_changes, snapshot_rows, trade_performance)
 
 
 class UIMarketContextTests(unittest.TestCase):
@@ -59,6 +62,48 @@ class UIMarketContextTests(unittest.TestCase):
         }]}}})
         self.assertEqual(rows[0]["Strike"], 800)
         self.assertEqual(rows[0]["Type"], "PE")
+
+    def test_trade_performance_calculates_journal_statistics(self):
+        result = trade_performance([
+            {"status": "CLOSED", "realized_pnl": 200, "entry_price": 100,
+             "stop_loss": 95, "quantity": 10},
+            {"status": "CLOSED", "realized_pnl": -100, "entry_price": 50,
+             "stop_loss": 45, "quantity": 10},
+            {"status": "OPEN", "realized_pnl": None},
+        ])
+        self.assertEqual(result["closed"], 2)
+        self.assertEqual(result["win_rate"], 50)
+        self.assertEqual(result["net_pnl"], 100)
+        self.assertEqual(result["expectancy"], 50)
+
+    def test_price_figure_contains_price_volume_and_rsi(self):
+        index = pd.date_range("2026-01-01", periods=60)
+        frame = pd.DataFrame({
+            "Open": range(100, 160), "High": range(102, 162),
+            "Low": range(98, 158), "Close": range(101, 161),
+            "Volume": range(1000, 1060),
+        }, index=index)
+        figure = price_figure(frame, "SBIN", {"entry": 150, "stop_loss": 140})
+        names = {trace.name for trace in figure.data}
+        self.assertTrue({"SBIN", "20 DMA", "50 DMA", "Volume", "RSI 14"}.issubset(names))
+
+    def test_report_changes_identifies_new_removed_and_status_changes(self):
+        previous = {"trades": [{"symbol": "SBIN", "status": "TRADE", "quality_score": 80}],
+                    "watchlist": [{"symbol": "INFY", "status": "WATCHLIST"}]}
+        current = {"watchlist": [{"symbol": "SBIN", "status": "WATCHLIST", "quality_score": 75}],
+                   "trades": [{"symbol": "TCS", "status": "TRADE"}]}
+        changes = {row["Symbol"]: row["Change"] for row in report_changes(current, previous)}
+        self.assertEqual(changes, {"INFY": "REMOVED", "SBIN": "STATUS CHANGED", "TCS": "NEW"})
+
+    def test_decision_timeline_and_outcome_attribution(self):
+        timeline = decision_timeline({"symbol": "SBIN", "status": "TRADE", "quality_score": 80,
+                                      "entry_selection": {"status": "BUY NOW"}})
+        self.assertEqual(timeline[-1]["State"], "PASSED")
+        outcomes = outcome_rows([{"symbol": "SBIN", "status": "CLOSED", "side": "BUY",
+                                  "entry_price": 100, "exit_price": 110, "quantity": 10,
+                                  "stop_loss": 95, "realized_pnl": 100, "strategy": "Swing"}])
+        self.assertEqual(outcomes[0]["R multiple"], 2)
+        self.assertEqual(outcomes[0]["Outcome"], "PROFIT")
 
 
 if __name__ == "__main__":

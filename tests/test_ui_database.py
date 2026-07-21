@@ -114,6 +114,23 @@ class ReportDatabaseTests(unittest.TestCase):
             self.assertEqual(rows[0]["original_status"], "REJECTED")
             self.assertEqual(rows[0]["original_action"], "REJECT")
 
+    def test_watchlists_alerts_and_preferences_round_trip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = ReportDatabase(Path(directory) / "reports.db")
+            watchlist_id = database.create_watchlist("Breakouts")
+            self.assertEqual(database.create_watchlist("Breakouts"), watchlist_id)
+            database.add_watchlist_symbol(watchlist_id, "sbin.ns")
+            self.assertEqual(database.watchlist_symbols(watchlist_id)[0]["symbol"], "SBIN")
+            self.assertTrue(database.remove_watchlist_symbol(watchlist_id, "SBIN"))
+            alert_id = database.add_price_alert("reliance", "above", 3000, "Entry")
+            self.assertEqual(database.list_price_alerts(True)[0]["target_price"], 3000)
+            database.trigger_price_alert(alert_id)
+            self.assertEqual(database.list_price_alerts()[0]["enabled"], 0)
+            database.set_preference("high_contrast", True)
+            self.assertTrue(database.get_preferences()["high_contrast"])
+            self.assertTrue(database.delete_price_alert(alert_id))
+            self.assertTrue(database.delete_watchlist(watchlist_id))
+
 
 if __name__ == "__main__":
     unittest.main()

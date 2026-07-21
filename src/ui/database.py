@@ -75,6 +75,34 @@ class ReportDatabase:
                     updated_at TEXT NOT NULL,
                     PRIMARY KEY (run_id, symbol)
                 );
+                CREATE TABLE IF NOT EXISTS watchlists (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS watchlist_symbols (
+                    watchlist_id INTEGER NOT NULL REFERENCES watchlists(id) ON DELETE CASCADE,
+                    symbol TEXT NOT NULL,
+                    added_at TEXT NOT NULL,
+                    PRIMARY KEY (watchlist_id, symbol)
+                );
+                CREATE TABLE IF NOT EXISTS price_alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT NOT NULL,
+                    condition TEXT NOT NULL CHECK(condition IN ('ABOVE','BELOW')),
+                    target_price REAL NOT NULL CHECK(target_price > 0),
+                    label TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    triggered_at TEXT,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_price_alerts_enabled
+                    ON price_alerts(enabled, symbol);
+                CREATE TABLE IF NOT EXISTS ui_preferences (
+                    preference_key TEXT PRIMARY KEY,
+                    preference_value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             # Lightweight migrations for databases created by older UI versions.
@@ -84,6 +112,117 @@ class ReportDatabase:
             if "hold_until" not in columns:
                 connection.execute("ALTER TABLE actual_trades ADD COLUMN hold_until TEXT")
             connection.commit()
+
+    def create_watchlist(self, name: str) -> int:
+        name = str(name).strip()
+        if not name:
+            raise ValueError("Watchlist name is required.")
+        with closing(self._connect()) as connection:
+            cursor = connection.execute(
+                "INSERT OR IGNORE INTO watchlists(name, created_at) VALUES (?, ?)",
+                (name, datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
+            row = connection.execute("SELECT id FROM watchlists WHERE name=?", (name,)).fetchone()
+            return int(row["id"] if row else cursor.lastrowid)
+
+    def list_watchlists(self) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT w.id, w.name, w.created_at, COUNT(s.symbol) symbol_count
+                   FROM watchlists w LEFT JOIN watchlist_symbols s ON s.watchlist_id=w.id
+                   GROUP BY w.id ORDER BY w.name"""
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def add_watchlist_symbol(self, watchlist_id: int, symbol: str) -> None:
+        symbol = str(symbol).strip().upper().removesuffix(".NS")
+        if not symbol:
+            raise ValueError("Symbol is required.")
+        with closing(self._connect()) as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO watchlist_symbols(watchlist_id, symbol, added_at) VALUES (?, ?, ?)",
+                (int(watchlist_id), symbol, datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
+
+    def remove_watchlist_symbol(self, watchlist_id: int, symbol: str) -> bool:
+        with closing(self._connect()) as connection:
+            cursor = connection.execute(
+                "DELETE FROM watchlist_symbols WHERE watchlist_id=? AND symbol=?",
+                (int(watchlist_id), str(symbol).strip().upper().removesuffix(".NS")),
+            )
+            connection.commit()
+            return cursor.rowcount == 1
+
+    def watchlist_symbols(self, watchlist_id: int) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT symbol, added_at FROM watchlist_symbols WHERE watchlist_id=? ORDER BY added_at DESC",
+                (int(watchlist_id),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def delete_watchlist(self, watchlist_id: int) -> bool:
+        with closing(self._connect()) as connection:
+            cursor = connection.execute("DELETE FROM watchlists WHERE id=?", (int(watchlist_id),))
+            connection.commit()
+            return cursor.rowcount == 1
+
+    def add_price_alert(self, symbol: str, condition: str, target_price: float,
+                        label: str = "") -> int:
+        symbol = str(symbol).strip().upper().removesuffix(".NS")
+        condition, target_price = str(condition).upper(), float(target_price)
+        if not symbol or condition not in {"ABOVE", "BELOW"} or target_price <= 0:
+            raise ValueError("Alert symbol, condition, or target price is invalid.")
+        with closing(self._connect()) as connection:
+            cursor = connection.execute(
+                """INSERT INTO price_alerts(symbol, condition, target_price, label, created_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (symbol, condition, target_price, str(label).strip(),
+                 datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
+            return int(cursor.lastrowid)
+
+    def list_price_alerts(self, enabled_only: bool = False) -> list[dict[str, Any]]:
+        query = "SELECT * FROM price_alerts"
+        if enabled_only:
+            query += " WHERE enabled=1"
+        query += " ORDER BY created_at DESC"
+        with closing(self._connect()) as connection:
+            return [dict(row) for row in connection.execute(query).fetchall()]
+
+    def trigger_price_alert(self, alert_id: int) -> None:
+        with closing(self._connect()) as connection:
+            connection.execute(
+                "UPDATE price_alerts SET enabled=0, triggered_at=? WHERE id=?",
+                (datetime.now(timezone.utc).isoformat(), int(alert_id)),
+            )
+            connection.commit()
+
+    def delete_price_alert(self, alert_id: int) -> bool:
+        with closing(self._connect()) as connection:
+            cursor = connection.execute("DELETE FROM price_alerts WHERE id=?", (int(alert_id),))
+            connection.commit()
+            return cursor.rowcount == 1
+
+    def set_preference(self, key: str, value: Any) -> None:
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """INSERT INTO ui_preferences(preference_key, preference_value, updated_at)
+                   VALUES (?, ?, ?) ON CONFLICT(preference_key) DO UPDATE SET
+                   preference_value=excluded.preference_value, updated_at=excluded.updated_at""",
+                (str(key), json.dumps(value), datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
+
+    def get_preferences(self) -> dict[str, Any]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT preference_key, preference_value FROM ui_preferences"
+            ).fetchall()
+        return {str(row["preference_key"]): json.loads(row["preference_value"]) for row in rows}
 
     def save_report(self, report: dict[str, Any], market_data_source: str) -> int:
         generated_at = datetime.now(timezone.utc).isoformat()

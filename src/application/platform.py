@@ -728,7 +728,8 @@ class TradingPlatform:
         return self._serialize(self.paper_broker.portfolio())
 
     def daily_report(self, limit: int = 5, minimum_score: int = 40,
-                     option_month: str | None = None) -> dict[str, Any]:
+                     option_month: str | None = None,
+                     excluded_symbols: set[str] | None = None) -> dict[str, Any]:
         """Generate the final ranked daily trade report.
 
         This is a research/paper-trading recommendation only.  It never sends
@@ -753,7 +754,10 @@ class TradingPlatform:
             if begin_live_refresh is not None:
                 begin_live_refresh(self._universe_symbols())
                 live_refresh_started = True
-            report = DailyTradingAssistant(self, option_month=option_month).generate(
+            assistant = (DailyTradingAssistant(
+                self, option_month=option_month, excluded_symbols=excluded_symbols
+            ) if excluded_symbols else DailyTradingAssistant(self, option_month=option_month))
+            report = assistant.generate(
                 limit, minimum_score
             )
             return self._serialize(report)

@@ -31,6 +31,7 @@ from src.learning.recommendation_journal import RecommendationJournal
 from src.workflow.final_decision import (
     EntryConfirmationResult, FinalConsistencyValidator, FinalDecisionEngine,
 )
+from src.workflow.stock_selection import classify_entry_timing
 from src.options.structure_validator import OptionStructureValidator
 from uuid import uuid4
 
@@ -44,7 +45,8 @@ class DailyTradingAssistant:
     trading, validation, and error behaviour remain consistent everywhere.
     """
 
-    def __init__(self, platform, option_month: str | None = None):
+    def __init__(self, platform, option_month: str | None = None,
+                 excluded_symbols: set[str] | None = None):
         self.platform = platform
         self.option_month = option_month
         self.sectors = SectorMapper()
@@ -56,6 +58,9 @@ class DailyTradingAssistant:
         self.event_context = DailyEventContext([], "UNAVAILABLE", [], {})
         self.journal = RecommendationJournal()
         self.run_id = ""
+        self.excluded_symbols = {
+            str(symbol).upper().removesuffix(".NS") for symbol in (excluded_symbols or set())
+        }
 
     @staticmethod
     def _stars(score: float, maximum: float = 100) -> str:
@@ -76,6 +81,45 @@ class DailyTradingAssistant:
             if score >= floor_score:
                 return {"grade": grade, "label": label}
         return {"grade": "D", "label": "Weak"}
+
+    @staticmethod
+    def _apply_sector_limit(reviewed: list[dict[str, Any]], maximum: int) -> int:
+        """Keep the highest-ranked trades and transparently defer sector duplicates."""
+        counts: Counter = Counter()
+        deferred = 0
+        for trade in reviewed:
+            if trade.get("status") != "TRADE":
+                continue
+            sector = str(trade.get("sector") or "UNKNOWN")
+            if sector == "UNKNOWN" or counts[sector] < maximum:
+                counts[sector] += 1
+                continue
+            deferred += 1
+            reason = f"Sector limit reached: only {maximum} final trade(s) are allowed from {sector}."
+            trade["status"] = "WATCHLIST"
+            trade["final_action"] = trade["action"] = trade["recommendation"] = "WATCHLIST"
+            trade["trade_eligibility"] = {
+                **trade["trade_eligibility"], "eligible": False, "status": "WATCHLIST",
+                "blocking_reasons": [*trade["trade_eligibility"].get("blocking_reasons", []), reason],
+            }
+            trade["final_decision"] = {
+                **trade["final_decision"], "action": "WATCHLIST", "executable": False,
+                "reasons": [*trade["final_decision"].get("reasons", []), reason],
+            }
+            trade["risk"] = {**trade["risk"], "quantity": 0, "capital_used": 0,
+                             "risk_amount": 0, "actual_risk": 0}
+            trade["entry_selection"] = {**trade["entry_selection"], "status": "AVOID",
+                                         "reason": reason}
+            trade["selection_status"], trade["selection_reason"] = "AVOID", reason
+            trade["option_trade_approval"] = {
+                **trade["option_trade_approval"], "status": "REJECTED", "approved": False,
+                "rejection_codes": [*trade["option_trade_approval"].get("rejection_codes", []),
+                                    "SECTOR_CONCENTRATION_LIMIT"],
+            }
+            trade["option_execution_valid"] = False
+            trade["option_context"] = {**trade["option_context"], "execution": "REJECTED"}
+            FinalConsistencyValidator.validate(trade)
+        return deferred
 
     @staticmethod
     def _band(value: float, bands: tuple[tuple[float, float], ...], default: float) -> float:
@@ -848,7 +892,40 @@ class DailyTradingAssistant:
             "ai_reasoning": reasons,
             "calibrated_probability": calibrated_probability,
             "validation": validation,
+            "selection_stability": candidate.get("selection_stability", {
+                "status": "NO_HISTORY", "eligible": True, "appearances": 0,
+                "runs_reviewed": 0, "score": 100.0,
+            }),
         }
+        entry_selection = classify_entry_timing(
+            current_price=trade["current_price"], levels=trade["levels"],
+            setup_category=setup_evaluation.get("stage_1", {}).get("category", setup),
+            breakout_confirmed=bool(analysis["breakout"].get("confirmed")),
+            entry_confirmed=entry_confirmation.passed, direction=direction,
+            ema20=analysis["analysis"].get("ema20"), atr=analysis["analysis"].get("atr"),
+            entry_zone_below_atr=self.platform.settings.entry_zone_below_atr,
+            entry_zone_above_atr=self.platform.settings.entry_zone_above_atr,
+        )
+        trade["entry_selection"] = entry_selection
+        trade["selection_status"] = entry_selection["status"]
+        trade["selection_reason"] = entry_selection["reason"]
+        stability = trade["selection_stability"]
+        active_position_block = trade["symbol"] in self.excluded_symbols
+        stability_pending = not bool(stability.get("eligible", True))
+        if active_position_block:
+            trade["entry_selection"] = {**trade["entry_selection"], "status": "AVOID",
+                                         "reason": "This stock already has an active tracked position."}
+        elif stability_pending:
+            trade["entry_selection"] = {
+                **trade["entry_selection"], "status": "WAIT FOR CONFIRMATION",
+                "reason": "Candidate is new or not yet persistent; keep it on the watchlist until confirmed.",
+            }
+        trade["selection_status"] = trade["entry_selection"]["status"]
+        trade["selection_reason"] = trade["entry_selection"]["reason"]
+        if entry_selection["status"] != "BUY NOW":
+            status_reasons.append(entry_selection["reason"])
+        if active_position_block or stability_pending:
+            status_reasons.append(trade["selection_reason"])
         news_complete = news["news_state"] in {"ANALYZED", "NO_RELEVANT_NEWS",
                                                 "NOT_REQUESTED_BY_POLICY"}
         event_complete = event_assessment.get("freshness_state") in {"FRESH", "DELAYED", "STALE"}
@@ -882,9 +959,12 @@ class DailyTradingAssistant:
         decision = FinalDecisionEngine.decide(
             direction=direction,
             entry=entry_confirmation,
-            readiness_status="WAIT" if not regime_rs_complete else execution_state["status"],
+            readiness_status=("WAIT" if (not regime_rs_complete
+                                          or entry_selection["status"] != "BUY NOW"
+                                          or stability_pending)
+                              else execution_state["status"]),
             eligible=bool(equity_eligible and regime_rs_passed),
-            hard_block=bool(event_assessment["hard_block"]),
+            hard_block=bool(event_assessment["hard_block"] or active_position_block),
             critical_failure=bool(critical_failure),
             news_complete=news_complete or not self.platform.settings.news_analysis_required_for_execution,
             event_complete=event_complete,
@@ -894,6 +974,20 @@ class DailyTradingAssistant:
         )
         final_action = decision.action.value
         executable = decision.executable
+        if final_action in {"REJECT", "NO_TRADE"}:
+            trade["entry_selection"] = {
+                **entry_selection, "status": "AVOID",
+                "reason": ((decision.rejection_reasons or decision.reasons or
+                            ("Final execution gates did not pass.",))[0]),
+            }
+        elif not executable and entry_selection["status"] == "BUY NOW":
+            trade["entry_selection"] = {
+                **entry_selection, "status": "AVOID",
+                "reason": ((decision.reasons or
+                            ("Entry timing is valid, but final execution gates did not pass.",))[0]),
+            }
+        trade["selection_status"] = trade["entry_selection"]["status"]
+        trade["selection_reason"] = trade["entry_selection"]["reason"]
         trade["final_decision"] = decision.to_dict()
         trade["analysis_waivers"] = analysis_waivers
         trade["market_policy"] = {**trade["market_policy"], "relative_strength_minimum": regime_rs_minimum,
@@ -947,6 +1041,10 @@ class DailyTradingAssistant:
             trade["trade_eligibility"] = {**trade["trade_eligibility"], "eligible": False,
                                            "status": "REJECTED",
                                            "blocking_reasons": list(failed_decision.rejection_reasons)}
+            trade["entry_selection"] = {**trade["entry_selection"], "status": "AVOID",
+                                         "reason": "Risk budget is too small for one valid share or lot."}
+            trade["selection_status"] = "AVOID"
+            trade["selection_reason"] = trade["entry_selection"]["reason"]
         restrictions = set(event_assessment["strategy_restrictions"])
         option_reasons = []
         if not option_structure["valid"]: option_reasons.extend(option_structure["rejection_codes"])
@@ -1004,6 +1102,10 @@ class DailyTradingAssistant:
             trade["option_execution_valid"] = False
             trade["option_context"] = {**trade["option_context"], "execution": "REJECTED"}
             trade["consistency_validation"] = {"passed": False, "errors": [str(exc)]}
+            trade["entry_selection"] = {**trade["entry_selection"], "status": "AVOID",
+                                         "reason": f"Consistency validation failed: {exc}"}
+            trade["selection_status"] = "AVOID"
+            trade["selection_reason"] = trade["entry_selection"]["reason"]
             FinalConsistencyValidator.validate(trade)
         if executable and record_recommendation:
             trade["recommendation_id"] = self.outcomes.record_recommendation(trade)
@@ -1086,6 +1188,27 @@ class DailyTradingAssistant:
         strength_by_symbol = {
             candidate["symbol"]: strength for candidate, strength in zip(candidates, strengths)
         }
+        recent_runs = self.journal.recent_selected_symbols(
+            self.platform.settings.selection_stability_lookback_runs
+        )
+        for candidate in candidates:
+            symbol = str(candidate["symbol"]).upper().removesuffix(".NS")
+            appearances = sum(symbol in symbols for symbols in recent_runs)
+            required = min(
+                self.platform.settings.selection_stability_min_appearances,
+                len(recent_runs),
+            )
+            enough_history = len(recent_runs) >= self.platform.settings.selection_stability_min_appearances
+            candidate["selection_stability"] = {
+                "status": ("NEW_NO_HISTORY" if not recent_runs else
+                           "STABLE" if appearances >= required else
+                           "BUILDING_HISTORY" if not enough_history else "UNSTABLE"),
+                "eligible": not enough_history or appearances >= required,
+                "appearances": appearances,
+                "runs_reviewed": len(recent_runs),
+                "required_appearances": required,
+                "score": round(100 * (appearances + 1) / (len(recent_runs) + 1), 2),
+            }
         context_seconds = perf_counter() - context_started
         logger.info("Daily stage market/relative strength: %.3fs", context_seconds)
 
@@ -1147,10 +1270,19 @@ class DailyTradingAssistant:
         reviewed = [
             self._trade(index, candidate, market_context, sector_strength,
                         news=news_by_symbol.get(candidate["symbol"], self._news_not_requested()),
-                        relative_strength=strength_by_symbol[candidate["symbol"]])
+                        relative_strength=strength_by_symbol[candidate["symbol"]],
+                        record_recommendation=False)
             for index, candidate in enumerate(candidates, start=1)
         ]
         reviewed.sort(key=self._ranking_key, reverse=True)
+        sector_deferred = self._apply_sector_limit(
+            reviewed, self.platform.settings.selection_max_trades_per_sector
+        )
+        for trade in reviewed:
+            trade["recommendation_id"] = (
+                self.outcomes.record_recommendation(trade) if trade["status"] == "TRADE" else None
+            )
+            trade["journal_path"] = str(self.journal.append(self.run_id, trade))
         final_review_seconds = perf_counter() - final_review_started
         logger.info("Daily stage final review: %.3fs", final_review_seconds)
         rejected = [trade for trade in reviewed if trade["status"] == "REJECTED"]
@@ -1276,6 +1408,11 @@ class DailyTradingAssistant:
             "timings": timings,
             "rejected": [
                 {"symbol": trade["symbol"], "technical_score": trade["technical_score"],
+                 "status": trade["status"], "final_action": trade["final_action"],
+                 "current_price": trade["current_price"], "levels": trade["levels"],
+                 "selection_status": trade["selection_status"],
+                 "selection_reason": trade["selection_reason"],
+                 "entry_selection": trade["entry_selection"],
                  "reasons": trade["status_reasons"] or trade["validation"]["conflicts"]}
                 for trade in rejected
             ],
@@ -1301,6 +1438,14 @@ class DailyTradingAssistant:
                 "conflicts_rejected": sum(1 for item in rejected if item["validation"]["critical_conflicts"]),
                 "stocks_shortlisted": len(trades) + len(watchlist),
                 "trades_generated": len(trades),
+                "sector_duplicates_deferred": sector_deferred,
+                "active_positions_excluded": sum(
+                    item["symbol"] in self.excluded_symbols for item in reviewed
+                ),
+                "unstable_candidates_deferred": sum(
+                    not item.get("selection_stability", {}).get("eligible", True)
+                    for item in reviewed
+                ),
                 "option_month_filter": self.option_month or "AUTO_NEAREST",
                 "event_risk_reviewed": len(reviewed),
                 "event_risk_very_low": sum(1 for item in reviewed if item["event_risk"]["event_risk_level"] == "VERY_LOW"),

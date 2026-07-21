@@ -133,6 +133,129 @@ Transformers exposes optional computer-vision modules that reference
 `torchvision`; disabling the watcher prevents misleading `ModuleNotFoundError:
 torchvision` messages without installing an unrelated vision stack.
 
+## Architecture and data flow
+
+The application is split into four layers. `TradingPlatform` is the supported
+facade between the UI/API and the analytical code, so Streamlit only presents
+results and records user actions; it does not make independent trading
+decisions.
+
+```mermaid
+flowchart LR
+    subgraph Inputs
+        K[Kite historical data<br/>live quotes and option chain]
+        N[Google News RSS<br/>FinBERT and spaCy]
+        C[Local configuration<br/>instruments and event data]
+    end
+
+    subgraph Application
+        P[TradingPlatform]
+        A[Analysis pipeline]
+        D[Decision and risk gates]
+        R[Daily report builder]
+    end
+
+    subgraph Persistence
+        S[(SQLite report snapshots<br/>and actual trades)]
+        F[JSON caches and<br/>recommendation journal]
+    end
+
+    subgraph Presentation
+        UI[Streamlit UI]
+        API[REST API]
+        CLI[CLI and text report]
+    end
+
+    K --> P
+    N --> P
+    C --> P
+    P --> A --> D --> R
+    R --> S
+    R --> F
+    R --> UI
+    R --> API
+    R --> CLI
+```
+
+### Daily analysis pipeline
+
+A daily report follows this sequence:
+
+1. Load the configured NSE/F&O universe and obtain historical OHLCV data.
+2. Calculate technical indicators, trend, momentum, volatility, volume,
+   support/resistance, candlestick evidence, and relative strength.
+3. Rank the universe and shortlist the strongest candidates for deeper review.
+4. Enrich shortlisted stocks with market regime, sector strength, news
+   sentiment, event risk, historical behaviour, and liquidity evidence.
+5. Build an equity trade plan containing entry, stop-loss, targets,
+   risk/reward, and risk-based position size.
+6. When Kite option data is enabled, validate expiry, strikes, liquidity,
+   structure, pricing, and final option approval.
+7. Apply final quality and execution-readiness gates. Each candidate is placed
+   in `trades`, `watchlist`, or `rejected`; the system never forces a trade to
+   satisfy the requested limit.
+8. Save the complete immutable report JSON to SQLite and present the same
+   result through Streamlit, REST, CLI text, and downloadable JSON.
+
+```mermaid
+flowchart TD
+    U[Universe] --> H[Historical and live market data]
+    H --> T[Technical and multi-timeframe analysis]
+    T --> Q[Ranking and shortlist]
+    Q --> E[Market, sector, news, event,<br/>history and liquidity enrichment]
+    E --> L[Entry, stop, targets,<br/>position size and option validation]
+    L --> G{Final gates}
+    G -->|Executable| TR[TRADE]
+    G -->|Needs confirmation| W[WATCHLIST]
+    G -->|Fails a hard gate| X[REJECTED]
+    TR --> O[Final daily report]
+    W --> O
+    X --> O
+```
+
+### Suggested trade and live-position lifecycle
+
+Marking a stock as traded from its suggestion card creates an `actual_trades`
+record immediately. The user supplies the actual entry price, quantity, trade
+date, and hold/review date; the report's stop-loss and first target are copied
+into the tracked position. No second entry in Trade Tracker is required.
+
+In Kite mode, one shared `KiteTicker` WebSocket subscribes to the instrument
+tokens for all active equity positions. Incoming ticks are stored in a
+thread-safe in-memory cache. The Streamlit fragment redraws once per second
+from that cache, without requesting a quote on every redraw. If the WebSocket
+is connecting or unavailable, a rate-limited REST quote provides the fallback.
+Completing a position removes it from active subscriptions and freezes its
+realized P&L.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Suggested: Daily report result
+    Suggested --> Active: Mark TRADED and enter execution details
+    Active --> Active: WebSocket tick updates price and unrealized P&L
+    Active --> Hold: Price remains between stop and target
+    Hold --> Active: Next market tick
+    Active --> ExitReview: Stop/target/review date reached
+    ExitReview --> Completed: Enter exit price and mark completed
+    Completed --> [*]: Realized PROFIT or LOSS is frozen
+```
+
+### How final results are displayed
+
+| Result | Where it appears | What is shown |
+|---|---|---|
+| Daily summary | Dashboard and Daily report | Stocks scanned, candidates reviewed, generated trades, watchlist count, and market regime |
+| Executable candidate | Daily report → Candidates | Final action, quality, readiness, entry, stop-loss, targets, risk/reward, and approved option structure when available |
+| Watchlist or rejected candidate | Daily report → Candidates/Rejected | Current analytical status and the reasons or confirmation gates that prevented execution |
+| Active position | Daily report and Trade Tracker → Live Positions | WebSocket price, live P&L in rupees and percent, PROFIT/LOSS state, stop/target distance, HOLD/EXIT guidance, hold-until date, and latest tick time |
+| Completed position | Suggestion card and Trade Tracker history | Exit date, exit price, fees, final realized P&L, and final PROFIT or LOSS outcome |
+| Full audit result | History, text, and JSON tabs | Immutable input context, scores, evidence, rejection reasons, dependency health, and the complete report payload |
+
+The live UI is advisory and journal-oriented. `HOLD`, `EXIT`, `BOOK PROFIT`,
+and `REVIEW` describe the stored trade plan relative to the latest price; they
+do not submit, modify, or close an order at Zerodha. A trade becomes completed
+only when the user records its exit in the UI.
+
 ## Daily recommendation report
 
 `daily-report` is the end-to-end output: it scans the configured universe,

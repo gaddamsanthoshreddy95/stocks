@@ -48,3 +48,29 @@ class RecommendationJournal:
             finally:
                 os.close(descriptor)
         return path
+
+    def recent_selected_symbols(self, limit: int = 3) -> list[set[str]]:
+        """Return selected symbols grouped by the most recent completed runs."""
+        if not self.root.exists() or limit <= 0:
+            return []
+        records = []
+        for path in sorted(self.root.glob("*/*/*.jsonl"), reverse=True):
+            try:
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    row = json.loads(line)
+                    if row.get("run_id") and row.get("symbol"):
+                        records.append(row)
+            except (OSError, json.JSONDecodeError):
+                continue
+        records.sort(key=lambda row: str(row.get("timestamp", "")), reverse=True)
+        grouped: dict[str, set[str]] = {}
+        for row in records:
+            run_id = str(row["run_id"])
+            if run_id not in grouped and len(grouped) >= limit:
+                continue
+            action = str(row.get("final_action") or "").upper()
+            if action not in {"REJECT", "NO_TRADE"}:
+                grouped.setdefault(run_id, set()).add(str(row["symbol"]).upper())
+            else:
+                grouped.setdefault(run_id, set())
+        return list(grouped.values())[:limit]
