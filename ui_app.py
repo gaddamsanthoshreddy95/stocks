@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import date
+from threading import Lock
 from typing import Any
+from uuid import uuid4
 
 import pandas as pd
 import streamlit as st
@@ -24,6 +27,143 @@ st.set_page_config(page_title="Stock Analyzer", page_icon="📈", layout="wide")
 @st.cache_resource
 def services() -> tuple[TradingPlatform, ReportDatabase]:
     return TradingPlatform(), ReportDatabase()
+
+
+class DailyReportJobs:
+    """Run long tasks outside Streamlit's page lifecycle so navigation is safe."""
+
+    def __init__(self) -> None:
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ui-background")
+        self._jobs: dict[str, Future] = {}
+        self._lock = Lock()
+
+    def submit(self, platform: TradingPlatform, database: ReportDatabase, limit: int,
+               minimum_score: int, option_month: str | None) -> str:
+        job_id = uuid4().hex
+
+        def generate_and_save() -> dict[str, Any]:
+            report = platform.daily_report(limit, minimum_score, option_month)
+            report_id = database.save_report(report, platform.settings.market_data_source)
+            return {"report": report, "report_id": report_id}
+
+        future = self._executor.submit(generate_and_save)
+        with self._lock:
+            self._jobs[job_id] = future
+        return job_id
+
+    def submit_task(self, task) -> str:
+        """Submit any UI operation that must survive navigation."""
+        job_id = uuid4().hex
+        future = self._executor.submit(task)
+        with self._lock:
+            self._jobs[job_id] = future
+        return job_id
+
+    def future(self, job_id: str | None) -> Future | None:
+        with self._lock:
+            return self._jobs.get(str(job_id)) if job_id else None
+
+
+@st.cache_resource
+def daily_report_jobs() -> DailyReportJobs:
+    return DailyReportJobs()
+
+
+def sync_daily_report_job() -> tuple[Future | None, dict[str, Any] | None]:
+    """Copy a completed background result into this browser session once."""
+    job_id = st.session_state.get("daily_report_job_id")
+    future = daily_report_jobs().future(job_id)
+    if future is None or not future.done():
+        return future, None
+    if st.session_state.get("daily_report_synced_job_id") == job_id:
+        return future, None
+    st.session_state["daily_report_synced_job_id"] = job_id
+    try:
+        result = future.result()
+    except Exception as exc:  # The worker preserves the original exception for display here.
+        st.session_state["daily_report_job_error"] = str(exc)
+        return future, None
+    st.session_state["current_report"] = result["report"]
+    st.session_state["daily_report_job_error"] = None
+    return future, result
+
+
+FEATURE_JOBS = {
+    "market": ("Global market refresh", "global_market_result"),
+    "bearish": ("Bearish options scan", "bearish_options"),
+    "analysis": ("Stock analysis", "analysis_result"),
+}
+
+
+def sync_feature_jobs() -> None:
+    """Move completed generic job results into the current browser session."""
+    for feature, (_, result_key) in FEATURE_JOBS.items():
+        job_id = st.session_state.get(f"{feature}_job_id")
+        future = daily_report_jobs().future(job_id)
+        if future is None or not future.done():
+            continue
+        if st.session_state.get(f"{feature}_synced_job_id") == job_id:
+            continue
+        st.session_state[f"{feature}_synced_job_id"] = job_id
+        try:
+            result = future.result()
+            if feature == "market":
+                st.session_state["global_market_context"] = result["market"]
+                st.session_state["sector_market_context"] = result["sectors"]
+                st.session_state["global_market_refresh_attempted"] = True
+            else:
+                st.session_state[result_key] = result
+            st.session_state[f"{feature}_job_error"] = None
+        except Exception as exc:
+            st.session_state[f"{feature}_job_error"] = str(exc)
+
+
+def feature_is_running(feature: str) -> bool:
+    future = daily_report_jobs().future(st.session_state.get(f"{feature}_job_id"))
+    return future is not None and not future.done()
+
+
+def start_feature_job(feature: str, task) -> None:
+    job_id = daily_report_jobs().submit_task(task)
+    st.session_state[f"{feature}_job_id"] = job_id
+    st.session_state[f"{feature}_synced_job_id"] = None
+    st.session_state[f"{feature}_job_error"] = None
+
+
+def daily_report_status() -> None:
+    """Render cross-page status; called in the sidebar on every Streamlit rerun."""
+    future, completed = sync_daily_report_job()
+    generic_futures = [
+        daily_report_jobs().future(st.session_state.get(f"{feature}_job_id"))
+        for feature in FEATURE_JOBS
+    ]
+    if future is None and not any(generic_futures):
+        return
+    st.divider()
+    st.caption("Background jobs")
+    if future is not None:
+        if not future.done():
+            st.info("Daily report: running in background.")
+        elif st.session_state.get("daily_report_job_error"):
+            st.error("Daily report failed: " + st.session_state["daily_report_job_error"])
+        else:
+            report_id = completed["report_id"] if completed else None
+            message = f"Daily report: completed and saved as #{report_id}." if report_id else "Daily report: completed and saved."
+            st.success(message)
+    for feature, (label, _) in FEATURE_JOBS.items():
+        feature_future = daily_report_jobs().future(st.session_state.get(f"{feature}_job_id"))
+        if feature_future is None:
+            continue
+        if not feature_future.done():
+            st.info(f"{label}: running in background.")
+        elif st.session_state.get(f"{feature}_job_error"):
+            st.error(f"{label} failed: {st.session_state[f'{feature}_job_error']}")
+        else:
+            st.success(f"{label}: completed.")
+    if ((future is not None and not future.done())
+            or any(item is not None and not item.done() for item in generic_futures)):
+        if st.button("Refresh job status", key="refresh-background-job-status"):
+            st.rerun()
 
 
 def value(value: Any, fallback: str = "N/A") -> Any:
@@ -324,18 +464,20 @@ def dashboard(platform: TradingPlatform, database: ReportDatabase) -> None:
     else:
         st.info("Generate the first daily report from the Daily report page.")
     st.subheader("Live global market snapshot")
-    if st.button("Refresh global markets"):
-        with st.spinner("Loading global indices, commodities and forex…"):
-            # This button explicitly requests internet market context. Global
-            # and sector quotes come from Yahoo and do not require Kite mode.
+    market_running = feature_is_running("market")
+    if st.button("Refresh global markets", disabled=market_running):
+        def refresh_markets() -> dict[str, Any]:
             market, sectors = ContextEnrichment(
                 True,
                 sector_history_provider=(platform.provider
                                          if platform.settings.market_data_source == "kite" else None),
             ).market_and_sectors(force_refresh=True)
-            st.session_state["global_market_context"] = market
-            st.session_state["sector_market_context"] = sectors
-            st.session_state["global_market_refresh_attempted"] = True
+            return {"market": market, "sectors": sectors}
+        start_feature_job("market", refresh_markets)
+        st.success("Market refresh started in the background. You can change pages safely.")
+        st.rerun()
+    if market_running:
+        st.info("Global markets are refreshing in the background.")
     market = st.session_state.get("global_market_context", {})
     global_rows = snapshot_rows(market.get("global", {}))
     global_available = sum(row["Status"] == "AVAILABLE" for row in global_rows)
@@ -380,15 +522,16 @@ def bearish_options_page(platform: TradingPlatform) -> None:
         left, right = st.columns(2)
         minimum_score = left.number_input("Minimum bearish score", 0, 100, 60)
         option_month = right.text_input("Option month (optional)", placeholder="YYYY-MM")
-        submitted = st.form_submit_button("Scan bearish options", type="primary")
+        submitted = st.form_submit_button("Scan bearish options", type="primary",
+                                          disabled=feature_is_running("bearish"))
     if submitted:
-        with st.spinner("Scanning the universe and validating option structures…"):
-            try:
-                st.session_state["bearish_options"] = platform.bearish_option_candidates(
-                    limit=2, minimum_score=int(minimum_score), option_month=option_month.strip() or None
-                )
-            except (PlatformError, ValueError) as exc:
-                st.error(str(exc))
+        start_feature_job("bearish", lambda: platform.bearish_option_candidates(
+            limit=2, minimum_score=int(minimum_score), option_month=option_month.strip() or None
+        ))
+        st.success("Bearish-options scan started in the background. You can change pages safely.")
+        st.rerun()
+    if feature_is_running("bearish"):
+        st.info("The bearish-options scan is running in the background.")
     result = st.session_state.get("bearish_options")
     if not result:
         return
@@ -420,21 +563,25 @@ def bearish_options_page(platform: TradingPlatform) -> None:
 
 def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> None:
     st.title("Daily report")
+    active_future = daily_report_jobs().future(st.session_state.get("daily_report_job_id"))
+    job_running = active_future is not None and not active_future.done()
     with st.form("daily-report-form"):
         left, middle, right = st.columns(3)
         limit = left.number_input("Maximum final trades", 1, 50, 5)
         minimum_score = middle.number_input("Minimum technical score", 0, 100, 40)
         option_month = right.text_input("Option month (optional)", placeholder="YYYY-MM")
-        submitted = st.form_submit_button("Run report", type="primary")
+        submitted = st.form_submit_button("Run report", type="primary", disabled=job_running)
     if submitted:
-        with st.spinner("Running the end-to-end workflow…"):
-            try:
-                report = platform.daily_report(int(limit), int(minimum_score), option_month.strip() or None)
-                report_id = database.save_report(report, platform.settings.market_data_source)
-                st.session_state["current_report"] = report
-                st.success(f"Report completed and saved locally as #{report_id}.")
-            except (PlatformError, ValueError) as exc:
-                st.error(str(exc))
+        job_id = daily_report_jobs().submit(
+            platform, database, int(limit), int(minimum_score), option_month.strip() or None
+        )
+        st.session_state["daily_report_job_id"] = job_id
+        st.session_state["daily_report_synced_job_id"] = None
+        st.session_state["daily_report_job_error"] = None
+        st.success("Daily report started in the background. You can open History or any other page.")
+        st.rerun()
+    if job_running:
+        st.info("A daily report is running in the background. Navigation will not stop it.")
     report = st.session_state.get("current_report")
     if report:
         show_report(report, database)
@@ -444,14 +591,15 @@ def analyze_page(platform: TradingPlatform) -> None:
     st.title("Analyze one stock")
     with st.form("analyze-form"):
         symbol = st.text_input("NSE symbol", placeholder="RELIANCE").strip().upper()
-        submitted = st.form_submit_button("Analyze", type="primary")
+        submitted = st.form_submit_button("Analyze", type="primary",
+                                          disabled=feature_is_running("analysis"))
     if submitted and symbol:
-        with st.spinner(f"Analyzing {symbol}…"):
-            try:
-                result = platform.analyze(symbol)
-                st.session_state["analysis_result"] = result
-            except (PlatformError, ValueError) as exc:
-                st.error(str(exc))
+        start_feature_job("analysis", lambda: platform.analyze(symbol))
+        st.session_state["analysis_symbol"] = symbol
+        st.success(f"Analysis for {symbol} started in the background. You can change pages safely.")
+        st.rerun()
+    if feature_is_running("analysis"):
+        st.info(f"Analysis for {st.session_state.get('analysis_symbol', symbol)} is running in the background.")
     result = st.session_state.get("analysis_result")
     if result:
         st.subheader(str(result.get("symbol", symbol)))
@@ -610,6 +758,7 @@ def system_page(platform: TradingPlatform, database: ReportDatabase) -> None:
 
 def main() -> None:
     platform, database = services()
+    sync_feature_jobs()
     with st.sidebar:
         st.header("Navigation")
         page = st.radio("Page", ("Dashboard", "Daily report", "Bearish options", "Analyze",
@@ -618,6 +767,7 @@ def main() -> None:
         st.divider()
         st.caption(f"Source: {platform.settings.market_data_source.upper()}")
         st.caption("Paper trading only")
+        daily_report_status()
     if page == "Dashboard":
         dashboard(platform, database)
     elif page == "Daily report":

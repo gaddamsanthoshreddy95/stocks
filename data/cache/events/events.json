@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-20T21:43:51.443991+00:00",
+  "generated_at": "2026-07-21T03:11:47.952866+00:00",
   "events": [
     {
       "event_id": "MARKET-WIDE-20260720",
@@ -17,7 +17,7 @@
       "event_end": null,
       "expected_duration": "ONE_TO_THREE_DAYS",
       "raw_score": 70.0,
-      "decayed_score": 47.08,
+      "decayed_score": 40.21,
       "confidence": 0.95,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -41,6 +41,55 @@
       "canonical_event_id": "6808812b9908a648",
       "related_article_ids": [
         "MARKET-WIDE-20260720"
+      ],
+      "event_version": 1,
+      "meaningful_update_count": 0
+    },
+    {
+      "event_id": "SILVER_PRICE-20260721",
+      "title": "Silver +3.44%",
+      "normalized_event_type": "SILVER_PRICE_UP",
+      "category": "COMMODITY",
+      "severity": "MEDIUM",
+      "direction": "POSITIVE",
+      "status": "ACTIVE",
+      "source_type": "COMMODITY_DATA",
+      "detected_at": "2026-07-21T03:11:47.952866+00:00",
+      "last_updated_at": "2026-07-21T03:11:47.952866+00:00",
+      "event_start": null,
+      "event_end": null,
+      "expected_duration": "THREE_TO_SEVEN_DAYS",
+      "raw_score": 50,
+      "decayed_score": 50,
+      "confidence": 0.9,
+      "freshness_score": 100.0,
+      "materiality": 1.0,
+      "gap_risk": 42.5,
+      "affected_sectors": [
+        "METAL",
+        "ELECTRONICS",
+        "RENEWABLE_ENERGY"
+      ],
+      "affected_symbols": [],
+      "affected_regions": [],
+      "affected_commodities": [
+        "SILVER"
+      ],
+      "reasons": [
+        "Silver move +3.44%, z-score +0.00, three-day move +0.00%."
+      ],
+      "source_titles": [],
+      "source_urls_or_ids": [],
+      "is_scheduled": false,
+      "is_confirmed": true,
+      "is_duplicate": false,
+      "duplicate_of": null,
+      "half_life_hours": 36.0,
+      "decay_model": "EXPONENTIAL",
+      "expiry_time": null,
+      "canonical_event_id": "8794a018ed433ade",
+      "related_article_ids": [
+        "SILVER_PRICE-20260721"
       ],
       "event_version": 1,
       "meaningful_update_count": 0
