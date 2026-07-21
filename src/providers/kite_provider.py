@@ -49,6 +49,33 @@ class KiteProvider(BaseProvider):
 
         return data[exchange_symbol]["last_price"]
 
+    def get_live_candle(self, symbol: str) -> dict:
+        """Return today's live NSE OHLCV snapshot for one equity."""
+        return self.get_live_candles([symbol])[symbol.upper().removesuffix(".NS")]
+
+    def get_live_candles(self, symbols: list[str]) -> dict[str, dict]:
+        """Fetch live snapshots in Kite's bulk-quote batches."""
+        clean_symbols = list(dict.fromkeys(
+            symbol.upper().removesuffix(".NS") for symbol in symbols
+        ))
+        quotes = {}
+        for offset in range(0, len(clean_symbols), 500):
+            exchange_symbols = [f"NSE:{symbol}" for symbol in clean_symbols[offset:offset + 500]]
+            quotes.update(self.kite.quote(exchange_symbols))
+        candles = {}
+        for symbol in clean_symbols:
+            quote = quotes[f"NSE:{symbol}"]
+            ohlc = quote.get("ohlc") or {}
+            last_price = float(quote["last_price"])
+            candles[symbol] = {
+                "Open": float(ohlc.get("open") or last_price),
+                "High": float(ohlc.get("high") or last_price),
+                "Low": float(ohlc.get("low") or last_price),
+                "Close": last_price,
+                "Volume": int(quote.get("volume") or 0),
+            }
+        return candles
+
     # -----------------------------------------------------
 
     def get_historical_data(

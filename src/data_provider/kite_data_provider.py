@@ -35,21 +35,45 @@ class KiteDataProvider:
         self._history_cache_lock = RLock()
         self._nfo_instruments = None
         self._live_refresh = False
+        self._live_candles: dict[str, dict] = {}
 
-    def begin_live_refresh(self) -> None:
-        """Make subsequent reads fetch the current, still-forming NSE candle.
+    def begin_live_refresh(self, symbols: list[str] | None = None) -> None:
+        """Make subsequent reads include the current, still-forming NSE candle.
 
         The UI keeps this provider alive with ``st.cache_resource``.  Without
         explicitly starting a new snapshot, its in-memory history cache never
         expires and later daily reports can keep using the first report's data.
+        Cached history remains reusable: only today's small live quote is read.
         """
         with self._history_cache_lock:
             self._history_cache.clear()
             self._live_refresh = True
+            get_live_candles = getattr(self.provider, "get_live_candles", None)
+            self._live_candles = (
+                get_live_candles(symbols) if get_live_candles is not None and symbols else {}
+            )
 
     def end_live_refresh(self) -> None:
         with self._history_cache_lock:
             self._live_refresh = False
+            self._live_candles = {}
+
+    def _with_live_candle(self, symbol: str, history: pd.DataFrame) -> pd.DataFrame:
+        """Overlay today's quote without redownloading a year of candles."""
+        if history is None or history.empty:
+            return history
+        candle = self._live_candles.get(symbol)
+        if candle is None:
+            get_live_candle = getattr(self.provider, "get_live_candle", None)
+            if get_live_candle is None:
+                return history
+            candle = get_live_candle(symbol)
+        live = history.copy()
+        timezone = getattr(live.index, "tz", None)
+        today = pd.Timestamp.now(tz=timezone).normalize()
+        for column in ("Open", "High", "Low", "Close", "Volume"):
+            live.loc[today, column] = candle[column]
+        return live.sort_index()
 
     @staticmethod
     def _merge_history(cached, fresh):
@@ -94,7 +118,6 @@ class KiteDataProvider:
             cache_is_fresh = (
                 cached is not None and not cached.empty
                 and self._history_cache_is_fresh(path)
-                and not self._live_refresh
             )
             if cache_is_fresh:
                 history = cached
@@ -112,6 +135,8 @@ class KiteDataProvider:
                 if history is not None and not history.empty:
                     path.parent.mkdir(parents=True, exist_ok=True)
                     history.to_parquet(path)
+            if self._live_refresh:
+                history = self._with_live_candle(key, history)
             self._history_cache[key] = history
             return history.copy()
 

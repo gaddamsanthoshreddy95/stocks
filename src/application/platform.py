@@ -748,15 +748,17 @@ class TradingPlatform:
             self._analysis_cache.clear()
         begin_live_refresh = getattr(self.provider, "begin_live_refresh", None)
         end_live_refresh = getattr(self.provider, "end_live_refresh", None)
-        if begin_live_refresh is not None:
-            begin_live_refresh()
+        live_refresh_started = False
         try:
+            if begin_live_refresh is not None:
+                begin_live_refresh(self._universe_symbols())
+                live_refresh_started = True
             report = DailyTradingAssistant(self, option_month=option_month).generate(
                 limit, minimum_score
             )
             return self._serialize(report)
         finally:
-            if end_live_refresh is not None:
+            if live_refresh_started and end_live_refresh is not None:
                 end_live_refresh()
 
     def record_trade_outcome(self, recommendation_id: str, won: bool,
