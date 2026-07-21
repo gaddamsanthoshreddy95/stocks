@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from threading import Lock
 from typing import Any
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
@@ -18,6 +19,7 @@ from src.application.platform import TradingPlatform
 from src.news.ai_sentiment import AISentimentAnalyzer
 from src.presenter.daily_report import DailyReportPresenter
 from src.ui.database import ReportDatabase
+from src.ui.live_prices import KiteLivePriceFeed
 from src.workflow.context_enrichment import ContextEnrichment
 
 
@@ -27,6 +29,11 @@ st.set_page_config(page_title="Stock Analyzer", page_icon="📈", layout="wide")
 @st.cache_resource
 def services() -> tuple[TradingPlatform, ReportDatabase]:
     return TradingPlatform(), ReportDatabase()
+
+
+@st.cache_resource
+def kite_live_price_feed(_provider: Any) -> KiteLivePriceFeed:
+    return KiteLivePriceFeed(_provider)
 
 
 class DailyReportJobs:
@@ -616,21 +623,30 @@ def bearish_options_page(platform: TradingPlatform) -> None:
         st.json(result.get("rejection_counts", {}), expanded=True)
 
 
-def _latest_trade_price(platform: TradingPlatform, trade: dict[str, Any]) -> float | None:
-    """Best available price for status display; failures never hide the position."""
-    symbol = str(trade.get("symbol", ""))
+@st.cache_data(ttl=5, show_spinner=False)
+def _polled_equity_price(_platform: TradingPlatform, symbol: str) -> float | None:
+    """Rate-limited REST/cache fallback used until WebSocket ticks arrive."""
     try:
-        live_provider = getattr(platform.provider, "provider", None)
-        if trade.get("instrument_type") == "EQUITY" and live_provider is not None:
+        live_provider = getattr(_platform.provider, "provider", None)
+        if live_provider is not None:
             price = live_provider.get_ltp(symbol)
             return float(price) if price is not None else None
-        if trade.get("instrument_type") == "EQUITY":
-            history = platform.provider.get_data(symbol)
-            if history is not None and not history.empty:
-                return float(history["Close"].iloc[-1])
+        history = _platform.provider.get_data(symbol)
+        if history is not None and not history.empty:
+            return float(history["Close"].iloc[-1])
     except Exception:
         return None
     return None
+
+
+def _latest_trade_price(platform: TradingPlatform, trade: dict[str, Any],
+                        feed: KiteLivePriceFeed | None = None) -> float | None:
+    """Best available price for status display; failures never hide the position."""
+    if trade.get("instrument_type") != "EQUITY":
+        return None
+    symbol = str(trade.get("symbol", ""))
+    streamed = feed.quote(symbol) if feed else None
+    return float(streamed["price"]) if streamed else _polled_equity_price(platform, symbol)
 
 
 def _trade_status(trade: dict[str, Any], current_price: float | None) -> dict[str, Any]:
@@ -640,6 +656,7 @@ def _trade_status(trade: dict[str, Any], current_price: float | None) -> dict[st
     pnl = None if current_price is None else round(
         (current_price - entry) * quantity * direction - float(trade.get("fees") or 0), 2
     )
+    pnl_percent = None if pnl is None else round(pnl / (entry * quantity) * 100, 2)
     stop, target = trade.get("stop_loss"), trade.get("target_price")
     stop_hit = current_price is not None and stop is not None and (
         current_price <= float(stop) if direction == 1 else current_price >= float(stop)
@@ -656,33 +673,79 @@ def _trade_status(trade: dict[str, Any], current_price: float | None) -> dict[st
         decision, reason = "REVIEW / EXIT", "The planned hold-until date has been reached."
     else:
         decision, reason = "HOLD", "Hold while price remains between stop-loss and target."
-    return {"pnl": pnl, "decision": decision, "reason": reason}
+    stop_distance = None if current_price is None or stop is None else round(
+        ((current_price - float(stop)) * direction / current_price) * 100, 2)
+    target_distance = None if current_price is None or target is None else round(
+        ((float(target) - current_price) * direction / current_price) * 100, 2)
+    return {"pnl": pnl, "pnl_percent": pnl_percent, "decision": decision, "reason": reason,
+            "stop_distance": stop_distance, "target_distance": target_distance}
 
 
+@st.fragment(run_every=1)
 def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabase) -> None:
-    """Persistent daily view for all trades that have not been completed."""
+    """Live, persistent view for all trades that have not been completed."""
     open_trades = database.list_actual_trades("OPEN")
-    st.subheader("Daily Status — Active Trades")
+    st.subheader("Live Positions")
     if not open_trades:
+        live_provider = getattr(platform.provider, "provider", None)
+        if live_provider is not None:
+            kite_live_price_feed(live_provider).update_symbols([])
         st.info("No active trades. Mark an approved recommendation as TRADED to start tracking it.")
         return
-    st.caption("These trades remain here on every run until you mark them completed.")
+    india_now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    market_open = (india_now.weekday() < 5 and
+                   (india_now.hour, india_now.minute) >= (9, 15) and
+                   (india_now.hour, india_now.minute) <= (15, 30))
+    live_provider = getattr(platform.provider, "provider", None)
+    feed = None
+    if live_provider is not None:
+        feed = kite_live_price_feed(live_provider)
+        feed.update_symbols([
+            trade["symbol"] for trade in open_trades
+            if trade.get("instrument_type") == "EQUITY"
+        ])
+    feed_status = feed.status() if feed else {"connected": False, "error": None}
+    connection_label = ("LIVE WEBSOCKET" if feed_status["connected"] else
+                        "CONNECTING / POLLING" if feed else "CACHED PRICE")
+    header = st.columns([3, 1])
+    header[0].caption(
+        f"{connection_label} · Screen updates every second · "
+        f"{india_now:%d %b %Y, %I:%M:%S %p} IST · Market {'OPEN' if market_open else 'CLOSED'}"
+    )
+    header[1].button("Refresh now", key="refresh-live-positions", width="stretch")
+    st.caption("Open trades remain live here until completed. Closing a trade freezes its realized P&L.")
+    if feed_status.get("error") and not feed_status["connected"]:
+        st.warning(f"Live stream unavailable; quote polling fallback is active. {feed_status['error']}")
     for trade in open_trades:
-        current = _latest_trade_price(platform, trade)
+        current = _latest_trade_price(platform, trade, feed)
         status = _trade_status(trade, current)
         pnl_label = "Price unavailable" if status["pnl"] is None else f"₹{status['pnl']:,.2f}"
+        pnl_delta = None if status["pnl_percent"] is None else f"{status['pnl_percent']:+.2f}%"
         result = "—" if status["pnl"] is None else ("PROFIT" if status["pnl"] >= 0 else "LOSS")
         with st.container(border=True):
             st.markdown(f"### {trade['symbol']} · {status['decision']}")
             columns = st.columns(5)
             columns[0].metric("Entry", f"₹{trade['entry_price']:,.2f}")
             columns[1].metric("Current", "Unavailable" if current is None else f"₹{current:,.2f}")
-            columns[2].metric("Unrealized P&L", pnl_label)
+            columns[2].metric("Live P&L", pnl_label, delta=pnl_delta)
             columns[3].metric("Position", result)
             columns[4].metric("Hold until", trade.get("hold_until") or "Target / stop")
             st.write(status["reason"])
-            st.caption(f"Stop: {value(trade.get('stop_loss'))} · Target: "
-                       f"{value(trade.get('target_price'))} · Quantity: {trade['quantity']}")
+            stop_distance = ("N/A" if status["stop_distance"] is None else
+                             f"{status['stop_distance']:+.2f}%")
+            target_distance = ("N/A" if status["target_distance"] is None else
+                               f"{status['target_distance']:+.2f}%")
+            st.caption(f"Stop: {value(trade.get('stop_loss'))} ({stop_distance} away) · Target: "
+                       f"{value(trade.get('target_price'))} ({target_distance} away) · "
+                       f"Quantity: {trade['quantity']} · Side: {trade['side']}")
+            streamed_quote = feed.quote(trade["symbol"]) if feed else None
+            if streamed_quote:
+                tick_time = datetime.fromisoformat(streamed_quote["received_at"]).astimezone(
+                    ZoneInfo("Asia/Kolkata"))
+                st.caption(f"Last market tick: {tick_time:%I:%M:%S %p} IST")
+            if trade.get("instrument_type") == "OPTION" and current is None:
+                st.warning("Live option P&L needs the exact NSE option trading symbol. "
+                           "This position remains tracked, but its price must be entered when completing it.")
             with st.form(f"complete-active-{trade['id']}"):
                 finish = st.columns(3)
                 exit_price = finish[0].number_input(
