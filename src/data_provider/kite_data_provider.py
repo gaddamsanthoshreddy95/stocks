@@ -36,6 +36,7 @@ class KiteDataProvider:
         self._nfo_instruments = None
         self._live_refresh = False
         self._live_candles: dict[str, dict] = {}
+        self._live_candles_prefetched = False
 
     def begin_live_refresh(self, symbols: list[str] | None = None) -> None:
         """Make subsequent reads include the current, still-forming NSE candle.
@@ -49,6 +50,7 @@ class KiteDataProvider:
             self._history_cache.clear()
             self._live_refresh = True
             get_live_candles = getattr(self.provider, "get_live_candles", None)
+            self._live_candles_prefetched = get_live_candles is not None and bool(symbols)
             self._live_candles = (
                 get_live_candles(symbols) if get_live_candles is not None and symbols else {}
             )
@@ -57,6 +59,7 @@ class KiteDataProvider:
         with self._history_cache_lock:
             self._live_refresh = False
             self._live_candles = {}
+            self._live_candles_prefetched = False
 
     def _with_live_candle(self, symbol: str, history: pd.DataFrame) -> pd.DataFrame:
         """Overlay today's quote without redownloading a year of candles."""
@@ -64,6 +67,8 @@ class KiteDataProvider:
             return history
         candle = self._live_candles.get(symbol)
         if candle is None:
+            if self._live_candles_prefetched:
+                return history
             get_live_candle = getattr(self.provider, "get_live_candle", None)
             if get_live_candle is None:
                 return history
@@ -71,8 +76,12 @@ class KiteDataProvider:
         live = history.copy()
         timezone = getattr(live.index, "tz", None)
         today = pd.Timestamp.now(tz=timezone).normalize()
-        for column in ("Open", "High", "Low", "Close", "Volume"):
-            live.loc[today, column] = candle[column]
+        try:
+            for column in ("Open", "High", "Low", "Close", "Volume"):
+                live.loc[today, column] = candle[column]
+        except (KeyError, TypeError, ValueError):
+            # One malformed/suspended instrument must not abort the universe.
+            return history
         return live.sort_index()
 
     @staticmethod

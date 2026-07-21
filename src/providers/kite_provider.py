@@ -3,6 +3,7 @@ Kite Market Data Provider
 """
 
 from datetime import date, timedelta
+from math import isfinite
 from pathlib import Path
 from threading import Lock
 from time import monotonic, sleep
@@ -58,21 +59,48 @@ class KiteProvider(BaseProvider):
         clean_symbols = list(dict.fromkeys(
             symbol.upper().removesuffix(".NS") for symbol in symbols
         ))
-        quotes = {}
-        for offset in range(0, len(clean_symbols), 500):
-            exchange_symbols = [f"NSE:{symbol}" for symbol in clean_symbols[offset:offset + 500]]
-            quotes.update(self.kite.quote(exchange_symbols))
-        candles = {}
+        # NFO futures include index underlyings (NIFTY, BANKNIFTY,
+        # FINNIFTY, MIDCPNIFTY, etc.). Only send symbols that exist in the NSE
+        # equity master; this also excludes expired/renamed instruments.
+        equity_symbols = []
         for symbol in clean_symbols:
-            quote = quotes[f"NSE:{symbol}"]
-            ohlc = quote.get("ohlc") or {}
-            last_price = float(quote["last_price"])
+            try:
+                self._instrument_token(symbol)
+            except ValueError:
+                continue
+            equity_symbols.append(symbol)
+        quotes = {}
+        for offset in range(0, len(equity_symbols), 500):
+            exchange_symbols = [f"NSE:{symbol}" for symbol in equity_symbols[offset:offset + 500]]
+            response = self.kite.quote(exchange_symbols)
+            if isinstance(response, dict):
+                quotes.update(response)
+        candles = {}
+        for symbol in equity_symbols:
+            # The F&O instrument master also contains index underlyings such
+            # as BANKNIFTY. They are not NSE equity quote keys, so Kite may
+            # legitimately omit them from this response.
+            quote = quotes.get(f"NSE:{symbol}")
+            if not isinstance(quote, dict) or quote.get("last_price") is None:
+                continue
+            try:
+                ohlc = quote.get("ohlc") or {}
+                last_price = float(quote["last_price"])
+                open_price = float(ohlc.get("open") or last_price)
+                high = float(ohlc.get("high") or last_price)
+                low = float(ohlc.get("low") or last_price)
+                volume = max(0, int(quote.get("volume") or 0))
+                if not all(isfinite(value) and value > 0 for value in
+                           (last_price, open_price, high, low)):
+                    continue
+            except (AttributeError, TypeError, ValueError, OverflowError):
+                continue
             candles[symbol] = {
-                "Open": float(ohlc.get("open") or last_price),
-                "High": float(ohlc.get("high") or last_price),
-                "Low": float(ohlc.get("low") or last_price),
+                "Open": open_price,
+                "High": max(high, open_price, last_price),
+                "Low": min(low, open_price, last_price),
                 "Close": last_price,
-                "Volume": int(quote.get("volume") or 0),
+                "Volume": volume,
             }
         return candles
 
