@@ -1,13 +1,28 @@
 import unittest
+from datetime import datetime, timezone
 
 import pandas as pd
 
 from ui_app import (candidate_rows, likely_news_reaction, news_impact, news_rows,
-                    decision_timeline, option_leg_rows, outcome_rows, price_figure,
-                    report_changes, snapshot_rows, trade_performance)
+                    data_age, decision_checks, decision_timeline, display_date,
+                    option_leg_rows, outcome_rows, price_figure, report_changes,
+                    snapshot_rows, trade_performance)
 
 
 class UIMarketContextTests(unittest.TestCase):
+    def test_position_dates_and_timestamp_ages_are_compact(self):
+        self.assertEqual(display_date("2026-07-31"), "31 Jul 2026")
+        now = datetime(2026, 7, 22, 10, 0, tzinfo=timezone.utc)
+        self.assertEqual(data_age("2026-07-22T09:55:00+00:00", now), "5m ago")
+
+    def test_decision_checks_separate_execution_gates(self):
+        checks = decision_checks({
+            "status": "TRADE", "selection_status": "BUY NOW",
+            "news": {"news_state": "ANALYZED"},
+            "event_risk": {"hard_block": False}, "risk": {"quantity": 10},
+        })
+        self.assertTrue(all(item["passed"] for item in checks))
+
     def test_news_impact_labels_cover_positive_and_negative_strength(self):
         self.assertEqual(news_impact(72), "SUPER POSITIVE")
         self.assertEqual(news_impact(20), "POSITIVE")

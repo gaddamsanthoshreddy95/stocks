@@ -6,7 +6,7 @@ import json
 import inspect
 import os
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
 from uuid import uuid4
@@ -36,6 +36,9 @@ APP_CSS = """
     [data-testid="stMetric"] {background: rgba(125,125,125,.055); border: 1px solid
         rgba(125,125,125,.18); border-radius: 12px; padding: .8rem 1rem;}
     div[data-testid="stVerticalBlockBorderWrapper"] {border-radius: 14px;}
+    [data-testid="stMetricValue"] {font-size:clamp(1rem, 1.55vw, 1.65rem); white-space:normal;
+        overflow-wrap:anywhere; line-height:1.2;}
+    [data-testid="stMetricDelta"] {white-space:normal; overflow-wrap:anywhere;}
     .hero {padding: 1.15rem 1.3rem; border: 1px solid rgba(99,102,241,.28);
         border-radius: 16px; background: linear-gradient(120deg, rgba(37,99,235,.14),
         rgba(16,185,129,.06)); margin-bottom: 1rem;}
@@ -51,6 +54,8 @@ APP_CSS = """
     .candidate-title {font-size:1.15rem; font-weight:750; margin-bottom:.35rem;}
     .candidate-reason {opacity:.78; min-height:2.8rem;}
     .section-note {opacity:.68; font-size:.82rem;}
+    .health-strip {display:flex; flex-wrap:wrap; gap:.45rem; padding:.7rem .85rem;
+        border:1px solid rgba(125,125,125,.18); border-radius:12px; margin:.4rem 0 1rem;}
     :focus-visible {outline: 3px solid #60a5fa!important; outline-offset: 2px;}
     @media (max-width: 760px) {
         .block-container {padding: .8rem .7rem 2rem;}
@@ -292,6 +297,66 @@ def value(value: Any, fallback: str = "N/A") -> Any:
     return fallback if value is None else value
 
 
+def display_date(raw: Any, fallback: str = "Target / stop") -> str:
+    """Render stored ISO dates without allowing narrow metric cards to clip them."""
+    if not raw:
+        return fallback
+    try:
+        return date.fromisoformat(str(raw)[:10]).strftime("%d %b %Y")
+    except ValueError:
+        return str(raw)
+
+
+def data_age(raw: Any, now: datetime | None = None) -> str:
+    """Return a compact, user-facing age for a timestamp."""
+    if not raw:
+        return "unknown age"
+    try:
+        timestamp = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        seconds = max(0, int(((now or datetime.now(timezone.utc)) - timestamp).total_seconds()))
+    except (TypeError, ValueError):
+        return "unknown age"
+    if seconds < 60:
+        return f"{seconds}s ago"
+    if seconds < 3600:
+        return f"{seconds // 60}m ago"
+    if seconds < 86400:
+        return f"{seconds // 3600}h ago"
+    return f"{seconds // 86400}d ago"
+
+
+def system_health(platform: TradingPlatform, database: ReportDatabase,
+                  latest: dict[str, Any] | None = None) -> list[dict[str, str]]:
+    """Summarize operational dependencies without initiating network calls."""
+    reports = database.list_reports(1)
+    generated_at = reports[0].get("generated_at") if reports else None
+    source = str(platform.settings.market_data_source).upper()
+    news_states = []
+    for candidate in [*(latest or {}).get("trades", []), *(latest or {}).get("watchlist", [])]:
+        news_states.append(str((candidate.get("news") or {}).get("news_state", "NOT_REQUESTED")))
+    news_status = ("FAILED" if any(state in {"FETCH_FAILED", "FAILED"} for state in news_states)
+                   else "READY" if any(state == "ANALYZED" for state in news_states)
+                   else "NOT CHECKED")
+    return [
+        {"name": "Market data", "status": "LIVE" if source == "KITE" else "CACHED"},
+        {"name": "News", "status": news_status},
+        {"name": "Database", "status": "READY"},
+        {"name": "Latest report", "status": data_age(generated_at)},
+        {"name": "Trading", "status": "PAPER ONLY"},
+    ]
+
+
+def render_health_strip(platform: TradingPlatform, database: ReportDatabase,
+                        latest: dict[str, Any] | None = None) -> None:
+    labels = "".join(
+        f"<span>{item['name']}: {badge(item['status'])}</span>"
+        for item in system_health(platform, database, latest)
+    )
+    st.markdown(f'<div class="health-strip">{labels}</div>', unsafe_allow_html=True)
+
+
 def summary_cards(report: dict[str, Any]) -> None:
     summary = report.get("summary", {})
     columns = st.columns(5)
@@ -358,6 +423,27 @@ def candidate_table_config() -> dict[str, Any]:
         "Event risk": st.column_config.NumberColumn(format="%.0f"),
         "Selection reason": st.column_config.TextColumn(width="large"),
     }
+
+
+def decision_checks(trade: dict[str, Any]) -> list[dict[str, Any]]:
+    """Translate overlapping backend gates into one consistent UI checklist."""
+    news = trade.get("news") or {}
+    event = trade.get("event_risk") or {}
+    eligibility = trade.get("trade_eligibility") or {}
+    confirmation = trade.get("entry_confirmation") or {}
+    risk = trade.get("risk") or trade.get("position_size") or {}
+    return [
+        {"label": "Policy permits execution",
+         "passed": bool(eligibility.get("eligible", trade.get("status") == "TRADE"))},
+        {"label": "Entry confirmation is complete",
+         "passed": bool(confirmation.get("passed", trade.get("selection_status") == "BUY NOW"))},
+        {"label": "News evidence is complete",
+         "passed": news.get("news_state") in {"ANALYZED", "NO_RELEVANT_NEWS"}},
+        {"label": "No hard event-risk block",
+         "passed": not bool(event.get("hard_block") or event.get("block_new_trades"))},
+        {"label": "Position size is positive",
+         "passed": int(risk.get("quantity") or 0) > 0},
+    ]
 
 
 def render_candidate_cards(platform: TradingPlatform, report: dict[str, Any],
@@ -455,6 +541,10 @@ def render_trade_detail(platform: TradingPlatform, report: dict[str, Any], trade
         st.dataframe(pd.DataFrame([{"Entry": levels.get("entry"), "Stop loss": levels.get("stop_loss"),
             "Target 1": levels.get("target_1"), "Target 2": levels.get("target_2"),
             "Target 3": levels.get("target_3")}]), width="stretch", hide_index=True)
+        st.markdown("**Execution checklist**")
+        for check in decision_checks(trade):
+            icon = "✓" if check["passed"] else "✕"
+            st.write(f"{icon} {check['label']}")
     with detail_tabs[1]:
         render_decision_timeline(trade)
     with detail_tabs[2]:
@@ -767,7 +857,9 @@ def news_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
                 "Source": headline.get("source") or "Unknown",
                 "Read": headline.get("url"),
                 "Published": headline.get("published") or "N/A",
+                "Age": data_age(headline.get("published")),
                 "Impact": impact,
+                "Analysis": news.get("analysis_method", "UNAVAILABLE"),
                 "Sentiment score": round(score, 2),
                 "Likely stock reaction": likely_news_reaction(
                     impact, str(assessment.get("materiality", news.get("materiality", "LOW")))
@@ -785,6 +877,19 @@ def show_news(report: dict[str, Any]) -> None:
         st.info("No analyzed stock headlines are available in this report. News is fetched only "
                 "for the final shortlist when live news analysis is enabled.")
         return
+    candidates = [*report.get("trades", []), *report.get("watchlist", []),
+                  *report.get("rejected", [])]
+    news_payloads = [item.get("news") or {} for item in candidates]
+    stale_count = sum(int(item.get("stale_article_count") or 0) for item in news_payloads)
+    analyzed_count = len(rows)
+    provider_names = sorted({str(item.get("analysis_method")) for item in news_payloads
+                             if item.get("analysis_method")})
+    freshness = max((int(item.get("max_age_hours") or 0) for item in news_payloads), default=0)
+    status = st.columns(4)
+    status[0].metric("Fresh articles", analyzed_count)
+    status[1].metric("Old/undated excluded", stale_count)
+    status[2].metric("Freshness window", f"{freshness}h" if freshness else "Unknown")
+    status[3].metric("Analysis", ", ".join(provider_names) or "Unavailable")
     counts = pd.DataFrame(rows).groupby(["Stock", "Impact"]).size().unstack(fill_value=0)
     st.dataframe(counts.reset_index(), width="stretch", hide_index=True)
     st.dataframe(
@@ -793,9 +898,16 @@ def show_news(report: dict[str, Any]) -> None:
             "Sentiment score": st.column_config.NumberColumn(format="%.1f", help="-100 to +100"),
             "News": st.column_config.TextColumn(width="large"),
             "Read": st.column_config.LinkColumn(display_text="Open article"),
+            "Published": st.column_config.DatetimeColumn(format="DD MMM YYYY, h:mm a"),
             "Likely stock reaction": st.column_config.TextColumn(width="large"),
         },
     )
+    with st.expander("News collection diagnostics"):
+        st.write(f"Articles displayed: {analyzed_count}")
+        st.write(f"Old, undated, or invalid articles excluded: {stale_count}")
+        st.write(f"Analysis provider: {', '.join(provider_names) or 'Unavailable'}")
+        st.caption("News is collected only for shortlisted candidates; the analysis provider does "
+                   "not itself guarantee that a headline is current.")
 
 
 def show_report(platform: TradingPlatform, report: dict[str, Any],
@@ -910,9 +1022,10 @@ def dashboard(platform: TradingPlatform, database: ReportDatabase) -> None:
     history = database.list_reports(10)
     latest = database.get_report(history[0]["id"]) if history else None
     regime = (latest or {}).get("market", {}).get("regime", "UNAVAILABLE")
-    hero("Today's trading desk", "Decisions, live risk, and fresh market context in one place.",
+    hero("Today's trading desk", "Decision summary and fresh market context in one place.",
          [f"Market {'open' if market_open else 'closed'}", regime,
           platform.settings.market_data_source])
+    render_health_strip(platform, database, latest)
     counts = database.counts()
     trade_summary = database.actual_trade_summary()
     metrics = st.columns(5)
@@ -927,7 +1040,8 @@ def dashboard(platform: TradingPlatform, database: ReportDatabase) -> None:
     else:
         st.info("Generate the first daily report to populate today's opportunities.")
     if trade_summary["open"]:
-        active_trade_status_panel(platform, database)
+        st.info(f"{trade_summary['open']} live position(s) are being tracked in the dedicated "
+                "Positions workspace.")
     st.subheader("Live global market snapshot")
     market_running = feature_is_running("market")
     if st.button("Refresh global markets", disabled=market_running):
@@ -983,6 +1097,78 @@ def dashboard(platform: TradingPlatform, database: ReportDatabase) -> None:
             st.dataframe(pd.DataFrame(history), width="stretch", hide_index=True,
                          column_config={"generated_at": st.column_config.DatetimeColumn(
                              "Generated", format="DD MMM YYYY, h:mm a")})
+
+
+def opportunities_page(platform: TradingPlatform, database: ReportDatabase) -> None:
+    """Decision-oriented view of the newest immutable report."""
+    history = database.list_reports(1)
+    latest = database.get_report(history[0]["id"]) if history else None
+    hero("Opportunities", "Actionable trades and research candidates grouped by the next decision.")
+    render_health_strip(platform, database, latest)
+    if not latest:
+        st.info("No report is available. Generate one from Daily report first.")
+        return
+    report_age = data_age(history[0].get("generated_at"))
+    st.caption(f"Report generated {report_age} · {display_date(latest.get('date'), 'Unknown date')} · "
+               f"Run {latest.get('run_id', 'unavailable')}")
+    candidates = [*latest.get("trades", []), *latest.get("watchlist", []),
+                  *latest.get("rejected", [])]
+    sectors = sorted({str(item.get("sector")) for item in candidates if item.get("sector")})
+    grades = sorted({str(item.get("quality_grade")) for item in candidates if item.get("quality_grade")})
+    controls = st.columns([2, 1, 1, 1])
+    query = controls[0].text_input("Search symbol", placeholder="RELIANCE", key="opportunity-search")
+    sector = controls[1].selectbox("Sector", ["All", *sectors], key="opportunity-sector")
+    grade = controls[2].selectbox("Grade", ["All", *grades], key="opportunity-grade")
+    minimum_rr = controls[3].number_input("Minimum R:R", min_value=0.0, value=0.0, step=0.25)
+
+    def included(item: dict[str, Any]) -> bool:
+        rr = float((item.get("levels") or {}).get("risk_reward") or 0)
+        return (query.upper() in str(item.get("symbol", "")).upper()
+                and (sector == "All" or str(item.get("sector")) == sector)
+                and (grade == "All" or str(item.get("quality_grade")) == grade)
+                and rr >= minimum_rr)
+
+    filtered = [item for item in candidates if included(item)]
+    groups = {
+        "Buy now": [item for item in filtered if item.get("status") == "TRADE"
+                    and (item.get("selection_status") == "BUY NOW"
+                         or item.get("final_action") in {"BUY", "TRADE"})],
+        "Wait for confirmation": [item for item in filtered if item.get("status") != "REJECTED"
+                                  and ("WAIT" in str(item.get("selection_status", ""))
+                                       or "WAIT" in str(item.get("final_action", "")))],
+        "Watchlist": [item for item in filtered if item.get("status") == "WATCHLIST"
+                      and "WAIT" not in str(item.get("selection_status", ""))],
+        "No trade / blocked": [item for item in filtered if item.get("status") == "REJECTED"
+                               or item.get("final_action") in {"NO_TRADE", "REJECT"}],
+    }
+    tabs = st.tabs([f"{label} ({len(items)})" for label, items in groups.items()])
+    for tab, (label, items) in zip(tabs, groups.items()):
+        with tab:
+            if not items:
+                st.info(f"No {label.lower()} candidates match the current filters.")
+                continue
+            bucket_report = {**latest, "trades": [], "watchlist": [], "rejected": []}
+            target_bucket = "rejected" if label == "No trade / blocked" else (
+                "trades" if label == "Buy now" else "watchlist")
+            bucket_report[target_bucket] = items
+            if target_bucket == "rejected":
+                rows = [{"Symbol": item.get("symbol"), "Final action": item.get("final_action"),
+                         "Primary blocker": (item.get("rejection_reason")
+                                             or item.get("selection_reason")
+                                             or "; ".join(item.get("reasons") or [])
+                                             or "Policy or evidence gate failed"),
+                         "Quality": item.get("quality_grade"),
+                         "Readiness": item.get("execution_readiness_score")}
+                        for item in items]
+                st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True,
+                             column_config={"Primary blocker": st.column_config.TextColumn(width="large")})
+            else:
+                render_candidate_cards(platform, bucket_report, database)
+
+
+def positions_page(platform: TradingPlatform, database: ReportDatabase) -> None:
+    """Dedicated live-position and journal workspace."""
+    trade_tracker_page(platform, database)
 
 
 def bearish_options_page(platform: TradingPlatform) -> None:
@@ -1131,13 +1317,21 @@ def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabas
         pnl_delta = None if status["pnl_percent"] is None else f"{status['pnl_percent']:+.2f}%"
         result = "—" if status["pnl"] is None else ("PROFIT" if status["pnl"] >= 0 else "LOSS")
         with st.container(border=True):
-            st.markdown(f"### {trade['symbol']} · {status['decision']}")
-            columns = st.columns(5)
-            columns[0].metric("Entry", f"₹{trade['entry_price']:,.2f}")
-            columns[1].metric("Current", "Unavailable" if current is None else f"₹{current:,.2f}")
-            columns[2].metric("Live P&L", pnl_label, delta=pnl_delta)
-            columns[3].metric("Position", result)
-            columns[4].metric("Hold until", trade.get("hold_until") or "Target / stop")
+            title, state = st.columns([4, 1])
+            title.markdown(f"### {trade['symbol']} · {status['decision']}")
+            state.markdown(badge(result), unsafe_allow_html=True)
+            # Two rows keep values readable on laptop and mobile widths. ISO dates
+            # are formatted to a shorter, unambiguous display value.
+            prices = st.columns(4)
+            prices[0].metric("Entry", f"₹{trade['entry_price']:,.2f}")
+            prices[1].metric("Current", "Unavailable" if current is None else f"₹{current:,.2f}")
+            prices[2].metric("Live P&L", pnl_label, delta=pnl_delta)
+            prices[3].metric("Quantity", f"{trade['quantity']:,}")
+            plan = st.columns(4)
+            plan[0].metric("Hold until", display_date(trade.get("hold_until")))
+            plan[1].metric("Stop", money(trade.get("stop_loss")))
+            plan[2].metric("Target", money(trade.get("target_price")))
+            plan[3].metric("Side", trade.get("side", "—"))
             st.write(status["reason"])
             stop_distance = ("N/A" if status["stop_distance"] is None else
                              f"{status['stop_distance']:+.2f}%")
@@ -1182,9 +1376,8 @@ def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabas
 
 
 def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> None:
-    st.title("Daily report")
-    active_trade_status_panel(platform, database)
-    st.divider()
+    hero("Daily report", "Generate and review a point-in-time research report. Live positions are "
+         "managed separately in Positions.")
     active_future = daily_report_jobs().future(st.session_state.get("daily_report_job_id"))
     job_running = active_future is not None and not active_future.done()
     with st.form("daily-report-form"):
@@ -1446,9 +1639,11 @@ def history_page(platform: TradingPlatform, database: ReportDatabase) -> None:
 
 
 def trade_tracker_page(platform: TradingPlatform, database: ReportDatabase) -> None:
-    hero("Portfolio & trade journal", "Monitor live risk, review performance, and record paper trades.",
+    hero("Positions & risk", "Monitor live positions, portfolio exposure, and the paper-trade journal.",
          ["Paper trading only"])
     all_trades = database.list_actual_trades()
+    active_trade_status_panel(platform, database)
+    st.divider()
     with st.expander("Portfolio performance", expanded=True):
         render_performance_dashboard(all_trades)
         if all_trades:
@@ -1527,8 +1722,6 @@ def trade_tracker_page(platform: TradingPlatform, database: ReportDatabase) -> N
     columns[1].metric("Open", summary["open"])
     columns[2].metric("Closed", summary["closed"])
     columns[3].metric("Realized P&L", f"₹{summary['realized_pnl']:,.2f}")
-    active_trade_status_panel(platform, database)
-
     with st.expander("Add an actual trade", expanded=not summary["total"]):
         with st.form("actual-trade-entry", clear_on_submit=True):
             first = st.columns(4)
@@ -1728,18 +1921,16 @@ def system_page(platform: TradingPlatform, database: ReportDatabase) -> None:
         reduce_motion = options[1].toggle("Reduce motion", value=bool(preferences.get("reduce_motion")))
         compact_mode = options[2].toggle("Compact layout", value=bool(preferences.get("compact_mode")))
         default_page = st.selectbox(
-            "Default workspace", ("TODAY · Overview", "TODAY · Daily report",
-                                  "RESEARCH · Analyze stock", "RESEARCH · Bearish options",
-                                  "PORTFOLIO · Positions & performance", "WATCH · Lists & alerts",
-                                  "ARCHIVE · Report history", "ADMIN · System & diagnostics"),
-            index=0 if preferences.get("default_page") not in {
-                "TODAY · Daily report", "RESEARCH · Analyze stock", "RESEARCH · Bearish options",
-                "PORTFOLIO · Positions & performance", "WATCH · Lists & alerts",
-                "ARCHIVE · Report history", "ADMIN · System & diagnostics"} else
-            list(("TODAY · Overview", "TODAY · Daily report", "RESEARCH · Analyze stock",
-                  "RESEARCH · Bearish options", "PORTFOLIO · Positions & performance",
-                  "WATCH · Lists & alerts", "ARCHIVE · Report history",
-                  "ADMIN · System & diagnostics")).index(preferences["default_page"]),
+            "Default workspace", ("Dashboard", "Opportunities", "Positions", "Daily report",
+                                  "Analyze stock", "Bearish options", "Watchlists & alerts",
+                                  "Report history", "System & diagnostics"),
+            index=(list(("Dashboard", "Opportunities", "Positions", "Daily report",
+                         "Analyze stock", "Bearish options", "Watchlists & alerts",
+                         "Report history", "System & diagnostics")).index(preferences["default_page"])
+                   if preferences.get("default_page") in {
+                       "Dashboard", "Opportunities", "Positions", "Daily report", "Analyze stock",
+                       "Bearish options", "Watchlists & alerts", "Report history",
+                       "System & diagnostics"} else 0),
         )
         save_preferences = st.form_submit_button("Save preferences", type="primary")
     if save_preferences:
@@ -1775,11 +1966,11 @@ def main() -> None:
         st.markdown("## 📈 Stock Analyzer")
         st.caption("Research & paper-trading desk")
         navigation = {
-            "TODAY · Overview": "Dashboard", "TODAY · Daily report": "Daily report",
-            "RESEARCH · Analyze stock": "Analyze", "RESEARCH · Bearish options": "Bearish options",
-            "PORTFOLIO · Positions & performance": "Trade tracker",
-            "WATCH · Lists & alerts": "Watchlists",
-            "ARCHIVE · Report history": "History", "ADMIN · System & diagnostics": "System",
+            "Dashboard": "Dashboard", "Opportunities": "Opportunities",
+            "Positions": "Positions", "Daily report": "Daily report",
+            "Analyze stock": "Analyze", "Bearish options": "Bearish options",
+            "Watchlists & alerts": "Watchlists", "Report history": "History",
+            "System & diagnostics": "System",
         }
         with st.form("command-palette", clear_on_submit=True):
             command = st.text_input("Quick command", placeholder="Analyze RELIANCE or open History")
@@ -1793,7 +1984,7 @@ def main() -> None:
                 target = instruction.split(maxsplit=1)[1].strip().upper()
                 start_feature_job("analysis", lambda: platform.analyze(target))
                 st.session_state["analysis_symbol"] = target
-                st.session_state["nav_page"] = "RESEARCH · Analyze stock"
+                st.session_state["nav_page"] = "Analyze stock"
                 st.rerun()
             elif page_match:
                 st.session_state["nav_page"] = page_match
@@ -1801,7 +1992,29 @@ def main() -> None:
             else:
                 st.warning("Try “Analyze RELIANCE” or “open History”.")
         if "nav_page" not in st.session_state:
-            st.session_state["nav_page"] = preferences.get("default_page", "TODAY · Overview")
+            preferred = preferences.get("default_page", "Dashboard")
+            legacy_pages = {
+                "TODAY · Overview": "Dashboard", "TODAY · Daily report": "Daily report",
+                "RESEARCH · Analyze stock": "Analyze stock",
+                "RESEARCH · Bearish options": "Bearish options",
+                "PORTFOLIO · Positions & performance": "Positions",
+                "WATCH · Lists & alerts": "Watchlists & alerts",
+                "ARCHIVE · Report history": "Report history",
+                "ADMIN · System & diagnostics": "System & diagnostics",
+            }
+            st.session_state["nav_page"] = legacy_pages.get(preferred, preferred)
+        elif st.session_state["nav_page"] not in navigation:
+            # Migrate an open Streamlit session after the navigation redesign.
+            legacy_pages = {
+                "TODAY · Overview": "Dashboard", "TODAY · Daily report": "Daily report",
+                "RESEARCH · Analyze stock": "Analyze stock",
+                "RESEARCH · Bearish options": "Bearish options",
+                "PORTFOLIO · Positions & performance": "Positions",
+                "WATCH · Lists & alerts": "Watchlists & alerts",
+                "ARCHIVE · Report history": "Report history",
+                "ADMIN · System & diagnostics": "System & diagnostics",
+            }
+            st.session_state["nav_page"] = legacy_pages.get(st.session_state["nav_page"], "Dashboard")
         selected_page = st.radio("Workspace", tuple(navigation), label_visibility="collapsed",
                                  key="nav_page")
         page = navigation[selected_page]
@@ -1823,14 +2036,16 @@ def main() -> None:
         daily_report_status()
     if page == "Dashboard":
         dashboard(platform, database)
+    elif page == "Opportunities":
+        opportunities_page(platform, database)
+    elif page == "Positions":
+        positions_page(platform, database)
     elif page == "Daily report":
         daily_report_page(platform, database)
     elif page == "Analyze":
         analyze_page(platform)
     elif page == "Bearish options":
         bearish_options_page(platform)
-    elif page == "Trade tracker":
-        trade_tracker_page(platform, database)
     elif page == "History":
         history_page(platform, database)
     elif page == "Watchlists":
