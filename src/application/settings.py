@@ -58,6 +58,9 @@ class PlatformSettings:
     setup_support_near_percent: float = 4.0
     setup_reversal_rsi: float = 35.0
     entry_confirmation_relative_volume: float = 1.2
+    entry_min_close_location: float = 0.60
+    entry_max_extension_atr: float = 1.50
+    entry_max_consecutive_bullish_candles: int = 4
     option_call_resistance_near_percent: float = 1.5
     option_long_delta_min: float = 0.35
     option_long_delta_max: float = 0.70
@@ -193,6 +196,10 @@ class PlatformSettings:
             raise ValueError("Option long delta range is invalid")
         if self.setup_support_near_percent < 0 or self.entry_confirmation_relative_volume < 0:
             raise ValueError("Setup proximity and volume thresholds cannot be negative")
+        if not 0 <= self.entry_min_close_location <= 1 or self.entry_max_extension_atr <= 0:
+            raise ValueError("Entry candle location and ATR extension settings are invalid")
+        if self.entry_max_consecutive_bullish_candles < 2:
+            raise ValueError("ENTRY_MAX_CONSECUTIVE_BULLISH_CANDLES must be at least two")
         if not 0 <= self.market_low_confidence_threshold <= self.market_confirmed_confidence_threshold <= 100:
             raise ValueError("Market confidence thresholds are invalid")
         if not (0 <= self.event_stale_multiplier <= self.event_delayed_multiplier
@@ -322,6 +329,10 @@ class PlatformSettings:
             setup_support_near_percent=env_float("SETUP_SUPPORT_NEAR_PERCENT", 4),
             setup_reversal_rsi=env_float("SETUP_REVERSAL_RSI", 35),
             entry_confirmation_relative_volume=env_float("ENTRY_CONFIRMATION_RELATIVE_VOLUME", 1.2),
+            entry_min_close_location=env_float("ENTRY_MIN_CLOSE_LOCATION", .60),
+            entry_max_extension_atr=env_float("ENTRY_MAX_EXTENSION_ATR", 1.50),
+            entry_max_consecutive_bullish_candles=env_int(
+                "ENTRY_MAX_CONSECUTIVE_BULLISH_CANDLES", 4),
             option_call_resistance_near_percent=env_float("OPTION_CALL_RESISTANCE_NEAR_PERCENT", 1.5),
             option_long_delta_min=env_float("OPTION_LONG_DELTA_MIN", .35),
             option_long_delta_max=env_float("OPTION_LONG_DELTA_MAX", .70),

@@ -31,10 +31,37 @@ class SetupEntryEvaluator:
                               0 <= (close - support) / close <= settings.setup_support_near_percent / 100)
 
         bullish_candle = candlestick.get("signal") == "BUY"
+        bearish_reversal = candlestick.get("signal") == "SELL"
+        ohlc_available = all(name in df.columns for name in ("Open", "High", "Low", "Close"))
+        latest_open = float(latest.get("Open", close - .000001))
+        latest_high = float(latest.get("High", close))
+        latest_low = float(latest.get("Low", close - .000001))
+        candle_range = max(latest_high - latest_low, .000001)
+        latest_green = close > latest_open
+        higher_close = close > float(previous["Close"]) if ohlc_available else bullish_candle
+        close_location = (close - latest_low) / candle_range
+        closes_upper_range = (close_location >= settings.entry_min_close_location
+                              if ohlc_available else bullish_candle)
         macd_above_signal = macd > macd_signal
         macd_turning_up = macd_above_signal and histogram >= previous_histogram
+        macd_not_weakening = histogram >= previous_histogram
         volume_expansion = rvol >= settings.entry_confirmation_relative_volume
         above_ema20 = close > ema20
+        atr = float(latest.get("ATR", candle_range) or candle_range)
+        extension_atr = max(0.0, (close - ema20) / max(atr, .000001))
+        not_overextended = (extension_atr <= settings.entry_max_extension_atr
+                            if ohlc_available else True)
+        consecutive_bullish = 0
+        for _, candle in df.tail(settings.entry_max_consecutive_bullish_candles + 1).iloc[::-1].iterrows():
+            if not ohlc_available:
+                break
+            candle_span = max(float(candle["High"]) - float(candle["Low"]), .000001)
+            strong_bull = (float(candle["Close"]) > float(candle["Open"])
+                           and abs(float(candle["Close"]) - float(candle["Open"])) / candle_span >= .55)
+            if not strong_bull:
+                break
+            consecutive_bullish += 1
+        not_exhausted = consecutive_bullish < settings.entry_max_consecutive_bullish_candles
         bullish_stack = close > ema20 > ema50 > ema200
         long_trend_intact = ema50 > ema200 and close > ema200
         good_risk_reward = (entry.get("risk_reward") or 0) >= settings.equity_min_risk_reward
@@ -68,8 +95,15 @@ class SetupEntryEvaluator:
         confirmation_checks = {
             "price_above_ema20": above_ema20,
             "bullish_reversal_candle": bullish_candle,
+            "latest_candle_green": latest_green,
+            "close_above_previous_close": higher_close,
+            "close_in_upper_range": closes_upper_range,
+            "no_bearish_reversal": not bearish_reversal,
             "volume_above_1_2x": volume_expansion,
             "macd_above_signal": macd_above_signal,
+            "macd_momentum_not_weakening": macd_not_weakening,
+            "not_overextended_above_ema20": not_overextended,
+            "no_exhausted_green_run": not_exhausted,
         }
         if category == "BREAKOUT":
             confirmation_checks["resistance_broken"] = bool(breakout.get("confirmed"))
@@ -79,6 +113,11 @@ class SetupEntryEvaluator:
         setup_evidence = {
             "oversold_rsi": rsi < settings.setup_reversal_rsi,
             "macd_turning_up": macd_turning_up,
+            "latest_candle_green": latest_green,
+            "close_location": round(close_location, 4),
+            "ema20_extension_atr": round(extension_atr, 4),
+            "consecutive_strong_bullish_candles": consecutive_bullish,
+            "bearish_reversal_pattern": bearish_reversal,
             "support_nearby": support_nearby,
             "risk_reward_at_least_1_5": good_risk_reward,
             "long_trend_intact": long_trend_intact,

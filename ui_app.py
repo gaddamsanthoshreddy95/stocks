@@ -509,6 +509,14 @@ def primary_blocker(candidate: dict[str, Any]) -> str:
     return "Other policy gate"
 
 
+def trade_override_required(candidate: dict[str, Any]) -> bool:
+    status = str(candidate.get("status") or "UNKNOWN").upper()
+    action = str(candidate.get("final_action") or candidate.get("action") or "UNKNOWN").upper()
+    return status != "TRADE" or action in {
+        "NO_TRADE", "REJECT", "WAIT", "WAIT_FOR_CONFIRMATION", "WATCHLIST"
+    }
+
+
 def rejection_summary(rejected: list[dict[str, Any]]) -> list[dict[str, Any]]:
     counts: dict[str, list[str]] = {}
     for item in rejected:
@@ -608,7 +616,7 @@ def render_candidate_cards(platform: TradingPlatform, report: dict[str, Any],
             if right.button("Close", key=f"close-candidate-focus-{key_prefix}", width="stretch"):
                 st.session_state.pop(focus_key, None)
                 st.rerun()
-            render_trade_detail(platform, report, focused_trade, database)
+            render_trade_detail(platform, report, focused_trade, database, key_prefix)
 
 
 def render_candidate_comparison(report: dict[str, Any]) -> None:
@@ -642,7 +650,8 @@ def render_candidate_comparison(report: dict[str, Any]) -> None:
 
 
 def render_trade_detail(platform: TradingPlatform, report: dict[str, Any], trade: dict[str, Any],
-                        database: ReportDatabase | None = None) -> None:
+                        database: ReportDatabase | None = None,
+                        key_prefix: str = "detail") -> None:
     levels = trade.get("levels") or {}
     run_id, symbol = str(report.get("run_id", "")), str(trade.get("symbol", ""))
     selection = trade.get("entry_selection") or {}
@@ -688,10 +697,10 @@ def render_trade_detail(platform: TradingPlatform, report: dict[str, Any], trade
         else:
             st.info((option.get("rejection") or {}).get("reason", "No executable option structure approved."))
     with detail_tabs[4]:
-        if trade.get("status") == "TRADE" and database:
-            start_recommended_trade_control(platform, database, run_id, trade)
+        if database:
+            start_recommended_trade_control(platform, database, run_id, trade, key_prefix)
         else:
-            st.warning("Only approved TRADE candidates can be started from this workspace.")
+            st.info("Trade recording requires the local report database.")
 
 
 def price_figure(frame: pd.DataFrame, symbol: str, levels: dict[str, Any] | None = None,
@@ -795,8 +804,9 @@ def execution_mark_control(database: ReportDatabase | None, run_id: str, symbol:
 
 
 def start_recommended_trade_control(platform: TradingPlatform, database: ReportDatabase,
-                                    run_id: str, trade: dict[str, Any]) -> None:
-    """Turn a recommendation into a durable open position from the report UI."""
+                                    run_id: str, trade: dict[str, Any],
+                                    key_prefix: str = "recommendation") -> None:
+    """Record the user's actual action while preserving the analytical recommendation."""
     symbol = str(trade.get("symbol", "")).upper().removesuffix(".NS")
     tracked = database.get_candidate_trade(run_id, symbol)
     if tracked and tracked["status"] == "OPEN":
@@ -811,47 +821,59 @@ def start_recommended_trade_control(platform: TradingPlatform, database: ReportD
         return
     levels = trade.get("levels") or {}
     live_entry = _polled_equity_price(platform, symbol)
+    suggested_entry = float(live_entry or levels.get("entry") or trade.get("current_price") or 0)
+    analytical_status = str(trade.get("status") or "UNKNOWN").upper()
+    analytical_action = str(trade.get("final_action") or trade.get("action") or "UNKNOWN").upper()
+    override_required = trade_override_required(trade)
     suggested_hold = date.today() + timedelta(days=10)
-    with st.form(f"start-trade-{run_id}-{symbol}"):
+    widget_scope = f"{key_prefix}-{run_id}-{symbol}"
+    with st.form(f"start-trade-{widget_scope}"):
         st.markdown("**I traded this stock**")
-        st.caption("Saving here creates the active trade automatically; no separate Trade Tracker entry is needed.")
-        columns = st.columns(3)
+        st.caption("This records what you actually traded. It does not change the report's original analysis.")
+        if override_required:
+            st.warning(f"Analytical decision: {analytical_status} · {analytical_action}. "
+                       "You are recording a discretionary override.")
+        columns = st.columns(4)
         quantity = columns[0].number_input("Quantity", min_value=1, value=1, step=1,
-                                           key=f"qty-{run_id}-{symbol}")
-        entry_date = columns[1].date_input("Trade date", value=date.today(),
-                                           key=f"entry-date-{run_id}-{symbol}")
-        hold_until = columns[2].date_input("Hold until (review date)", value=suggested_hold,
+                                           key=f"qty-{widget_scope}")
+        side = columns[1].selectbox("Actual side", ("BUY", "SELL"), key=f"side-{widget_scope}")
+        entry_date = columns[2].date_input("Trade date", value=date.today(),
+                                           key=f"entry-date-{widget_scope}")
+        hold_until = columns[3].date_input("Hold until (review date)", value=suggested_hold,
                                            min_value=entry_date,
-                                           key=f"hold-{run_id}-{symbol}")
-        if live_entry is None:
-            st.error("Live spot price is unavailable. Refresh after the Kite quote connection is available.")
-        else:
-            st.metric("Actual entry price (live spot)", f"₹{live_entry:,.2f}")
-            st.caption("The current live spot price will be saved automatically when you mark the trade.")
+                                           key=f"hold-{widget_scope}")
+        entry_price = st.number_input(
+            "Actual executed entry price", min_value=0.01,
+            value=max(0.01, suggested_entry), step=0.05, key=f"actual-entry-{widget_scope}",
+            help="Enter your broker execution price. A live/reference price is prefilled when available.")
+        if live_entry is not None:
+            st.caption(f"Current reference price: ₹{live_entry:,.2f}. Confirm your actual fill above.")
+        override_confirmed = (st.checkbox(
+            "I understand this overrides a non-approved or not-yet-confirmed analytical decision",
+            key=f"override-{widget_scope}") if override_required else True)
+        confirmed = st.checkbox("I confirm the quantity, side, entry price, and review date",
+                                key=f"confirm-start-{widget_scope}")
         submitted = st.form_submit_button(
-            "Mark TRADED & start tracking", type="primary", disabled=live_entry is None
+            "Mark TRADED & start tracking", type="primary",
+            disabled=not override_confirmed or not confirmed
         )
     if submitted:
-        # Fetch once more at submission time so the saved entry is the freshest available quote.
-        _polled_equity_price.clear()
-        entry_price = _polled_equity_price(platform, symbol)
-        if entry_price is None:
-            st.error("The live spot price became unavailable. The trade was not saved.")
-            return
-        database.set_candidate_execution(run_id, symbol, True)
-        action = str(trade.get("final_action") or trade.get("action") or "BUY").upper()
-        database.add_actual_trade({
-            "symbol": symbol, "instrument_type": "EQUITY",
-            "side": "SELL" if action in {"SELL", "SHORT"} else "BUY",
-            "quantity": int(quantity), "entry_date": entry_date.isoformat(),
-            "entry_price": entry_price, "stop_loss": levels.get("stop_loss"),
-            "target_price": levels.get("target_1") or levels.get("target"),
-            "strategy": trade.get("strategy") or action,
-            "recommendation_run_id": run_id, "hold_until": hold_until.isoformat(),
-            "notes": "Created from daily-report recommendation",
-        })
-        st.success(f"{symbol} is now an active tracked trade.")
-        st.rerun()
+        try:
+            database.add_actual_trade({
+                "symbol": symbol, "instrument_type": "EQUITY", "side": side,
+                "quantity": int(quantity), "entry_date": entry_date.isoformat(),
+                "entry_price": entry_price, "stop_loss": levels.get("stop_loss"),
+                "target_price": levels.get("target_1") or levels.get("target"),
+                "strategy": trade.get("strategy") or analytical_action,
+                "recommendation_run_id": run_id, "hold_until": hold_until.isoformat(),
+                "notes": (f"Created from report candidate; original status={analytical_status}; "
+                          f"original action={analytical_action}; discretionary_override={override_required}"),
+            })
+            database.set_candidate_execution(run_id, symbol, True)
+            st.success(f"{symbol} is now an active tracked trade.")
+            st.rerun()
+        except ValueError as exc:
+            st.error(f"Could not start trade tracking: {exc}")
 
 
 def selected_stock_details(platform: TradingPlatform, report: dict[str, Any],
@@ -877,7 +899,7 @@ def selected_stock_details(platform: TradingPlatform, report: dict[str, Any],
                 else:
                     st.warning(message)
             if database:
-                start_recommended_trade_control(platform, database, run_id, trade)
+                start_recommended_trade_control(platform, database, run_id, trade, "selected")
             else:
                 execution_mark_control(database, run_id, symbol,
                                        execution_marks.get(symbol, "NOT_TRADED"), "selected")
@@ -1140,7 +1162,7 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
                     st.error("Analytical status: REJECTED. Marking this as TRADED records your "
                              "actual action and does not convert it into an approved recommendation.")
                     if database:
-                        start_recommended_trade_control(platform, database, run_id, item)
+                        start_recommended_trade_control(platform, database, run_id, item, "rejected")
                     for reason in item.get("reasons", []):
                         st.write(f"• {reason}")
         else:
@@ -1340,6 +1362,15 @@ def opportunities_page(platform: TradingPlatform, database: ReportDatabase) -> N
                         for item in items]
                 st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True,
                              column_config={"Primary blocker": st.column_config.TextColumn(width="large")})
+                by_symbol = {str(item.get("symbol")): item for item in items}
+                selected_override = st.selectbox(
+                    "Record a discretionary trade", list(by_symbol),
+                    key="opportunity-rejected-trade-symbol",
+                    help="This records your actual action without changing the rejected analysis.")
+                with st.expander(f"Trade override · {selected_override}"):
+                    start_recommended_trade_control(
+                        platform, database, str(latest.get("run_id", "")),
+                        by_symbol[selected_override], "opportunity-rejected")
             elif density == "Comfortable":
                 render_candidate_cards(platform, bucket_report, database,
                                        key_prefix="opportunities-" + label.lower().replace(" ", "-"))
@@ -1463,9 +1494,8 @@ def _trade_status(trade: dict[str, Any], current_price: float | None) -> dict[st
             "stop_distance": stop_distance, "target_distance": target_distance}
 
 
-@st.fragment(run_every=1)
 def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabase) -> None:
-    """Live, persistent view for all trades that have not been completed."""
+    """Stable interactive view for all trades that have not been completed."""
     open_trades = database.list_actual_trades("OPEN")
     st.subheader("Live Positions")
     if not open_trades:
@@ -1491,7 +1521,7 @@ def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabas
                         "CONNECTING / POLLING" if feed else "CACHED PRICE")
     header = st.columns([3, 1])
     header[0].caption(
-        f"{connection_label} · Screen updates every second · "
+        f"{connection_label} · Use Refresh now for the latest displayed prices · "
         f"{india_now:%d %b %Y, %I:%M:%S %p} IST · Market {'OPEN' if market_open else 'CLOSED'}"
     )
     header[1].button("Refresh now", key="refresh-live-positions", width="stretch")
@@ -1551,28 +1581,31 @@ def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabas
             if trade.get("instrument_type") == "OPTION" and current is None:
                 st.warning("Live option P&L needs the exact NSE option trading symbol. "
                            "This position remains tracked, but its price must be entered when completing it.")
-            with st.form(f"complete-active-{trade['id']}"):
+            with st.form(f"complete-active-{trade['id']}", clear_on_submit=False):
                 finish = st.columns(3)
                 exit_price = finish[0].number_input(
                     "Exit price", min_value=0.01, value=float(current or trade["entry_price"]),
-                    step=0.05, key=f"daily-exit-price-{trade['id']}")
+                    step=0.05, key=f"position-exit-price-{trade['id']}")
                 exit_date = finish[1].date_input("Exit date", value=date.today(),
-                                                 key=f"daily-exit-date-{trade['id']}")
+                                                 key=f"position-exit-date-{trade['id']}")
                 exit_fees = finish[2].number_input("Exit fees", min_value=0.0, value=0.0,
-                                                   key=f"daily-exit-fees-{trade['id']}")
+                                                   key=f"position-exit-fees-{trade['id']}")
                 projected = ((exit_price - float(trade["entry_price"])) * int(trade["quantity"])
                              * (1 if trade["side"] == "BUY" else -1)
                              - float(trade.get("fees") or 0) - exit_fees)
                 st.caption(f"Projected realized P&L: {money(projected)}")
                 confirmed = st.checkbox("Confirm this exit and freeze realized P&L",
-                                        key=f"confirm-daily-exit-{trade['id']}")
+                                        key=f"confirm-position-exit-{trade['id']}")
                 completed = st.form_submit_button("Mark completed", type="primary", disabled=not confirmed)
             if completed:
-                pnl = database.close_actual_trade(trade["id"], exit_date.isoformat(),
-                                                  exit_price, exit_fees)
-                outcome = "PROFIT" if pnl >= 0 else "LOSS"
-                st.success(f"Completed as {outcome}. Final P&L: ₹{pnl:,.2f}")
-                st.rerun()
+                try:
+                    pnl = database.close_actual_trade(trade["id"], exit_date.isoformat(),
+                                                      exit_price, exit_fees)
+                    outcome = "PROFIT" if pnl >= 0 else "LOSS"
+                    st.success(f"Completed as {outcome}. Final P&L: ₹{pnl:,.2f}")
+                    st.rerun()
+                except ValueError as exc:
+                    st.error(f"Could not complete this position: {exc}")
 
 
 def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> None:

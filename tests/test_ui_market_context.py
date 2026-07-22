@@ -8,7 +8,7 @@ from ui_app import (candidate_rows, likely_news_reaction, news_impact, news_rows
                     candidate_history_rows, opportunity_groups, option_leg_rows, outcome_rows,
                     price_figure, report_changes,
                     portfolio_snapshot, primary_blocker, rejection_summary, snapshot_rows,
-                    trade_performance)
+                    trade_override_required, trade_performance)
 
 
 class UIMarketContextTests(unittest.TestCase):
@@ -69,6 +69,12 @@ class UIMarketContextTests(unittest.TestCase):
         rows = candidate_history_rows(reports, "SBIN")
         self.assertEqual([row["Quality"] for row in rows], [70, 85])
         self.assertEqual(rows[-1]["Status"], "TRADE")
+
+    def test_non_approved_candidates_require_discretionary_override(self):
+        self.assertFalse(trade_override_required({"status": "TRADE", "final_action": "BUY"}))
+        self.assertTrue(trade_override_required({"status": "WATCHLIST",
+                                                 "final_action": "WAIT_FOR_CONFIRMATION"}))
+        self.assertTrue(trade_override_required({"status": "REJECTED", "final_action": "REJECT"}))
 
     def test_news_impact_labels_cover_positive_and_negative_strength(self):
         self.assertEqual(news_impact(72), "SUPER POSITIVE")

@@ -18,6 +18,20 @@ def frame(confirmed=False):
 
 
 class SetupEntryEvaluatorTests(unittest.TestCase):
+    @staticmethod
+    def full_frame(last_open=99, last_close=101, ema20=100, atr=2):
+        rows = []
+        for index in range(8):
+            close = 100 + index * .1
+            rows.append({"Open": close - .4, "High": close + .5, "Low": close - .6,
+                         "Close": close, "EMA20": ema20, "EMA50": 98, "EMA200": 95,
+                         "RSI": 50, "MACD": .5, "MACD_SIGNAL": .3,
+                         "MACD_HISTOGRAM": .2, "RVOL": 1.4, "ATR": atr})
+        rows[-1].update({"Open": last_open, "Close": last_close,
+                         "High": max(last_open, last_close) + .5,
+                         "Low": min(last_open, last_close) - .5})
+        return pd.DataFrame(rows)
+
     def test_oversold_is_candidate_not_trade(self):
         result = SetupEntryEvaluator.evaluate(
             frame(False), SimpleNamespace(score=65), {"support": 98, "risk_reward": 2},
@@ -55,3 +69,20 @@ class SetupEntryEvaluatorTests(unittest.TestCase):
         )
         self.assertTrue(result["stage_2"]["eligible"])
         self.assertNotIn("higher_low", result["stage_2"]["checks"])
+
+    def test_latest_red_candle_blocks_immediate_entry(self):
+        result = SetupEntryEvaluator.evaluate(
+            self.full_frame(last_open=102, last_close=101), SimpleNamespace(score=75),
+            {"support": 99, "risk_reward": 2}, {"confirmed": False}, {"signal": "BUY"},
+        )
+        self.assertFalse(result["stage_2"]["eligible"])
+        self.assertIn("latest_candle_green", result["stage_2"]["missing"])
+
+    def test_large_ema20_atr_extension_blocks_immediate_entry(self):
+        result = SetupEntryEvaluator.evaluate(
+            self.full_frame(last_open=109, last_close=110, ema20=100, atr=2),
+            SimpleNamespace(score=75), {"support": 99, "risk_reward": 2},
+            {"confirmed": False}, {"signal": "BUY"},
+        )
+        self.assertFalse(result["stage_2"]["eligible"])
+        self.assertIn("not_overextended_above_ema20", result["stage_2"]["missing"])
