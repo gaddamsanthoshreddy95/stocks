@@ -5,8 +5,10 @@ import pandas as pd
 
 from ui_app import (candidate_rows, likely_news_reaction, news_impact, news_rows,
                     data_age, decision_checks, decision_timeline, display_date,
-                    option_leg_rows, outcome_rows, price_figure, report_changes,
-                    snapshot_rows, trade_performance)
+                    candidate_history_rows, opportunity_groups, option_leg_rows, outcome_rows,
+                    price_figure, report_changes,
+                    portfolio_snapshot, primary_blocker, rejection_summary, snapshot_rows,
+                    trade_performance)
 
 
 class UIMarketContextTests(unittest.TestCase):
@@ -22,6 +24,51 @@ class UIMarketContextTests(unittest.TestCase):
             "event_risk": {"hard_block": False}, "risk": {"quantity": 10},
         })
         self.assertTrue(all(item["passed"] for item in checks))
+
+    def test_opportunity_groups_are_mutually_exclusive(self):
+        candidates = [
+            {"symbol": "BUY", "status": "TRADE", "selection_status": "BUY NOW"},
+            {"symbol": "WAIT", "status": "WATCHLIST", "final_action": "WAIT_FOR_CONFIRMATION"},
+            {"symbol": "WATCH", "status": "WATCHLIST"},
+            {"symbol": "BLOCK", "status": "WATCHLIST", "final_action": "WAIT",
+             "_opportunity_source": "REJECTED"},
+        ]
+        groups = opportunity_groups(candidates)
+        symbols = [item["symbol"] for items in groups.values() for item in items]
+        self.assertCountEqual(symbols, ["BUY", "WAIT", "WATCH", "BLOCK"])
+        self.assertEqual(len(symbols), len(set(symbols)))
+        self.assertEqual(groups["No trade / blocked"][0]["symbol"], "BLOCK")
+
+    def test_rejections_are_grouped_by_actionable_primary_blocker(self):
+        rejected = [
+            {"symbol": "A", "selection_reason": "Risk/reward 1.1 is below minimum"},
+            {"symbol": "B", "reasons": ["Risk reward failed"]},
+            {"symbol": "C", "selection_reason": "Entry confirmation missing"},
+        ]
+        self.assertEqual(primary_blocker(rejected[0]), "Insufficient risk/reward")
+        summary = rejection_summary(rejected)
+        self.assertEqual(summary[0]["Count"], 2)
+        self.assertEqual(summary[0]["Symbols"], "A, B")
+
+    def test_portfolio_snapshot_includes_unrealized_risk_and_overdue_reviews(self):
+        trades = [{"symbol": "SBIN", "status": "OPEN", "side": "BUY", "quantity": 10,
+                   "entry_price": 100, "stop_loss": 95, "fees": 5,
+                   "hold_until": "2020-01-01"}]
+        snapshot = portfolio_snapshot(trades, {"SBIN": 110})
+        self.assertEqual(snapshot["capital_deployed"], 1000)
+        self.assertEqual(snapshot["risk_at_stops"], 50)
+        self.assertEqual(snapshot["unrealized_pnl"], 95)
+        self.assertEqual(snapshot["overdue_reviews"], 1)
+
+    def test_candidate_history_tracks_saved_report_progression(self):
+        reports = [
+            {"date": "2026-07-21", "watchlist": [{"symbol": "SBIN", "quality_score": 70}]},
+            {"date": "2026-07-22", "trades": [{"symbol": "SBIN", "status": "TRADE",
+                                                 "quality_score": 85}]},
+        ]
+        rows = candidate_history_rows(reports, "SBIN")
+        self.assertEqual([row["Quality"] for row in rows], [70, 85])
+        self.assertEqual(rows[-1]["Status"], "TRADE")
 
     def test_news_impact_labels_cover_positive_and_negative_strength(self):
         self.assertEqual(news_impact(72), "SUPER POSITIVE")

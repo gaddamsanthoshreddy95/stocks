@@ -45,14 +45,23 @@ APP_CSS = """
     .hero h1 {font-size: 1.65rem; margin: 0 0 .25rem 0;}
     .hero p {margin: 0; opacity: .75;}
     .badge {display:inline-block; padding:.2rem .55rem; border-radius:999px;
-        font-size:.72rem; font-weight:700; letter-spacing:.03em; margin-right:.3rem;}
+        font-size:.72rem; font-weight:700; letter-spacing:.03em; margin:0; white-space:nowrap;}
+    .badge-row {display:flex; flex-wrap:wrap; gap:.4rem; margin:.25rem 0 .75rem;}
     .good {color:#34d399; background:rgba(16,185,129,.14);}
     .warn {color:#fbbf24; background:rgba(245,158,11,.14);}
     .bad {color:#fb7185; background:rgba(244,63,94,.14);}
     .info {color:#60a5fa; background:rgba(59,130,246,.14);}
     .muted {color:#a1a1aa; background:rgba(113,113,122,.14);}
     .candidate-title {font-size:1.15rem; font-weight:750; margin-bottom:.35rem;}
-    .candidate-reason {opacity:.78; min-height:2.8rem;}
+    .candidate-reason {opacity:.78; min-height:2.8rem; overflow-wrap:anywhere; line-height:1.45;}
+    .candidate-metrics {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.5rem;
+        margin:.8rem 0;}
+    .candidate-metric {min-width:0; padding:.55rem .65rem; border-radius:10px;
+        background:rgba(125,125,125,.06); border:1px solid rgba(125,125,125,.14);}
+    .candidate-metric small {display:block; opacity:.7; margin-bottom:.15rem;}
+    .candidate-metric strong {display:block; font-size:clamp(.88rem,1.1vw,1.1rem);
+        overflow-wrap:anywhere; line-height:1.25;}
+    .candidate-targets {overflow-wrap:anywhere; line-height:1.45; margin-bottom:.65rem; opacity:.78;}
     .section-note {opacity:.68; font-size:.82rem;}
     .health-strip {display:flex; flex-wrap:wrap; gap:.45rem; padding:.7rem .85rem;
         border:1px solid rgba(125,125,125,.18); border-radius:12px; margin:.4rem 0 1rem;}
@@ -63,6 +72,7 @@ APP_CSS = """
         .hero h1 {font-size:1.35rem;}
         [data-testid="stHorizontalBlock"] {flex-wrap:wrap;}
         [data-testid="column"] {min-width: min(100%, 260px); flex: 1 1 46%!important;}
+        .candidate-metrics {grid-template-columns:1fr 1fr;}
         button {min-height:44px;}
     }
 </style>
@@ -111,12 +121,14 @@ def status_class(status: Any) -> str:
 
 def badge(status: Any) -> str:
     label = str(status or "UNAVAILABLE").replace("_", " ").upper()
-    return f'<span class="badge {status_class(label)}">{label}</span>'
+    return f'<span class="badge {status_class(label)}">{label}</span> '
 
 
 def hero(title: str, subtitle: str, badges: list[Any] | None = None) -> None:
     labels = "".join(badge(item) for item in (badges or []))
-    st.markdown(f'<div class="hero"><h1>{title}</h1><p>{subtitle}</p>{labels}</div>',
+    labels = f'<div class="badge-row">{labels}</div>' if labels else ""
+    st.markdown(f'<div class="hero"><h1>{title}</h1><p>{subtitle}</p>'
+                f'{labels}</div>',
                 unsafe_allow_html=True)
 
 
@@ -357,18 +369,26 @@ def render_health_strip(platform: TradingPlatform, database: ReportDatabase,
     st.markdown(f'<div class="health-strip">{labels}</div>', unsafe_allow_html=True)
 
 
+def render_metric_cards(metrics: list[tuple[str, Any]], per_row: int = 3) -> None:
+    """Render metrics in bounded rows so values remain readable at common widths."""
+    per_row = max(1, min(int(per_row), 3))
+    for start in range(0, len(metrics), per_row):
+        row = metrics[start:start + per_row]
+        columns = st.columns(len(row))
+        for column, (label, metric) in zip(columns, row):
+            column.metric(label, metric)
+
+
 def summary_cards(report: dict[str, Any]) -> None:
     summary = report.get("summary", {})
-    columns = st.columns(5)
-    metrics = (
+    metrics = [
         ("Stocks scanned", summary.get("stocks_scanned", 0)),
         ("Candidates reviewed", summary.get("context_reviewed", 0)),
         ("Trades", summary.get("trades_generated", 0)),
         ("Watchlist", summary.get("watchlisted", 0)),
         ("Market", report.get("market", {}).get("regime", "UNAVAILABLE")),
-    )
-    for column, (label, metric) in zip(columns, metrics):
-        column.metric(label, metric)
+    ]
+    render_metric_cards(metrics)
 
 
 def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | None = None) -> list[dict[str, Any]]:
@@ -446,43 +466,147 @@ def decision_checks(trade: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def opportunity_groups(candidates: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Assign every candidate to exactly one next-action group."""
+    groups: dict[str, list[dict[str, Any]]] = {
+        "Buy now": [], "Wait for confirmation": [], "Watchlist": [], "No trade / blocked": [],
+    }
+    for item in candidates:
+        status = str(item.get("status", "")).upper()
+        action = str(item.get("final_action", "")).upper()
+        selection = str(item.get("selection_status", "")).upper()
+        source = str(item.get("_opportunity_source", "")).upper()
+        if source == "REJECTED" or status == "REJECTED" or action in {"NO_TRADE", "REJECT"}:
+            group = "No trade / blocked"
+        elif status == "TRADE" and (selection == "BUY NOW" or action in {"BUY", "TRADE"}):
+            group = "Buy now"
+        elif "WAIT" in selection or "WAIT" in action:
+            group = "Wait for confirmation"
+        else:
+            group = "Watchlist"
+        groups[group].append(item)
+    return groups
+
+
+def primary_blocker(candidate: dict[str, Any]) -> str:
+    """Classify the most actionable reason a candidate did not become a trade."""
+    text = " ".join(str(item) for item in [candidate.get("selection_reason"),
+                    candidate.get("rejection_reason"), *(candidate.get("reasons") or [])]).lower()
+    if "risk/reward" in text or "risk reward" in text:
+        return "Insufficient risk/reward"
+    if "entry" in text or "confirmation" in text or "breakout" in text or "pullback" in text:
+        return "Entry confirmation"
+    if "market" in text or "regime" in text:
+        return "Market regime"
+    if "news" in text or "event" in text or "earnings" in text:
+        return "News / event risk"
+    if "liquid" in text or "volume" in text or "spread" in text:
+        return "Liquidity"
+    if "stability" in text or "persistent" in text or "appearance" in text:
+        return "Selection stability"
+    if "unavailable" in text or "missing" in text or "failed" in text:
+        return "Missing data"
+    return "Other policy gate"
+
+
+def rejection_summary(rejected: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts: dict[str, list[str]] = {}
+    for item in rejected:
+        counts.setdefault(primary_blocker(item), []).append(str(item.get("symbol", "UNKNOWN")))
+    return [{"Blocker": blocker, "Count": len(symbols), "Symbols": ", ".join(symbols)}
+            for blocker, symbols in sorted(counts.items(), key=lambda pair: (-len(pair[1]), pair[0]))]
+
+
+def candidate_history_rows(reports: list[dict[str, Any]], symbol: str) -> list[dict[str, Any]]:
+    """Extract one symbol's progression from ordered immutable reports."""
+    rows = []
+    for report in reports:
+        candidate = None
+        bucket_name = ""
+        for bucket in ("trades", "watchlist", "rejected"):
+            candidate = next((item for item in report.get(bucket, [])
+                              if str(item.get("symbol", "")).upper() == symbol.upper()), None)
+            if candidate is not None:
+                bucket_name = bucket
+                break
+        if candidate is None:
+            continue
+        rows.append({"Date": report.get("date"), "Status": candidate.get("status") or bucket_name.upper(),
+                     "Action": candidate.get("final_action"), "Quality": candidate.get("quality_score"),
+                     "Readiness": candidate.get("execution_readiness_score"),
+                     "R:R": (candidate.get("levels") or {}).get("risk_reward")})
+    return rows
+
+
+def portfolio_snapshot(trades: list[dict[str, Any]], prices: dict[str, float | None]) -> dict[str, Any]:
+    """Calculate live portfolio totals without hiding positions with missing quotes."""
+    deployed = risk = unrealized = 0.0
+    priced = overdue = 0
+    for trade in trades:
+        if trade.get("status") != "OPEN":
+            continue
+        entry, quantity = float(trade["entry_price"]), int(trade["quantity"])
+        deployed += entry * quantity
+        if trade.get("stop_loss") is not None:
+            risk += abs(entry - float(trade["stop_loss"])) * quantity
+        current = prices.get(str(trade.get("symbol")))
+        if current is not None:
+            direction = 1 if trade.get("side") == "BUY" else -1
+            unrealized += (float(current) - entry) * quantity * direction - float(trade.get("fees") or 0)
+            priced += 1
+        overdue += int(bool(trade.get("hold_until") and str(trade["hold_until"]) <= date.today().isoformat()))
+    return {"capital_deployed": round(deployed, 2), "risk_at_stops": round(risk, 2),
+            "unrealized_pnl": round(unrealized, 2), "priced_positions": priced,
+            "open_positions": sum(item.get("status") == "OPEN" for item in trades),
+            "overdue_reviews": overdue}
+
+
 def render_candidate_cards(platform: TradingPlatform, report: dict[str, Any],
-                           database: ReportDatabase | None = None) -> None:
+                           database: ReportDatabase | None = None,
+                           key_prefix: str = "candidates") -> None:
     candidates = [*report.get("trades", []), *report.get("watchlist", [])]
     if not candidates:
         st.info("No actionable or watchlist candidates were produced. Review rejection reasons below.")
         return
     run_id = str(report.get("run_id", ""))
-    for start in range(0, len(candidates), 3):
-        columns = st.columns(3)
-        for column, trade in zip(columns, candidates[start:start + 3]):
+    for start in range(0, len(candidates), 2):
+        columns = st.columns(2)
+        for column, trade in zip(columns, candidates[start:start + 2]):
             with column.container(border=True):
                 levels = trade.get("levels") or {}
                 status = trade.get("status", "WATCHLIST")
                 symbol = str(trade.get("symbol", "UNKNOWN"))
                 st.markdown(
                     f'<div class="candidate-title">{symbol}</div>'
-                    f'{badge(status)}{badge(trade.get("final_action"))}{badge(trade.get("quality_grade"))}',
+                    f'<div class="badge-row">{badge(status)}{badge(trade.get("final_action"))}'
+                    f'{badge(trade.get("quality_grade"))}</div>',
                     unsafe_allow_html=True,
                 )
                 st.markdown(f'<div class="candidate-reason">{trade.get("selection_reason") or "No summary supplied."}</div>',
                             unsafe_allow_html=True)
-                metrics = st.columns(3)
-                metrics[0].metric("Entry", money(levels.get("entry")))
-                metrics[1].metric("Stop", money(levels.get("stop_loss")))
-                metrics[2].metric("R:R", number(levels.get("risk_reward")))
-                st.caption(f"Targets: {money(levels.get('target_1'))} · {money(levels.get('target_2'))} · "
-                           f"Readiness {number(trade.get('execution_readiness_score'), 0)}")
-                if st.button("Open trade details", key=f"card-{run_id}-{symbol}", width="stretch"):
-                    st.session_state["candidate_focus"] = symbol
-    focused = st.session_state.get("candidate_focus")
+                st.markdown(
+                    '<div class="candidate-metrics">'
+                    f'<div class="candidate-metric"><small>Entry</small><strong>{money(levels.get("entry"))}</strong></div>'
+                    f'<div class="candidate-metric"><small>Stop</small><strong>{money(levels.get("stop_loss"))}</strong></div>'
+                    f'<div class="candidate-metric"><small>Risk / reward</small><strong>{number(levels.get("risk_reward"))}</strong></div>'
+                    '</div>'
+                    f'<div class="candidate-targets">Targets: {money(levels.get("target_1"))} · '
+                    f'{money(levels.get("target_2"))}<br>Readiness: '
+                    f'{number(trade.get("execution_readiness_score"), 0)}</div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button("Open trade details",
+                             key=f"card-{key_prefix}-{run_id}-{symbol}", width="stretch"):
+                    st.session_state[f"candidate_focus_{key_prefix}"] = symbol
+    focus_key = f"candidate_focus_{key_prefix}"
+    focused = st.session_state.get(focus_key)
     focused_trade = next((item for item in candidates if item.get("symbol") == focused), None)
     if focused_trade:
         with st.container(border=True):
             left, right = st.columns([5, 1])
             left.subheader(f"{focused} trade workspace")
-            if right.button("Close", key="close-candidate-focus", width="stretch"):
-                st.session_state.pop("candidate_focus", None)
+            if right.button("Close", key=f"close-candidate-focus-{key_prefix}", width="stretch"):
+                st.session_state.pop(focus_key, None)
                 st.rerun()
             render_trade_detail(platform, report, focused_trade, database)
 
@@ -527,12 +651,12 @@ def render_trade_detail(platform: TradingPlatform, report: dict[str, Any], trade
         message = f"{selection_status}: {trade.get('selection_reason') or selection.get('reason', '')}"
         (st.success if selection_status == "BUY NOW" else st.info if "WAIT" in selection_status
          else st.warning)(message)
-    metrics = st.columns(5)
-    for column, label, item in zip(metrics, ("Price", "Support", "Resistance", "Risk / reward", "Quality"),
-                                   (money(trade.get("current_price")), money(levels.get("support")),
-                                    money(levels.get("resistance")), number(levels.get("risk_reward")),
-                                    number(trade.get("quality_score"), 0))):
-        column.metric(label, item)
+    render_metric_cards([
+        ("Price", money(trade.get("current_price"))), ("Support", money(levels.get("support"))),
+        ("Resistance", money(levels.get("resistance"))),
+        ("Risk / reward", number(levels.get("risk_reward"))),
+        ("Quality", number(trade.get("quality_score"), 0)),
+    ])
     render_price_chart(platform, symbol, levels)
     option = trade.get("option_strategy") or {}
     plan = option.get("trade") or {}
@@ -917,9 +1041,22 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
                "Actionable decisions are green; watch conditions are amber.")
     tabs = st.tabs(["Overview", "Candidates", "Market", "News", "Rejections", "Diagnostics"])
     with tabs[0]:
-        render_candidate_cards(platform, report, database)
-        st.subheader("Candidate comparison")
-        render_candidate_comparison(report)
+        all_candidates = [*report.get("trades", []), *report.get("watchlist", [])]
+        top_report = {**report, "trades": report.get("trades", [])[:3],
+                      "watchlist": report.get("watchlist", [])[:max(0, 3 - len(report.get("trades", [])))]}
+        st.subheader("Top decisions")
+        render_candidate_cards(platform, top_report, database, key_prefix="report-overview")
+        if len(all_candidates) > 3:
+            st.caption(f"Showing the top 3 of {len(all_candidates)} candidates. Use Opportunities "
+                       "for the complete decision workspace.")
+        if st.button("Open all opportunities", key=f"report-opportunities-{report.get('run_id')}"):
+            st.session_state["nav_page"] = "Opportunities"
+            st.rerun()
+        grouped = rejection_summary(report.get("rejected", []))
+        if grouped:
+            st.subheader("Important blockers")
+            st.dataframe(pd.DataFrame(grouped[:4]), width="stretch", hide_index=True,
+                         column_config={"Symbols": st.column_config.TextColumn(width="large")})
         if database:
             history = database.list_reports(100)
             position = next((index for index, item in enumerate(history)
@@ -949,9 +1086,14 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
                          column_order=("Symbol", "Status", "Action", "Quality", "Quality score",
                                        "Readiness", "R:R", "Trigger price", "Support", "Resistance",
                                        "Option approval", "Event risk", "Selection reason"))
+            st.download_button("Export candidate CSV", pd.DataFrame(filtered).to_csv(index=False).encode(),
+                               file_name=f"candidates-{report.get('date', 'latest')}.csv",
+                               mime="text/csv", key=f"candidate-csv-{report.get('run_id')}")
         else:
             st.info("No executable or watchlist candidates were produced.")
         if rows:
+            with st.expander("Compare candidates"):
+                render_candidate_comparison(report)
             st.subheader("Expanded candidate details")
             selected_stock_details(platform, report, database)
     with tabs[2]:
@@ -985,6 +1127,10 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
     with tabs[4]:
         rejected = report.get("rejected", [])
         if rejected:
+            grouped = rejection_summary(rejected)
+            st.subheader("Rejections by primary blocker")
+            st.dataframe(pd.DataFrame(grouped), width="stretch", hide_index=True,
+                         column_config={"Symbols": st.column_config.TextColumn(width="large")})
             run_id = str(report.get("run_id", ""))
             for item in rejected:
                 with st.expander(str(item.get("symbol", "UNKNOWN"))):
@@ -1028,13 +1174,21 @@ def dashboard(platform: TradingPlatform, database: ReportDatabase) -> None:
     render_health_strip(platform, database, latest)
     counts = database.counts()
     trade_summary = database.actual_trade_summary()
-    metrics = st.columns(5)
-    metrics[0].metric("Open positions", trade_summary["open"])
-    metrics[1].metric("Realized P&L", money(trade_summary["realized_pnl"]))
-    metrics[2].metric("Latest trades", (latest or {}).get("summary", {}).get("trades_generated", 0))
-    metrics[3].metric("Watchlist", (latest or {}).get("summary", {}).get("watchlisted", 0))
-    metrics[4].metric("Reports", counts["reports"])
+    render_metric_cards([
+        ("Open positions", trade_summary["open"]),
+        ("Realized P&L", money(trade_summary["realized_pnl"])),
+        ("Latest trades", (latest or {}).get("summary", {}).get("trades_generated", 0)),
+        ("Watchlist", (latest or {}).get("summary", {}).get("watchlisted", 0)),
+        ("Reports", counts["reports"]),
+    ])
     if latest:
+        if len(history) > 1:
+            previous = database.get_report(history[1]["id"])
+            changes = report_changes(latest, previous)
+            if changes:
+                with st.expander(f"What changed since the previous report ({len(changes)})", expanded=True):
+                    st.dataframe(pd.DataFrame(changes[:10]), width="stretch", hide_index=True,
+                                 column_config={"Score change": st.column_config.NumberColumn(format="%+.1f")})
         st.subheader("Latest opportunities")
         render_candidate_cards(platform, latest, database)
     else:
@@ -1109,38 +1263,62 @@ def opportunities_page(platform: TradingPlatform, database: ReportDatabase) -> N
         st.info("No report is available. Generate one from Daily report first.")
         return
     report_age = data_age(history[0].get("generated_at"))
+    preferences = database.get_preferences()
     st.caption(f"Report generated {report_age} · {display_date(latest.get('date'), 'Unknown date')} · "
                f"Run {latest.get('run_id', 'unavailable')}")
-    candidates = [*latest.get("trades", []), *latest.get("watchlist", []),
-                  *latest.get("rejected", [])]
+    candidates = [
+        *[{**item, "_opportunity_source": "TRADE"} for item in latest.get("trades", [])],
+        *[{**item, "_opportunity_source": "WATCHLIST"} for item in latest.get("watchlist", [])],
+        *[{**item, "_opportunity_source": "REJECTED"} for item in latest.get("rejected", [])],
+    ]
     sectors = sorted({str(item.get("sector")) for item in candidates if item.get("sector")})
     grades = sorted({str(item.get("quality_grade")) for item in candidates if item.get("quality_grade")})
     controls = st.columns([2, 1, 1, 1])
     query = controls[0].text_input("Search symbol", placeholder="RELIANCE", key="opportunity-search")
     sector = controls[1].selectbox("Sector", ["All", *sectors], key="opportunity-sector")
     grade = controls[2].selectbox("Grade", ["All", *grades], key="opportunity-grade")
-    minimum_rr = controls[3].number_input("Minimum R:R", min_value=0.0, value=0.0, step=0.25)
+    minimum_rr = controls[3].number_input("Minimum R:R", min_value=0.0, value=0.0,
+                                         step=0.25, key="opportunity-min-rr")
+    advanced = st.columns([1, 1, 1])
+    minimum_readiness = advanced[0].number_input(
+        "Minimum readiness", min_value=0, max_value=100, value=0, key="opportunity-readiness",
+        help="Readiness estimates how close the setup is to execution; it is not trade approval.")
+    complete_only = advanced[1].toggle("Only complete news data", key="opportunity-complete")
+    density_options = ("Comfortable", "Compact", "Table only")
+    density = advanced[2].selectbox(
+        "Display density", density_options,
+        index=density_options.index(preferences.get("opportunity_density", "Comfortable")),
+        key="opportunity-density")
 
     def included(item: dict[str, Any]) -> bool:
         rr = float((item.get("levels") or {}).get("risk_reward") or 0)
+        readiness = float(item.get("execution_readiness_score") or 0)
+        news_state = str((item.get("news") or {}).get("news_state", ""))
         return (query.upper() in str(item.get("symbol", "")).upper()
                 and (sector == "All" or str(item.get("sector")) == sector)
                 and (grade == "All" or str(item.get("quality_grade")) == grade)
-                and rr >= minimum_rr)
+                and rr >= minimum_rr and readiness >= minimum_readiness
+                and (not complete_only or news_state in {"ANALYZED", "NO_RELEVANT_NEWS"}))
 
     filtered = [item for item in candidates if included(item)]
-    groups = {
-        "Buy now": [item for item in filtered if item.get("status") == "TRADE"
-                    and (item.get("selection_status") == "BUY NOW"
-                         or item.get("final_action") in {"BUY", "TRADE"})],
-        "Wait for confirmation": [item for item in filtered if item.get("status") != "REJECTED"
-                                  and ("WAIT" in str(item.get("selection_status", ""))
-                                       or "WAIT" in str(item.get("final_action", "")))],
-        "Watchlist": [item for item in filtered if item.get("status") == "WATCHLIST"
-                      and "WAIT" not in str(item.get("selection_status", ""))],
-        "No trade / blocked": [item for item in filtered if item.get("status") == "REJECTED"
-                               or item.get("final_action") in {"NO_TRADE", "REJECT"}],
-    }
+    with st.expander("Candidate history"):
+        symbols = sorted({str(item.get("symbol")) for item in candidates})
+        if symbols:
+            history_symbol = st.selectbox("Symbol history", symbols, key="opportunity-history-symbol")
+            saved = database.list_reports(20)
+            report_payloads = [database.get_report(item["id"]) for item in reversed(saved)]
+            progression = candidate_history_rows([item for item in report_payloads if item], history_symbol)
+            if progression:
+                frame = pd.DataFrame(progression)
+                st.dataframe(frame, width="stretch", hide_index=True)
+                chart_values = frame.set_index("Date")[["Quality", "Readiness", "R:R"]].apply(
+                    pd.to_numeric, errors="coerce")
+                st.line_chart(chart_values)
+            else:
+                st.info("No saved history is available for this symbol.")
+        else:
+            st.info("No candidates are available in this report.")
+    groups = opportunity_groups(filtered)
     tabs = st.tabs([f"{label} ({len(items)})" for label, items in groups.items()])
     for tab, (label, items) in zip(tabs, groups.items()):
         with tab:
@@ -1162,8 +1340,18 @@ def opportunities_page(platform: TradingPlatform, database: ReportDatabase) -> N
                         for item in items]
                 st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True,
                              column_config={"Primary blocker": st.column_config.TextColumn(width="large")})
+            elif density == "Comfortable":
+                render_candidate_cards(platform, bucket_report, database,
+                                       key_prefix="opportunities-" + label.lower().replace(" ", "-"))
             else:
-                render_candidate_cards(platform, bucket_report, database)
+                rows = candidate_rows(bucket_report)
+                columns = (("Symbol", "Action", "Quality", "Readiness", "R:R")
+                           if density == "Compact" else None)
+                st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True,
+                             column_config=candidate_table_config(), column_order=columns)
+                st.download_button("Export visible CSV", pd.DataFrame(rows).to_csv(index=False).encode(),
+                                   file_name=f"opportunities-{label.lower().replace(' ', '-')}.csv",
+                                   mime="text/csv", key=f"opportunity-export-{label}")
 
 
 def positions_page(platform: TradingPlatform, database: ReportDatabase) -> None:
@@ -1310,8 +1498,20 @@ def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabas
     st.caption("Open trades remain live here until completed. Closing a trade freezes its realized P&L.")
     if feed_status.get("error") and not feed_status["connected"]:
         st.warning(f"Live stream unavailable; quote polling fallback is active. {feed_status['error']}")
+    live_prices = {str(trade["symbol"]): _latest_trade_price(platform, trade, feed)
+                   for trade in open_trades}
+    snapshot = portfolio_snapshot(open_trades, live_prices)
+    render_metric_cards([
+        ("Unrealized P&L", money(snapshot["unrealized_pnl"])),
+        ("Capital deployed", money(snapshot["capital_deployed"])),
+        ("Risk at stops", money(snapshot["risk_at_stops"])),
+        ("Prices available", f"{snapshot['priced_positions']}/{snapshot['open_positions']}"),
+        ("Reviews due", snapshot["overdue_reviews"]),
+    ])
+    if snapshot["overdue_reviews"]:
+        st.warning(f"{snapshot['overdue_reviews']} position review date(s) are due or overdue.")
     for trade in open_trades:
-        current = _latest_trade_price(platform, trade, feed)
+        current = live_prices[str(trade["symbol"])]
         status = _trade_status(trade, current)
         pnl_label = "Price unavailable" if status["pnl"] is None else f"₹{status['pnl']:,.2f}"
         pnl_delta = None if status["pnl_percent"] is None else f"{status['pnl_percent']:+.2f}%"
@@ -1380,10 +1580,14 @@ def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> No
          "managed separately in Positions.")
     active_future = daily_report_jobs().future(st.session_state.get("daily_report_job_id"))
     job_running = active_future is not None and not active_future.done()
+    preferences = database.get_preferences()
     with st.form("daily-report-form"):
         left, middle, right = st.columns(3)
-        limit = left.number_input("Maximum final trades", 1, 50, 5)
-        minimum_score = middle.number_input("Minimum technical score", 0, 100, 40)
+        limit = left.number_input("Maximum final trades", 1, 50,
+                                  int(preferences.get("default_report_limit", 5)))
+        minimum_score = middle.number_input("Minimum technical score", 0, 100,
+                                            int(preferences.get("default_minimum_score", 40)),
+                                            help="Initial technical screening floor; final execution gates still apply.")
         option_month = right.text_input("Option month (optional)", placeholder="YYYY-MM")
         submitted = st.form_submit_button("Run report", type="primary", disabled=job_running)
     if submitted:
@@ -1400,7 +1604,17 @@ def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> No
         st.success("Daily report started in the background. You can open History or any other page.")
         st.rerun()
     if job_running:
+        progress, current_stage = job_progress("daily_report")
         st.info("A daily report is running in the background. Navigation will not stop it.")
+        st.progress(progress, text=current_stage)
+        stages = ("Connect to data", "Technical screening", "Context and event checks",
+                  "Trade validation", "Candidate ranking", "Final report")
+        current_index = min(len(stages) - 1, int(progress / (100 / len(stages))))
+        st.dataframe(pd.DataFrame([
+            {"Stage": stage, "Status": "Complete" if index < current_index else
+             "Running" if index == current_index else "Waiting"}
+            for index, stage in enumerate(stages)
+        ]), width="stretch", hide_index=True)
     report = None if job_running else st.session_state.get("current_report")
     if report:
         show_report(platform, report, database)
@@ -1436,13 +1650,12 @@ def render_analysis_workspace(platform: TradingPlatform, result: dict[str, Any])
     }
     verdict = decision.get("action") or decision.get("decision") or decision.get("signal") or "ANALYZED"
     hero(symbol, str(decision.get("reason") or "Technical research result"), [verdict])
-    metrics = st.columns(5)
     technical = analysis.get("technical_score", analysis.get("score"))
-    metrics[0].metric("Verdict", verdict)
-    metrics[1].metric("Technical score", number(technical, 0))
-    metrics[2].metric("Entry", money(levels["entry"]))
-    metrics[3].metric("Stop", money(levels["stop_loss"]))
-    metrics[4].metric("Position size", number((result.get("position_size") or {}).get("quantity"), 0))
+    render_metric_cards([
+        ("Verdict", verdict), ("Technical score", number(technical, 0)),
+        ("Entry", money(levels["entry"])), ("Stop", money(levels["stop_loss"])),
+        ("Position size", number((result.get("position_size") or {}).get("quantity"), 0)),
+    ])
     render_price_chart(platform, symbol, levels)
     tabs = st.tabs(["Verdict & risk", "Technical evidence", "Setup", "Raw analysis"])
     with tabs[0]:
@@ -1578,12 +1791,13 @@ def render_decision_timeline(candidate: dict[str, Any]) -> None:
 
 def render_performance_dashboard(trades: list[dict[str, Any]]) -> None:
     performance = trade_performance(trades)
-    metrics = st.columns(5)
-    metrics[0].metric("Net realized P&L", money(performance["net_pnl"]))
-    metrics[1].metric("Win rate", f"{performance['win_rate']:.1f}%")
-    metrics[2].metric("Expectancy / trade", money(performance["expectancy"]))
-    metrics[3].metric("Average winner", money(performance["average_win"]))
-    metrics[4].metric("Average R", number(performance["average_r"]))
+    render_metric_cards([
+        ("Net realized P&L", money(performance["net_pnl"])),
+        ("Win rate", f"{performance['win_rate']:.1f}%"),
+        ("Expectancy / trade", money(performance["expectancy"])),
+        ("Average winner", money(performance["average_win"])),
+        ("Average R", number(performance["average_r"])),
+    ])
     closed = [trade for trade in trades if trade.get("status") == "CLOSED"]
     if not closed:
         st.info("Close your first tracked trade to unlock the equity curve and strategy breakdown.")
@@ -1782,6 +1996,9 @@ def trade_tracker_page(platform: TradingPlatform, database: ReportDatabase) -> N
     display_columns.insert(13, "hold_until")
     display_columns.insert(15, "outcome")
     st.dataframe(trade_frame[display_columns], width="stretch", hide_index=True)
+    st.download_button("Export position history CSV",
+                       trade_frame[display_columns].to_csv(index=False).encode(),
+                       file_name="position-history.csv", mime="text/csv")
 
     open_trades = [trade for trade in trades if trade["status"] == "OPEN"]
     if open_trades:
@@ -1920,6 +2137,15 @@ def system_page(platform: TradingPlatform, database: ReportDatabase) -> None:
         high_contrast = options[0].toggle("High contrast", value=bool(preferences.get("high_contrast")))
         reduce_motion = options[1].toggle("Reduce motion", value=bool(preferences.get("reduce_motion")))
         compact_mode = options[2].toggle("Compact layout", value=bool(preferences.get("compact_mode")))
+        defaults = st.columns(3)
+        opportunity_density = defaults[0].selectbox(
+            "Default opportunity density", ("Comfortable", "Compact", "Table only"),
+            index=("Comfortable", "Compact", "Table only").index(
+                preferences.get("opportunity_density", "Comfortable")))
+        default_report_limit = defaults[1].number_input(
+            "Default maximum trades", 1, 50, int(preferences.get("default_report_limit", 5)))
+        default_minimum_score = defaults[2].number_input(
+            "Default technical score", 0, 100, int(preferences.get("default_minimum_score", 40)))
         default_page = st.selectbox(
             "Default workspace", ("Dashboard", "Opportunities", "Positions", "Daily report",
                                   "Analyze stock", "Bearish options", "Watchlists & alerts",
@@ -1935,7 +2161,10 @@ def system_page(platform: TradingPlatform, database: ReportDatabase) -> None:
         save_preferences = st.form_submit_button("Save preferences", type="primary")
     if save_preferences:
         for key, setting in {"high_contrast": high_contrast, "reduce_motion": reduce_motion,
-                             "compact_mode": compact_mode, "default_page": default_page}.items():
+                             "compact_mode": compact_mode, "default_page": default_page,
+                             "opportunity_density": opportunity_density,
+                             "default_report_limit": default_report_limit,
+                             "default_minimum_score": default_minimum_score}.items():
             database.set_preference(key, setting)
         st.success("Preferences saved. Reloading the workspace.")
         st.rerun()
@@ -2028,11 +2257,22 @@ def main() -> None:
         alerts = database.list_price_alerts()
         active_alerts = sum(bool(item["enabled"]) for item in alerts)
         triggered_alerts = sum(bool(item["triggered_at"]) for item in alerts)
-        if active_alerts or triggered_alerts:
-            with st.expander(f"🔔 Notifications ({active_alerts} active)"):
+        open_trades = database.list_actual_trades("OPEN")
+        overdue_reviews = sum(bool(item.get("hold_until") and
+                                   str(item["hold_until"]) <= date.today().isoformat())
+                              for item in open_trades)
+        report_failed = bool(st.session_state.get("daily_report_job_error"))
+        notification_count = triggered_alerts + overdue_reviews + int(report_failed)
+        if active_alerts or notification_count:
+            with st.expander(f"🔔 Notifications ({notification_count} important)"):
                 if triggered_alerts:
                     st.success(f"{triggered_alerts} price alert(s) triggered.")
-                st.caption("Open Watchlists & alerts to review conditions.")
+                if overdue_reviews:
+                    st.warning(f"{overdue_reviews} position review date(s) are due. Open Positions.")
+                if report_failed:
+                    st.error("The latest daily report failed. Open Daily report for details.")
+                if active_alerts:
+                    st.caption(f"{active_alerts} price alert(s) remain active.")
         daily_report_status()
     if page == "Dashboard":
         dashboard(platform, database)
