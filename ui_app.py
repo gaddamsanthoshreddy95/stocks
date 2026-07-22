@@ -22,7 +22,9 @@ from src.application.errors import PlatformError
 from src.application.platform import TradingPlatform
 from src.assistant import (CodexService, CodexUnavailableError, OpenAIAnalyst,
                            OpenAIAuthenticationError, OpenAIConfigurationError,
-                           OllamaAnalyst, OllamaConfigurationError, StockAnalyzerTools)
+                           OllamaAnalyst, OllamaConfigurationError, StockAnalyzerTools,
+                           GeminiAnalyst, GeminiAuthenticationError,
+                           GeminiConfigurationError)
 from src.assistant.context_tools import UIContext
 from src.news.ai_sentiment import AISentimentAnalyzer
 from src.presenter.daily_report import DailyReportPresenter
@@ -2674,12 +2676,17 @@ def render_ai_chat(database: ReportDatabase, symbol: str | None = None,
     """Context-aware analyst conversation grounded in saved data and safe source reads."""
     tools = StockAnalyzerTools(database, Path(__file__).resolve().parent)
     session_api_key = st.session_state.get("_openai_session_api_key")
+    session_gemini_key = st.session_state.get("_gemini_session_api_key")
     provider = st.selectbox(
         "Assistant provider",
-        ("Codex via ChatGPT Plus", "OpenAI API", "Local model (Ollama)", "ChatGPT via MCP"),
+        ("Google Gemini", "Codex via ChatGPT Plus", "OpenAI API", "Local model (Ollama)",
+         "ChatGPT via MCP"),
         key=f"ai-provider-{scope}",
-        help="Codex uses your ChatGPT sign-in and plan limits. OpenAI API is billed separately.")
-    if provider == "Codex via ChatGPT Plus":
+        help="Gemini supports a limited free tier. Codex uses ChatGPT plan limits; OpenAI API is billed separately.")
+    if provider == "Google Gemini":
+        analyst = GeminiAnalyst(api_key=session_gemini_key)
+        provider_ready = analyst.configured
+    elif provider == "Codex via ChatGPT Plus":
         analyst = CodexService(Path(__file__).resolve().parent)
         provider_ready = analyst.configured
     elif provider == "OpenAI API":
@@ -2714,6 +2721,29 @@ def render_ai_chat(database: ReportDatabase, symbol: str | None = None,
                    "Streamlit afterward. No OpenAI API key is required.")
         st.code("winget install OpenJS.NodeJS.LTS\nnpm.cmd install -g @openai/codex\ncodex",
                 language="powershell")
+    elif provider == "Google Gemini" and not provider_ready:
+        st.warning("A Google AI Studio API key is required before Gemini can answer.")
+        with st.form(f"gemini-sign-in-{scope}", clear_on_submit=True):
+            supplied_key = st.text_input(
+                "Gemini API key", type="password", autocomplete="off",
+                help="Used only in this Streamlit session. It is not saved to SQLite or project files.")
+            sign_in = st.form_submit_button("Use Gemini for this session", type="primary")
+        if sign_in:
+            if supplied_key.strip():
+                st.session_state["_gemini_session_api_key"] = supplied_key.strip()
+                st.session_state.pop("_gemini_auth_error", None)
+                st.rerun()
+            else:
+                st.error("Enter a Gemini API key to continue.")
+        st.caption("For Azure, configure GEMINI_API_KEY as a secret-backed environment variable. "
+                   "Google may use unpaid-tier prompts and responses to improve its products; do not "
+                   "submit confidential or personal information.")
+    elif provider == "Google Gemini" and session_gemini_key:
+        signout_col, note_col = st.columns([1, 3])
+        if signout_col.button("Sign out", key=f"gemini-sign-out-{scope}"):
+            st.session_state.pop("_gemini_session_api_key", None)
+            st.rerun()
+        note_col.caption("Using a session-only Gemini key; it will be forgotten when this session ends.")
     elif provider == "Local model (Ollama)":
         st.info(f"Using local model `{analyst.model}` at `{analyst.base_url}`. No OpenAI API "
                 "billing applies; your computer supplies the compute.")
@@ -2744,6 +2774,8 @@ def render_ai_chat(database: ReportDatabase, symbol: str | None = None,
         note_col.caption("Signed in with a session-only API key; it will be forgotten when this session ends.")
     if st.session_state.get("_openai_auth_error"):
         st.error(st.session_state["_openai_auth_error"])
+    if st.session_state.get("_gemini_auth_error"):
+        st.error(st.session_state["_gemini_auth_error"])
     for message in history[-12:]:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -2793,8 +2825,14 @@ def render_ai_chat(database: ReportDatabase, symbol: str | None = None,
             history.append({"role": "assistant", "content":
                             "Authentication is required before I can answer. Please sign in above."})
             st.rerun()
-        except (OpenAIConfigurationError, OllamaConfigurationError, CodexUnavailableError,
-                RuntimeError) as exc:
+        except GeminiAuthenticationError as exc:
+            st.session_state.pop("_gemini_session_api_key", None)
+            st.session_state["_gemini_auth_error"] = str(exc)
+            history.append({"role": "assistant", "content":
+                            "Gemini authentication is required before I can answer. Please sign in above."})
+            st.rerun()
+        except (OpenAIConfigurationError, GeminiConfigurationError, OllamaConfigurationError,
+                CodexUnavailableError, RuntimeError) as exc:
             history.append({"role": "assistant", "content": f"I could not answer: {exc}"})
             st.rerun()
 

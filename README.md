@@ -131,20 +131,30 @@ The UI provides:
 
 ## AI Analyst, MCP, and Codex
 
-The AI Analyst offers four providers:
+The AI Analyst offers five providers:
 
-- **Codex via ChatGPT Plus** (default): uses an authenticated Codex CLI and plan limits, without
+- **Google Gemini** (default): optional embedded assistant using a Google AI Studio key, with a
+  limited free tier on supported models;
+- **Codex via ChatGPT Plus**: uses an authenticated Codex CLI and plan limits, without
   requiring an OpenAI API key;
 - **OpenAI API**: optional embedded assistant with separately billed API usage;
 - **Local model (Ollama)**: runs on your computer without OpenAI API charges;
 - **ChatGPT via MCP**: keeps the conversation in ChatGPT while exposing bounded read-only project
   and report tools.
 
-Only the OpenAI API provider needs these optional values:
+The OpenAI API provider uses these optional values:
 
 ```env
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_ANALYST_MODEL=gpt-5.6-terra
+```
+
+The Gemini provider uses these optional values. Keep the key server-side; unpaid-tier prompts and
+responses may be used by Google to improve its products, so do not send confidential information.
+
+```env
+GEMINI_API_KEY=your_google_ai_studio_key
+GEMINI_ANALYST_MODEL=gemini-2.5-flash-lite
 ```
 
 The key remains server-side. Assistant context excludes `.env`, credentials, `.git`, caches,

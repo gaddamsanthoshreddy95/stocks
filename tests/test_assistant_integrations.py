@@ -8,6 +8,8 @@ from src.assistant.context_tools import StockAnalyzerTools, UIContext
 from src.assistant.openai_assistant import (OpenAIAnalyst, OpenAIAuthenticationError,
                                             OpenAIConfigurationError)
 from src.assistant.local_assistant import OllamaAnalyst, OllamaConfigurationError
+from src.assistant.gemini_assistant import (GeminiAnalyst, GeminiAuthenticationError,
+                                            GeminiConfigurationError)
 from src.ui.database import ReportDatabase
 
 
@@ -68,6 +70,41 @@ class AssistantIntegrationTests(unittest.TestCase):
         payload = {"output": [{"type": "message", "content": [
             {"type": "output_text", "text": "Grounded answer"}]}]}
         self.assertEqual(OpenAIAnalyst._output_text(payload), "Grounded answer")
+
+    def test_unconfigured_gemini_client_fails_with_setup_instruction(self):
+        client = GeminiAnalyst(api_key="")
+        client.api_key = None
+        with self.assertRaises(GeminiConfigurationError):
+            client.answer("why", {})
+
+    def test_gemini_output_parser_handles_candidate_parts(self):
+        payload = {"candidates": [{"content": {"parts": [
+            {"text": "Grounded"}, {"text": " answer"},
+        ]}}]}
+        self.assertEqual(GeminiAnalyst._output_text(payload), "Grounded\n answer")
+
+    @patch("src.assistant.gemini_assistant.requests.post")
+    def test_gemini_answer_uses_grounded_context(self, post):
+        response = Mock(ok=True)
+        response.json.return_value = {
+            "candidates": [{"content": {"parts": [{"text": "Gemini answer"}]}}],
+        }
+        post.return_value = response
+        result = GeminiAnalyst(api_key="test-key", model="test-model").answer(
+            "Why?", {"symbol": "SBIN"})
+        self.assertEqual(result["text"], "Gemini answer")
+        self.assertIn("SBIN", post.call_args.kwargs["json"]["contents"][-1]["parts"][0]["text"])
+        self.assertEqual(post.call_args.kwargs["headers"]["x-goog-api-key"], "test-key")
+
+    @patch("src.assistant.gemini_assistant.requests.post")
+    def test_invalid_gemini_key_becomes_login_request(self, post):
+        response = Mock(ok=False, status_code=400, text="invalid")
+        response.json.return_value = {
+            "error": {"message": "API key not valid", "status": "INVALID_ARGUMENT"},
+        }
+        post.return_value = response
+        with self.assertRaises(GeminiAuthenticationError):
+            GeminiAnalyst(api_key="bad-key").answer("why", {})
 
     @patch("src.assistant.openai_assistant.requests.post")
     def test_invalid_openai_key_becomes_login_request(self, post):
