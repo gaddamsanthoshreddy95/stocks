@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time as clock_time
+import logging
 from pathlib import Path
 from threading import RLock
 from time import time
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from requests.exceptions import RequestException
 
 from src.providers.kite_provider import KiteProvider
+
+
+logger = logging.getLogger(__name__)
 
 
 class KiteDataProvider:
@@ -23,6 +28,7 @@ class KiteDataProvider:
         history_cache_directory: str | Path = ".cache/kite_history",
         instrument_cache_directory: str | Path = ".cache/kite_instruments",
         history_cache_ttl_seconds: int = 15 * 60,
+        max_stale_history_days: int = 7,
     ):
         self.provider = provider or KiteProvider()
         self._history_cache = {}
@@ -31,6 +37,7 @@ class KiteDataProvider:
         self._history_cache_directory = Path(history_cache_directory)
         self._instrument_cache_directory = Path(instrument_cache_directory)
         self._history_cache_ttl_seconds = history_cache_ttl_seconds
+        self._max_stale_history_days = max_stale_history_days
         self._long_history_cache_lock = RLock()
         self._history_cache_lock = RLock()
         self._nfo_instruments = None
@@ -133,11 +140,30 @@ class KiteDataProvider:
             else:
                 if cached is not None and not cached.empty:
                     try:
-                        fresh = self.provider.get_historical_data(
-                            key, from_date=cached.index.max().date()
+                        try:
+                            fresh = self.provider.get_historical_data(
+                                key, from_date=cached.index.max().date()
+                            )
+                        except TypeError:  # Compatibility with small custom providers.
+                            fresh = self.provider.get_historical_data(key)
+                    except RequestException:
+                        # A transient Kite outage must not erase a technically
+                        # usable candidate from the scan.  The last completed
+                        # daily candle is safer than silently treating the
+                        # symbol as an analysis failure.  Authentication and
+                        # malformed-data errors still propagate normally.
+                        latest = cached.index.max()
+                        latest_date = (
+                            latest.date() if hasattr(latest, "date") else pd.Timestamp(latest).date()
                         )
-                    except TypeError:  # Compatibility with small custom providers.
-                        fresh = self.provider.get_historical_data(key)
+                        age_days = (date.today() - latest_date).days
+                        if age_days > self._max_stale_history_days:
+                            raise
+                        logger.warning(
+                            "Kite refresh failed for %s; using cached history through %s (%d day(s) old)",
+                            key, latest_date.isoformat(), age_days,
+                        )
+                        fresh = None
                     history = self._merge_history(cached, fresh)
                 else:
                     history = self.provider.get_historical_data(key)

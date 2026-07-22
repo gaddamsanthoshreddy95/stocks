@@ -1,4 +1,5 @@
 import pandas as pd
+from requests.exceptions import ConnectionError
 
 from src.data_provider.kite_data_provider import KiteDataProvider
 from src.providers.kite_provider import KiteProvider
@@ -63,6 +64,62 @@ def test_daily_history_is_reused_from_disk_on_same_day(tmp_path):
 
     assert provider.calls == [("RELIANCE", "1y")]
     pd.testing.assert_frame_equal(cached, downloaded)
+
+
+def test_stale_daily_history_is_used_when_refresh_has_network_failure(tmp_path):
+    provider = FakeKiteProvider()
+    data = KiteDataProvider(provider, history_cache_directory=tmp_path)
+    cached = data.get_data("HAL")
+
+    cache_path = tmp_path / "HAL.parquet"
+    cache_path.touch()
+    data._history_cache.clear()
+    data._history_cache_is_fresh = lambda path: False
+    provider.get_historical_data = lambda *args, **kwargs: (_ for _ in ()).throw(
+        ConnectionError("Kite is temporarily unavailable")
+    )
+
+    fallback = data.get_data("HAL")
+
+    pd.testing.assert_frame_equal(fallback, cached)
+
+
+def test_network_failure_without_cached_history_is_not_hidden(tmp_path):
+    provider = FakeKiteProvider()
+    provider.get_historical_data = lambda *args, **kwargs: (_ for _ in ()).throw(
+        ConnectionError("Kite is temporarily unavailable")
+    )
+    data = KiteDataProvider(provider, history_cache_directory=tmp_path)
+    data._history_cache_is_fresh = lambda path: False
+
+    try:
+        data.get_data("NEWSTOCK")
+    except ConnectionError as exc:
+        assert "temporarily unavailable" in str(exc)
+    else:
+        raise AssertionError("A missing cache must not hide the network failure")
+
+
+def test_network_failure_does_not_use_dangerously_old_history(tmp_path):
+    provider = FakeKiteProvider()
+    old = pd.DataFrame(
+        {"Open": [100.0], "High": [102.0], "Low": [99.0],
+         "Close": [101.0], "Volume": [1000]},
+        index=pd.DatetimeIndex(["2020-01-01"], name="Date"),
+    )
+    old.to_parquet(tmp_path / "HAL.parquet")
+    provider.get_historical_data = lambda *args, **kwargs: (_ for _ in ()).throw(
+        ConnectionError("Kite is temporarily unavailable")
+    )
+    data = KiteDataProvider(provider, history_cache_directory=tmp_path)
+    data._history_cache_is_fresh = lambda path: False
+
+    try:
+        data.get_data("HAL")
+    except ConnectionError:
+        pass
+    else:
+        raise AssertionError("Dangerously old history must not generate a candidate")
 
 
 def test_live_refresh_overlays_quote_without_redownloading_history(tmp_path):

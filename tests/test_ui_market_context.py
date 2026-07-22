@@ -8,7 +8,7 @@ from ui_app import (candidate_rows, likely_news_reaction, news_impact, news_rows
                     candidate_history_rows, opportunity_groups, option_leg_rows, outcome_rows,
                     price_figure, report_changes,
                     portfolio_snapshot, primary_blocker, rejection_summary, snapshot_rows,
-                    trade_override_required, trade_performance)
+                    trade_override_required, trade_performance, _trade_status)
 
 
 class UIMarketContextTests(unittest.TestCase):
@@ -75,6 +75,16 @@ class UIMarketContextTests(unittest.TestCase):
         self.assertTrue(trade_override_required({"status": "WATCHLIST",
                                                  "final_action": "WAIT_FOR_CONFIRMATION"}))
         self.assertTrue(trade_override_required({"status": "REJECTED", "final_action": "REJECT"}))
+
+    def test_short_equity_position_profits_down_and_loses_up(self):
+        trade = {"entry_price": 100, "quantity": 10, "side": "SELL", "fees": 0,
+                 "stop_loss": 105, "target_price": 90}
+        down = _trade_status(trade, 90)
+        up = _trade_status(trade, 105)
+        self.assertEqual(down["pnl"], 100)
+        self.assertEqual(down["decision"], "EXIT / BOOK PROFIT")
+        self.assertEqual(up["pnl"], -50)
+        self.assertEqual(up["decision"], "EXIT")
 
     def test_news_impact_labels_cover_positive_and_negative_strength(self):
         self.assertEqual(news_impact(72), "SUPER POSITIVE")
