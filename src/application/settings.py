@@ -65,6 +65,15 @@ class PlatformSettings:
     breakout_retest_tolerance_atr: float = 0.25
     breakout_consolidation_max_range_atr: float = 0.80
     entry_max_consecutive_bullish_candles: int = 4
+    bullish_max_adverse_move_percent: float = 3.0
+    bullish_min_adverse_hold_probability: float = 70.0
+    bullish_barrier_horizon_days: int = 5
+    bullish_barrier_minimum_samples: int = 60
+    bullish_intraday_barrier_minimum_samples: int = 30
+    bullish_max_technical_stop_percent: float = 3.0
+    bullish_min_target_before_adverse_probability: float = 55.0
+    bullish_min_no_overnight_gap_probability: float = 95.0
+    bullish_min_relative_strength_score: float = 55.0
     option_call_resistance_near_percent: float = 1.5
     option_long_delta_min: float = 0.35
     option_long_delta_max: float = 0.70
@@ -208,6 +217,17 @@ class PlatformSettings:
             raise ValueError("Breakout retest and consolidation thresholds are invalid")
         if self.entry_max_consecutive_bullish_candles < 2:
             raise ValueError("ENTRY_MAX_CONSECUTIVE_BULLISH_CANDLES must be at least two")
+        if (not 0 < self.bullish_max_adverse_move_percent < 100
+                or not 0 <= self.bullish_min_adverse_hold_probability <= 100
+                or self.bullish_barrier_horizon_days < 1
+                or self.bullish_barrier_minimum_samples < 20
+                or self.bullish_intraday_barrier_minimum_samples < 20):
+            raise ValueError("Bullish adverse-move probability settings are invalid")
+        if (not 0 < self.bullish_max_technical_stop_percent < 100
+                or not 0 <= self.bullish_min_target_before_adverse_probability <= 100
+                or not 0 <= self.bullish_min_no_overnight_gap_probability <= 100
+                or not 0 <= self.bullish_min_relative_strength_score <= 100):
+            raise ValueError("Bullish stock-selection thresholds are invalid")
         if not 0 <= self.market_low_confidence_threshold <= self.market_confirmed_confidence_threshold <= 100:
             raise ValueError("Market confidence thresholds are invalid")
         if not (0 <= self.event_stale_multiplier <= self.event_delayed_multiplier
@@ -346,6 +366,21 @@ class PlatformSettings:
                 "BREAKOUT_CONSOLIDATION_MAX_RANGE_ATR", .80),
             entry_max_consecutive_bullish_candles=env_int(
                 "ENTRY_MAX_CONSECUTIVE_BULLISH_CANDLES", 4),
+            bullish_max_adverse_move_percent=env_float("BULLISH_MAX_ADVERSE_MOVE_PERCENT", 3),
+            bullish_min_adverse_hold_probability=env_float(
+                "BULLISH_MIN_ADVERSE_HOLD_PROBABILITY", 70),
+            bullish_barrier_horizon_days=env_int("BULLISH_BARRIER_HORIZON_DAYS", 5),
+            bullish_barrier_minimum_samples=env_int("BULLISH_BARRIER_MINIMUM_SAMPLES", 60),
+            bullish_intraday_barrier_minimum_samples=env_int(
+                "BULLISH_INTRADAY_BARRIER_MINIMUM_SAMPLES", 30),
+            bullish_max_technical_stop_percent=env_float(
+                "BULLISH_MAX_TECHNICAL_STOP_PERCENT", 3),
+            bullish_min_target_before_adverse_probability=env_float(
+                "BULLISH_MIN_TARGET_BEFORE_ADVERSE_PROBABILITY", 55),
+            bullish_min_no_overnight_gap_probability=env_float(
+                "BULLISH_MIN_NO_OVERNIGHT_GAP_PROBABILITY", 95),
+            bullish_min_relative_strength_score=env_float(
+                "BULLISH_MIN_RELATIVE_STRENGTH_SCORE", 55),
             option_call_resistance_near_percent=env_float("OPTION_CALL_RESISTANCE_NEAR_PERCENT", 1.5),
             option_long_delta_min=env_float("OPTION_LONG_DELTA_MIN", .35),
             option_long_delta_max=env_float("OPTION_LONG_DELTA_MAX", .70),

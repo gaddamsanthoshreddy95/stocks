@@ -27,6 +27,7 @@ class KiteDataProvider:
         long_history_cache_directory: str | Path = ".cache/kite_long_history",
         history_cache_directory: str | Path = ".cache/kite_history",
         instrument_cache_directory: str | Path = ".cache/kite_instruments",
+        intraday_cache_directory: str | Path = ".cache/kite_intraday",
         history_cache_ttl_seconds: int = 15 * 60,
         max_stale_history_days: int = 7,
     ):
@@ -36,6 +37,8 @@ class KiteDataProvider:
         self._long_history_cache_directory = Path(long_history_cache_directory)
         self._history_cache_directory = Path(history_cache_directory)
         self._instrument_cache_directory = Path(instrument_cache_directory)
+        self._intraday_cache_directory = Path(intraday_cache_directory)
+        self._intraday_cache: dict[tuple[str, str, str], pd.DataFrame] = {}
         self._history_cache_ttl_seconds = history_cache_ttl_seconds
         self._max_stale_history_days = max_stale_history_days
         self._long_history_cache_lock = RLock()
@@ -208,6 +211,31 @@ class KiteDataProvider:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 history.to_parquet(cache_path)
             return self._long_history_cache[key].copy()
+
+    def get_intraday_history(self, symbol: str, period: str = "6mo",
+                             interval: str = "15minute") -> pd.DataFrame:
+        """Return cached ordered intraday bars for overnight path-risk studies."""
+        key = (symbol.upper().removesuffix(".NS"), period, interval)
+        with self._history_cache_lock:
+            if key in self._intraday_cache:
+                return self._intraday_cache[key].copy()
+            path = self._intraday_cache_directory / f"{key[0]}_{period}_{interval}.parquet"
+            cached = None
+            if path.exists() and self._history_cache_is_fresh(path):
+                try:
+                    cached = pd.read_parquet(path)
+                except (OSError, ValueError):
+                    cached = None
+            history = cached
+            if history is None or history.empty:
+                history = self.provider.get_historical_data(
+                    key[0], period=key[1], interval=key[2]
+                )
+                if history is not None and not history.empty:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    history.to_parquet(path)
+            self._intraday_cache[key] = history if history is not None else pd.DataFrame()
+            return self._intraday_cache[key].copy()
 
     def get_symbols(self) -> list[str]:
         """Get the current F&O equity universe directly from Kite."""

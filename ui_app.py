@@ -414,12 +414,20 @@ def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | Non
             "Actually traded": execution_marks.get(str(trade.get("symbol")), "NOT_TRADED"),
             "Action": trade.get("final_action"), "Quality": trade.get("quality_grade"),
             "Quality score": trade.get("quality_score"),
+            "Stock filters": "PASS" if trade.get("stock_selection_filters", {}).get("passed") else "FAIL",
+            "Failed filters": ", ".join(trade.get("stock_selection_filters", {}).get("failed_checks", [])),
             "Readiness": trade.get("execution_readiness_score"),
             "R:R": trade.get("levels", {}).get("risk_reward"),
             "Support": trade.get("levels", {}).get("support"),
             "Resistance": trade.get("levels", {}).get("resistance"),
             "Relative strength": trade.get("relative_strength", {}).get("score"),
             "RS status": trade.get("relative_strength", {}).get("status"),
+            "Stay above -3%": trade.get("adverse_move_risk", {}).get(
+                "probability_stays_above_adverse_barrier"),
+            "Target before -3%": trade.get("adverse_move_risk", {}).get(
+                "probability_target_before_adverse_barrier"),
+            "No overnight gap >3%": trade.get("adverse_move_risk", {}).get(
+                "probability_no_overnight_gap_beyond_barrier"),
             "Event risk": event.get("event_risk_score"),
             "Event data": event.get("event_data_availability_state"),
             "Option approval": trade.get("option_trade_approval", {}).get("status"),

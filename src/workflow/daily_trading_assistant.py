@@ -16,6 +16,7 @@ from src.news.ai_sentiment import AISentimentAnalyzer
 from src.workflow.context_enrichment import ContextEnrichment
 from src.learning.outcome_repository import OutcomeRepository
 from src.position_sizing.position_size import PositionSizingEngine
+from src.risk.adverse_move import AdverseMoveRisk
 from src.trade_plan.trade_plan import TradePlanEngine
 from src.options.short_put import ShortPutStrategyEngine
 from src.workflow.decision_policy import (
@@ -180,6 +181,67 @@ class DailyTradingAssistant:
         score = round(min(100, max(0, weighted / available_weight)), 2) if available_weight else 0.0
         grade = self._quality_grade(score)
         return {"score": score, **grade, "factors": factors}
+
+    @staticmethod
+    def _bullish_stock_selection_filters(*, plan: dict, setup: str, technical: dict,
+                                         entry_quality: dict, adverse: dict,
+                                         relative_strength: dict, sector: dict,
+                                         liquidity: dict, settings) -> dict[str, Any]:
+        """Hard stock-selection gates, separate from portfolio and position policy."""
+        entry = float(plan.get("entry") or 0)
+        stop = float(plan.get("stop_loss") or 0)
+        stop_percent = ((entry - stop) * 100 / entry if entry > 0 and 0 < stop < entry
+                        else float("inf"))
+        target_first = adverse.get("probability_target_before_adverse_barrier")
+        no_gap = adverse.get("probability_no_overnight_gap_beyond_barrier")
+        rs_score = relative_strength.get("score")
+        sector_score = sector.get("score")
+        breakout = setup == "BREAKOUT"
+        minimum_volume = (settings.entry_confirmation_relative_volume if breakout
+                          else settings.entry_min_relative_volume)
+        checks = [
+            {"name": "logical_stop_within_limit", "passed": stop_percent <= settings.bullish_max_technical_stop_percent,
+             "value": round(stop_percent, 2), "minimum_or_maximum": settings.bullish_max_technical_stop_percent,
+             "reason": f"Technical stop is {stop_percent:.2f}% from entry; maximum is {settings.bullish_max_technical_stop_percent}%."},
+            {"name": "intraday_path_sample_quality", "passed": bool(adverse.get("available")),
+             "value": adverse.get("sample_count", 0), "minimum_or_maximum": settings.bullish_intraday_barrier_minimum_samples,
+             "reason": adverse.get("reason", "Intraday path sample is sufficient.")},
+            {"name": "target_before_adverse_probability",
+             "passed": target_first is not None and float(target_first) >= settings.bullish_min_target_before_adverse_probability,
+             "value": target_first, "minimum_or_maximum": settings.bullish_min_target_before_adverse_probability,
+             "reason": f"Target-before-adverse probability is {target_first}%; minimum is {settings.bullish_min_target_before_adverse_probability}%."},
+            {"name": "overnight_gap_safety", "passed": no_gap is not None and float(no_gap) >= settings.bullish_min_no_overnight_gap_probability,
+             "value": no_gap, "minimum_or_maximum": settings.bullish_min_no_overnight_gap_probability,
+             "reason": f"Probability of avoiding an overnight gap beyond the adverse barrier is {no_gap}%; minimum is {settings.bullish_min_no_overnight_gap_probability}%."},
+            {"name": "positive_stock_relative_strength",
+             "passed": bool(relative_strength.get("available")) and rs_score is not None
+                       and float(rs_score) >= settings.bullish_min_relative_strength_score,
+             "value": rs_score, "minimum_or_maximum": settings.bullish_min_relative_strength_score,
+             "reason": f"Relative-strength score is {rs_score}; minimum is {settings.bullish_min_relative_strength_score}."},
+            {"name": "supportive_sector", "passed": bool(sector.get("available")) and sector_score is not None
+                                                    and float(sector_score) >= settings.entry_min_sector_score,
+             "value": sector_score, "minimum_or_maximum": settings.entry_min_sector_score,
+             "reason": f"Sector score is {sector_score}; minimum is {settings.entry_min_sector_score}."},
+            {"name": "entry_not_overextended",
+             "passed": entry_quality.get("position_size_guidance") != "ZERO_UNTIL_RETEST",
+             "value": entry_quality.get("extension_band"), "minimum_or_maximum": "NORMAL_OR_CAUTION",
+             "reason": f"Entry extension is {entry_quality.get('extension_band', 'UNKNOWN')}."},
+            {"name": "volume_confirmation",
+             "passed": float(technical.get("relative_volume") or 0) >= minimum_volume,
+             "value": technical.get("relative_volume"), "minimum_or_maximum": minimum_volume,
+             "reason": f"Relative volume is {float(technical.get('relative_volume') or 0):.2f}x; minimum is {minimum_volume}x."},
+            {"name": "reward_to_next_valid_target",
+             "passed": float(plan.get("risk_reward") or 0) >= settings.equity_min_risk_reward,
+             "value": plan.get("risk_reward"), "minimum_or_maximum": settings.equity_min_risk_reward,
+             "reason": f"Reward/risk is {plan.get('risk_reward')}:1; minimum is {settings.equity_min_risk_reward}:1."},
+            {"name": "exit_liquidity", "passed": float(liquidity.get("score") or 0) >= settings.candidate_min_liquidity_score,
+             "value": liquidity.get("score"), "minimum_or_maximum": settings.candidate_min_liquidity_score,
+             "reason": f"Liquidity score is {liquidity.get('score')}; minimum is {settings.candidate_min_liquidity_score}."},
+        ]
+        failed = [item for item in checks if not item["passed"]]
+        return {"passed": not failed, "checks": checks,
+                "failed_checks": [item["name"] for item in failed],
+                "blocking_reasons": [item["reason"] for item in failed]}
 
     def _ranking_key(self, item: dict[str, Any]) -> tuple:
         mode = self.platform.settings.candidate_ranking_mode
@@ -524,6 +586,46 @@ class DailyTradingAssistant:
             candidate.get("entry_report", analysis["entry"]),
             breakout_probability=contextual_breakout_probability,
         ))
+        adverse_move_risk = {"available": False, "reason": "Not applicable to bearish setup."}
+        if direction == "BULLISH":
+            target_percent = (float(plan.get("expected_reward") or 0) * 100
+                              / max(float(plan.get("entry") or 0), .000001))
+            try:
+                daily_barrier = AdverseMoveRisk.assess(
+                    self.platform.provider.get_data(candidate["symbol"]), target_percent,
+                    adverse_percent=self.platform.settings.bullish_max_adverse_move_percent,
+                    horizon_days=self.platform.settings.bullish_barrier_horizon_days,
+                    minimum_samples=self.platform.settings.bullish_barrier_minimum_samples,
+                )
+                get_intraday = getattr(self.platform.provider, "get_intraday_history", None)
+                if get_intraday is None:
+                    adverse_move_risk = {"available": False,
+                                         "reason": "15-minute history provider is unavailable.",
+                                         "sample_count": 0, "daily_fallback": daily_barrier}
+                else:
+                    adverse_move_risk = AdverseMoveRisk.assess_intraday(
+                        get_intraday(candidate["symbol"], period="6mo", interval="15minute"),
+                        target_percent,
+                        adverse_percent=self.platform.settings.bullish_max_adverse_move_percent,
+                        horizon_days=self.platform.settings.bullish_barrier_horizon_days,
+                        minimum_samples=self.platform.settings.bullish_intraday_barrier_minimum_samples,
+                    )
+                    adverse_move_risk["daily_fallback"] = daily_barrier
+            except Exception as exc:
+                logger.warning("Intraday barrier study unavailable for %s: %s",
+                               candidate["symbol"], exc.__class__.__name__)
+                adverse_move_risk = {"available": False,
+                                     "reason": f"Barrier study failed: {exc.__class__.__name__}",
+                                     "sample_count": 0}
+        adverse_hold_probability = adverse_move_risk.get(
+            "probability_stays_above_adverse_barrier"
+        )
+        adverse_risk_passed = (direction != "BULLISH" or (
+            adverse_move_risk.get("available")
+            and adverse_hold_probability is not None
+            and float(adverse_hold_probability)
+            >= self.platform.settings.bullish_min_adverse_hold_probability
+        ))
         risk_scale = market_risk_scale(
             market.get("confidence", 0), market.get("available", False), alignment["status"],
             self.platform.settings.market_low_confidence_threshold,
@@ -645,6 +747,14 @@ class DailyTradingAssistant:
         quality = self._quality_score(
             analysis, candidate, relative_strength, plan, expectancy, probability, momentum_label,
         )
+        stock_selection = ({"passed": True, "checks": [], "failed_checks": [],
+                            "blocking_reasons": []}
+                           if direction != "BULLISH" else self._bullish_stock_selection_filters(
+                               plan=plan, setup=setup, technical=technical,
+                               entry_quality=entry_quality, adverse=adverse_move_risk,
+                               relative_strength=relative_strength, sector=sector_data,
+                               liquidity=candidate["stock_liquidity"], settings=self.platform.settings,
+                           ))
         reasons = [
             candidate["reason"],
             f"Trend: {analysis['analysis']['trend']}.",
@@ -713,6 +823,13 @@ class DailyTradingAssistant:
                           "execute_threshold": execution_state["execute_threshold"],
                           "ready": execution_state["status"] == "EXECUTE",
                           "weighted": True})
+        readiness["checks"].append({
+            "name": "bullish_3_percent_adverse_barrier", "passed": adverse_risk_passed,
+            "counted": direction == "BULLISH", "state": "PASS" if adverse_risk_passed else "FAIL",
+            "detail": (f"{adverse_hold_probability}% probability of staying above -"
+                       f"{self.platform.settings.bullish_max_adverse_move_percent}%"
+                       if adverse_hold_probability is not None else adverse_move_risk.get("reason")),
+        })
         confirmation_approved = entry_eligible or not confirmation_required
         strategy_eligibility = combine_strategy_eligibility(
             confirmation_approved, plan["risk_reward"],
@@ -730,7 +847,9 @@ class DailyTradingAssistant:
         if critical_failure or execution_state["status"] == "IGNORE":
             status = "REJECTED"
         elif (event_assessment["hard_block"] or event_size_failure
-              or not confirmation_approved or execution_state["status"] != "EXECUTE"):
+              or not confirmation_approved or not adverse_risk_passed
+              or not stock_selection["passed"]
+              or execution_state["status"] != "EXECUTE"):
             status = "WATCHLIST"
         else:
             status = "TRADE"
@@ -762,6 +881,17 @@ class DailyTradingAssistant:
             if not confirmation_approved:
                 missing = setup_evaluation.get("stage_2", {}).get("missing", [])
                 status_reasons.append("Entry confirmation missing: " + ", ".join(missing))
+            if not adverse_risk_passed:
+                if adverse_hold_probability is None:
+                    status_reasons.append("Historical 3% adverse-move probability is unavailable: "
+                                          + adverse_move_risk.get("reason", "insufficient evidence"))
+                else:
+                    status_reasons.append(
+                        f"Only {adverse_hold_probability}% of comparable bullish windows stayed above the "
+                        f"-{self.platform.settings.bullish_max_adverse_move_percent}% barrier; "
+                        f"{self.platform.settings.bullish_min_adverse_hold_probability}% is required."
+                    )
+            status_reasons.extend(stock_selection["blocking_reasons"])
             if option_status in {"CONFLICT", "UNRELIABLE"} and not budget_only_option_failure:
                 rejection = self._option_rejection(option)
                 status_reasons.append(rejection.get("reason", f"Option confirmation is {option_status}."))
@@ -802,6 +932,10 @@ class DailyTradingAssistant:
                                  "estimated_probability": probability,
                                  "calibrated_probability": calibrated_probability,
                                  "event_adjusted_probability": event_adjusted_probability},
+            "adverse_move_risk": {**adverse_move_risk, "passed": adverse_risk_passed,
+                                  "minimum_hold_probability":
+                                      self.platform.settings.bullish_min_adverse_hold_probability},
+            "stock_selection_filters": stock_selection,
             "trade_eligibility": eligibility,
             "entry_confirmation": entry_confirmation.to_dict(),
             "entry_quality_score": entry_quality["score"],
