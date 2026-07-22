@@ -239,7 +239,12 @@ class PlatformSettings:
         option_risk = float(os.getenv("OPTION_RISK_PER_TRADE", "100000"))
         allow_live = os.getenv("ALLOW_LIVE_TRADING", "false").lower() == "true"
         market_data_source = os.getenv("MARKET_DATA_SOURCE", "kite").lower()
-        strategy_mode = os.getenv("TRADING_STRATEGY_MODE", "both").lower()
+        # Environment variables set from Windows cmd.exe are sometimes written as
+        # `set TRADING_STRATEGY_MODE="both"`, which makes the quote characters part
+        # of the value.  Treat surrounding whitespace/quotes as configuration
+        # formatting rather than as part of the strategy name.
+        raw_strategy_mode = os.getenv("TRADING_STRATEGY_MODE", "both")
+        strategy_mode = raw_strategy_mode.strip().strip("'\"").strip().lower()
         if capital <= 0:
             raise ValueError("TRADING_CAPITAL must be positive")
         if not 0 < risk_percent <= 100:
@@ -251,7 +256,10 @@ class PlatformSettings:
         if market_data_source not in {"kite", "cache"}:
             raise ValueError("MARKET_DATA_SOURCE must be 'kite' or 'cache'")
         if strategy_mode not in {"equity", "short_put", "both"}:
-            raise ValueError("TRADING_STRATEGY_MODE must be 'equity', 'short_put', or 'both'")
+            raise ValueError(
+                "TRADING_STRATEGY_MODE must be 'equity', 'short_put', or 'both' "
+                f"(received {raw_strategy_mode!r})"
+            )
         env_float = lambda name, default: float(os.getenv(name, str(default)))
         env_int = lambda name, default: int(os.getenv(name, str(default)))
         env_bool = lambda name, default: os.getenv(name, str(default).lower()).lower() == "true"

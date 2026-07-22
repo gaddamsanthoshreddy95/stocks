@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-21T03:11:47.952866+00:00",
+  "generated_at": "2026-07-22T03:35:45.322422+00:00",
   "events": [
     {
       "event_id": "MARKET-WIDE-20260720",
@@ -17,7 +17,7 @@
       "event_end": null,
       "expected_duration": "ONE_TO_THREE_DAYS",
       "raw_score": 70.0,
-      "decayed_score": 40.21,
+      "decayed_score": 19.87,
       "confidence": 0.95,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -52,17 +52,17 @@
       "category": "COMMODITY",
       "severity": "MEDIUM",
       "direction": "POSITIVE",
-      "status": "ACTIVE",
-      "source_type": "COMMODITY_DATA",
+      "status": "STALE",
+      "source_type": "CACHED_SOURCE",
       "detected_at": "2026-07-21T03:11:47.952866+00:00",
       "last_updated_at": "2026-07-21T03:11:47.952866+00:00",
-      "event_start": null,
+      "event_start": "2026-07-21T03:11:47.952866+00:00",
       "event_end": null,
       "expected_duration": "THREE_TO_SEVEN_DAYS",
-      "raw_score": 50,
-      "decayed_score": 50,
+      "raw_score": 50.0,
+      "decayed_score": 31.26,
       "confidence": 0.9,
-      "freshness_score": 100.0,
+      "freshness_score": 25,
       "materiality": 1.0,
       "gap_risk": 42.5,
       "affected_sectors": [
@@ -90,6 +90,104 @@
       "canonical_event_id": "8794a018ed433ade",
       "related_article_ids": [
         "SILVER_PRICE-20260721"
+      ],
+      "event_version": 1,
+      "meaningful_update_count": 0
+    },
+    {
+      "event_id": "GOLD_PRICE-20260722",
+      "title": "Gold +3.30%",
+      "normalized_event_type": "GOLD_PRICE_UP",
+      "category": "COMMODITY",
+      "severity": "MEDIUM",
+      "direction": "POSITIVE",
+      "status": "ACTIVE",
+      "source_type": "COMMODITY_DATA",
+      "detected_at": "2026-07-22T03:35:45.322422+00:00",
+      "last_updated_at": "2026-07-22T03:35:45.322422+00:00",
+      "event_start": null,
+      "event_end": null,
+      "expected_duration": "THREE_TO_SEVEN_DAYS",
+      "raw_score": 50,
+      "decayed_score": 50,
+      "confidence": 0.9,
+      "freshness_score": 100.0,
+      "materiality": 1.0,
+      "gap_risk": 42.5,
+      "affected_sectors": [
+        "FINANCIAL_SERVICES",
+        "JEWELLERY",
+        "MINING"
+      ],
+      "affected_symbols": [],
+      "affected_regions": [],
+      "affected_commodities": [
+        "GOLD"
+      ],
+      "reasons": [
+        "Gold move +3.30%, z-score +0.00, three-day move +0.00%."
+      ],
+      "source_titles": [],
+      "source_urls_or_ids": [],
+      "is_scheduled": false,
+      "is_confirmed": true,
+      "is_duplicate": false,
+      "duplicate_of": null,
+      "half_life_hours": 36.0,
+      "decay_model": "EXPONENTIAL",
+      "expiry_time": null,
+      "canonical_event_id": "eb795c18eb74aad9",
+      "related_article_ids": [
+        "GOLD_PRICE-20260722"
+      ],
+      "event_version": 1,
+      "meaningful_update_count": 0
+    },
+    {
+      "event_id": "SILVER_PRICE-20260722",
+      "title": "Silver +6.02%",
+      "normalized_event_type": "SILVER_PRICE_UP",
+      "category": "COMMODITY",
+      "severity": "HIGH",
+      "direction": "POSITIVE",
+      "status": "ACTIVE",
+      "source_type": "COMMODITY_DATA",
+      "detected_at": "2026-07-22T03:35:45.322422+00:00",
+      "last_updated_at": "2026-07-22T03:35:45.322422+00:00",
+      "event_start": null,
+      "event_end": null,
+      "expected_duration": "THREE_TO_SEVEN_DAYS",
+      "raw_score": 75,
+      "decayed_score": 75,
+      "confidence": 0.9,
+      "freshness_score": 100.0,
+      "materiality": 1.0,
+      "gap_risk": 63.75,
+      "affected_sectors": [
+        "METAL",
+        "ELECTRONICS",
+        "RENEWABLE_ENERGY"
+      ],
+      "affected_symbols": [],
+      "affected_regions": [],
+      "affected_commodities": [
+        "SILVER"
+      ],
+      "reasons": [
+        "Silver move +6.02%, z-score +0.00, three-day move +0.00%."
+      ],
+      "source_titles": [],
+      "source_urls_or_ids": [],
+      "is_scheduled": false,
+      "is_confirmed": true,
+      "is_duplicate": false,
+      "duplicate_of": null,
+      "half_life_hours": 36.0,
+      "decay_model": "EXPONENTIAL",
+      "expiry_time": null,
+      "canonical_event_id": "6103760d4971ac87",
+      "related_article_ids": [
+        "SILVER_PRICE-20260722"
       ],
       "event_version": 1,
       "meaningful_update_count": 0

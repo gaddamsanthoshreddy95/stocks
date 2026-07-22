@@ -1,0 +1,474 @@
+"""Small SQLite repository for immutable UI report snapshots."""
+
+from __future__ import annotations
+
+from contextlib import closing
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import sqlite3
+from typing import Any
+
+
+class ReportDatabase:
+    """Persist generated reports without changing the analytical backend."""
+
+    def __init__(self, path: str | Path = "data/ui/stock_analyzer.db"):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._initialize()
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.path, timeout=10)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA journal_mode = WAL")
+        return connection
+
+    def _initialize(self) -> None:
+        with closing(self._connect()) as connection:
+            connection.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS report_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT NOT NULL UNIQUE,
+                    generated_at TEXT NOT NULL,
+                    report_date TEXT NOT NULL,
+                    market_data_source TEXT NOT NULL,
+                    market_regime TEXT,
+                    candidates_reviewed INTEGER NOT NULL DEFAULT 0,
+                    trades_generated INTEGER NOT NULL DEFAULT 0,
+                    report_json TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_report_runs_generated_at
+                    ON report_runs(generated_at DESC);
+                CREATE TABLE IF NOT EXISTS actual_trades (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    instrument_type TEXT NOT NULL CHECK(instrument_type IN ('EQUITY','OPTION')),
+                    side TEXT NOT NULL CHECK(side IN ('BUY','SELL')),
+                    strategy TEXT,
+                    option_type TEXT CHECK(option_type IS NULL OR option_type IN ('CE','PE')),
+                    strike REAL,
+                    expiry TEXT,
+                    quantity INTEGER NOT NULL CHECK(quantity > 0),
+                    entry_date TEXT NOT NULL,
+                    entry_price REAL NOT NULL CHECK(entry_price > 0),
+                    stop_loss REAL,
+                    target_price REAL,
+                    status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN','CLOSED')),
+                    exit_date TEXT,
+                    exit_price REAL,
+                    fees REAL NOT NULL DEFAULT 0,
+                    realized_pnl REAL,
+                    notes TEXT,
+                    recommendation_run_id TEXT,
+                    hold_until TEXT
+                );
+                CREATE INDEX IF NOT EXISTS idx_actual_trades_status
+                    ON actual_trades(status, entry_date DESC);
+                CREATE TABLE IF NOT EXISTS candidate_execution_marks (
+                    run_id TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    execution_status TEXT NOT NULL CHECK(execution_status IN ('TRADED','NOT_TRADED')),
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (run_id, symbol)
+                );
+                CREATE TABLE IF NOT EXISTS watchlists (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS watchlist_symbols (
+                    watchlist_id INTEGER NOT NULL REFERENCES watchlists(id) ON DELETE CASCADE,
+                    symbol TEXT NOT NULL,
+                    added_at TEXT NOT NULL,
+                    PRIMARY KEY (watchlist_id, symbol)
+                );
+                CREATE TABLE IF NOT EXISTS price_alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT NOT NULL,
+                    condition TEXT NOT NULL CHECK(condition IN ('ABOVE','BELOW')),
+                    target_price REAL NOT NULL CHECK(target_price > 0),
+                    label TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    triggered_at TEXT,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_price_alerts_enabled
+                    ON price_alerts(enabled, symbol);
+                CREATE TABLE IF NOT EXISTS ui_preferences (
+                    preference_key TEXT PRIMARY KEY,
+                    preference_value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                """
+            )
+            # Lightweight migrations for databases created by older UI versions.
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(actual_trades)")}
+            if "recommendation_run_id" not in columns:
+                connection.execute("ALTER TABLE actual_trades ADD COLUMN recommendation_run_id TEXT")
+            if "hold_until" not in columns:
+                connection.execute("ALTER TABLE actual_trades ADD COLUMN hold_until TEXT")
+            connection.commit()
+
+    def create_watchlist(self, name: str) -> int:
+        name = str(name).strip()
+        if not name:
+            raise ValueError("Watchlist name is required.")
+        with closing(self._connect()) as connection:
+            cursor = connection.execute(
+                "INSERT OR IGNORE INTO watchlists(name, created_at) VALUES (?, ?)",
+                (name, datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
+            row = connection.execute("SELECT id FROM watchlists WHERE name=?", (name,)).fetchone()
+            return int(row["id"] if row else cursor.lastrowid)
+
+    def list_watchlists(self) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT w.id, w.name, w.created_at, COUNT(s.symbol) symbol_count
+                   FROM watchlists w LEFT JOIN watchlist_symbols s ON s.watchlist_id=w.id
+                   GROUP BY w.id ORDER BY w.name"""
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def add_watchlist_symbol(self, watchlist_id: int, symbol: str) -> None:
+        symbol = str(symbol).strip().upper().removesuffix(".NS")
+        if not symbol:
+            raise ValueError("Symbol is required.")
+        with closing(self._connect()) as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO watchlist_symbols(watchlist_id, symbol, added_at) VALUES (?, ?, ?)",
+                (int(watchlist_id), symbol, datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
+
+    def remove_watchlist_symbol(self, watchlist_id: int, symbol: str) -> bool:
+        with closing(self._connect()) as connection:
+            cursor = connection.execute(
+                "DELETE FROM watchlist_symbols WHERE watchlist_id=? AND symbol=?",
+                (int(watchlist_id), str(symbol).strip().upper().removesuffix(".NS")),
+            )
+            connection.commit()
+            return cursor.rowcount == 1
+
+    def watchlist_symbols(self, watchlist_id: int) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT symbol, added_at FROM watchlist_symbols WHERE watchlist_id=? ORDER BY added_at DESC",
+                (int(watchlist_id),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def delete_watchlist(self, watchlist_id: int) -> bool:
+        with closing(self._connect()) as connection:
+            cursor = connection.execute("DELETE FROM watchlists WHERE id=?", (int(watchlist_id),))
+            connection.commit()
+            return cursor.rowcount == 1
+
+    def add_price_alert(self, symbol: str, condition: str, target_price: float,
+                        label: str = "") -> int:
+        symbol = str(symbol).strip().upper().removesuffix(".NS")
+        condition, target_price = str(condition).upper(), float(target_price)
+        if not symbol or condition not in {"ABOVE", "BELOW"} or target_price <= 0:
+            raise ValueError("Alert symbol, condition, or target price is invalid.")
+        with closing(self._connect()) as connection:
+            cursor = connection.execute(
+                """INSERT INTO price_alerts(symbol, condition, target_price, label, created_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (symbol, condition, target_price, str(label).strip(),
+                 datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
+            return int(cursor.lastrowid)
+
+    def list_price_alerts(self, enabled_only: bool = False) -> list[dict[str, Any]]:
+        query = "SELECT * FROM price_alerts"
+        if enabled_only:
+            query += " WHERE enabled=1"
+        query += " ORDER BY created_at DESC"
+        with closing(self._connect()) as connection:
+            return [dict(row) for row in connection.execute(query).fetchall()]
+
+    def trigger_price_alert(self, alert_id: int) -> None:
+        with closing(self._connect()) as connection:
+            connection.execute(
+                "UPDATE price_alerts SET enabled=0, triggered_at=? WHERE id=?",
+                (datetime.now(timezone.utc).isoformat(), int(alert_id)),
+            )
+            connection.commit()
+
+    def delete_price_alert(self, alert_id: int) -> bool:
+        with closing(self._connect()) as connection:
+            cursor = connection.execute("DELETE FROM price_alerts WHERE id=?", (int(alert_id),))
+            connection.commit()
+            return cursor.rowcount == 1
+
+    def set_preference(self, key: str, value: Any) -> None:
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """INSERT INTO ui_preferences(preference_key, preference_value, updated_at)
+                   VALUES (?, ?, ?) ON CONFLICT(preference_key) DO UPDATE SET
+                   preference_value=excluded.preference_value, updated_at=excluded.updated_at""",
+                (str(key), json.dumps(value), datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
+
+    def get_preferences(self) -> dict[str, Any]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT preference_key, preference_value FROM ui_preferences"
+            ).fetchall()
+        return {str(row["preference_key"]): json.loads(row["preference_value"]) for row in rows}
+
+    def save_report(self, report: dict[str, Any], market_data_source: str) -> int:
+        generated_at = datetime.now(timezone.utc).isoformat()
+        run_id = str(report.get("run_id") or f"ui-{generated_at}")
+        summary = report.get("summary", {})
+        payload = json.dumps(report, default=str, separators=(",", ":"))
+        with closing(self._connect()) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO report_runs (
+                    run_id, generated_at, report_date, market_data_source,
+                    market_regime, candidates_reviewed, trades_generated, report_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id) DO UPDATE SET report_json=excluded.report_json
+                """,
+                (run_id, generated_at, str(report.get("date", "")), market_data_source,
+                 str(report.get("market", {}).get("regime", "UNAVAILABLE")),
+                 int(summary.get("context_reviewed", 0)),
+                 int(summary.get("trades_generated", 0)), payload),
+            )
+            connection.commit()
+            row = connection.execute("SELECT id FROM report_runs WHERE run_id = ?", (run_id,)).fetchone()
+            return int(row["id"] if row else cursor.lastrowid)
+
+    def list_reports(self, limit: int = 50) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 500))
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT id, run_id, generated_at, report_date, market_data_source,
+                          market_regime, candidates_reviewed, trades_generated
+                   FROM report_runs ORDER BY generated_at DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_report(self, report_id: int) -> dict[str, Any] | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT report_json FROM report_runs WHERE id = ?", (int(report_id),)
+            ).fetchone()
+        return json.loads(row["report_json"]) if row else None
+
+    def delete_report(self, report_id: int) -> bool:
+        return self.delete_reports([report_id]) == 1
+
+    def delete_reports(self, report_ids: list[int]) -> int:
+        ids = sorted({int(item) for item in report_ids})
+        if not ids:
+            return 0
+        placeholders = ",".join("?" for _ in ids)
+        with closing(self._connect()) as connection:
+            run_ids = [row["run_id"] for row in connection.execute(
+                f"SELECT run_id FROM report_runs WHERE id IN ({placeholders})", ids
+            ).fetchall()]
+            cursor = connection.execute(
+                f"DELETE FROM report_runs WHERE id IN ({placeholders})", ids
+            )
+            if run_ids:
+                run_placeholders = ",".join("?" for _ in run_ids)
+                connection.execute(
+                    f"DELETE FROM candidate_execution_marks WHERE run_id IN ({run_placeholders})",
+                    run_ids,
+                )
+            connection.commit()
+            return int(cursor.rowcount)
+
+    def set_candidate_execution(self, run_id: str, symbol: str, traded: bool) -> None:
+        run_id, symbol = str(run_id).strip(), str(symbol).strip().upper().removesuffix(".NS")
+        if not run_id or not symbol:
+            raise ValueError("Run ID and symbol are required.")
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """INSERT INTO candidate_execution_marks
+                   (run_id, symbol, execution_status, updated_at) VALUES (?, ?, ?, ?)
+                   ON CONFLICT(run_id, symbol) DO UPDATE SET
+                     execution_status=excluded.execution_status,
+                     updated_at=excluded.updated_at""",
+                (run_id, symbol, "TRADED" if traded else "NOT_TRADED",
+                 datetime.now(timezone.utc).isoformat()),
+            )
+            connection.commit()
+
+    def candidate_has_open_trade(self, run_id: str, symbol: str) -> bool:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """SELECT 1 FROM actual_trades
+                   WHERE recommendation_run_id=? AND symbol=? AND status='OPEN' LIMIT 1""",
+                (str(run_id), str(symbol).strip().upper().removesuffix(".NS")),
+            ).fetchone()
+        return row is not None
+
+    def get_candidate_trade(self, run_id: str, symbol: str) -> dict[str, Any] | None:
+        """Return the latest journal position created from one recommendation."""
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """SELECT * FROM actual_trades
+                   WHERE recommendation_run_id=? AND symbol=?
+                   ORDER BY id DESC LIMIT 1""",
+                (str(run_id), str(symbol).strip().upper().removesuffix(".NS")),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_candidate_executions(self, run_id: str) -> dict[str, str]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT symbol, execution_status FROM candidate_execution_marks WHERE run_id = ?",
+                (str(run_id),),
+            ).fetchall()
+        return {str(row["symbol"]): str(row["execution_status"]) for row in rows}
+
+    def list_traded_suggestions(self) -> list[dict[str, Any]]:
+        """Join user execution marks to the immutable recommendation snapshot."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT m.run_id, m.symbol, m.updated_at, r.id report_id,
+                          r.generated_at, r.report_date, r.report_json
+                   FROM candidate_execution_marks m
+                   JOIN report_runs r ON r.run_id = m.run_id
+                   WHERE m.execution_status = 'TRADED'
+                   ORDER BY m.updated_at DESC"""
+            ).fetchall()
+        results = []
+        for row in rows:
+            report = json.loads(row["report_json"])
+            candidate, original_status = None, "UNKNOWN"
+            for bucket, status in (("trades", "TRADE"), ("watchlist", "WATCHLIST"),
+                                   ("rejected", "REJECTED")):
+                candidate = next((item for item in report.get(bucket, [])
+                                  if str(item.get("symbol", "")).upper() == row["symbol"]), None)
+                if candidate is not None:
+                    original_status = str(candidate.get("status") or status)
+                    break
+            candidate = candidate or {}
+            tracked = self.get_candidate_trade(str(row["run_id"]), str(row["symbol"]))
+            realized = tracked.get("realized_pnl") if tracked else None
+            results.append({
+                "report_id": int(row["report_id"]), "run_id": row["run_id"],
+                "report_date": row["report_date"], "report_generated_at": row["generated_at"],
+                "marked_traded_at": row["updated_at"], "symbol": row["symbol"],
+                "original_status": original_status,
+                "original_action": candidate.get("final_action") or candidate.get("action"),
+                "quality_grade": candidate.get("quality_grade"),
+                "readiness": candidate.get("execution_readiness_score"),
+                "entry": (candidate.get("levels") or {}).get("entry"),
+                "option_approval": (candidate.get("option_trade_approval") or {}).get("status"),
+                "tracking_status": tracked.get("status") if tracked else "NOT_STARTED",
+                "hold_until": tracked.get("hold_until") if tracked else None,
+                "final_outcome": (None if realized is None else
+                                  "PROFIT" if float(realized) >= 0 else "LOSS"),
+                "realized_pnl": realized,
+            })
+        return results
+
+    def add_actual_trade(self, trade: dict[str, Any]) -> int:
+        symbol = str(trade.get("symbol", "")).strip().upper().removesuffix(".NS")
+        instrument = str(trade.get("instrument_type", "EQUITY")).upper()
+        side = str(trade.get("side", "BUY")).upper()
+        quantity = int(trade.get("quantity", 0))
+        entry_price = float(trade.get("entry_price", 0))
+        if not symbol or instrument not in {"EQUITY", "OPTION"} or side not in {"BUY", "SELL"}:
+            raise ValueError("Symbol, instrument type, or side is invalid.")
+        if quantity <= 0 or entry_price <= 0:
+            raise ValueError("Quantity and entry price must be positive.")
+        option_type = str(trade.get("option_type") or "").upper() or None
+        if instrument == "OPTION" and option_type not in {"CE", "PE"}:
+            raise ValueError("Option trades require CE or PE.")
+        with closing(self._connect()) as connection:
+            cursor = connection.execute(
+                """INSERT INTO actual_trades (
+                    created_at, symbol, instrument_type, side, strategy, option_type,
+                    strike, expiry, quantity, entry_date, entry_price, stop_loss,
+                    target_price, fees, notes, recommendation_run_id, hold_until
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (datetime.now(timezone.utc).isoformat(), symbol, instrument, side,
+                 str(trade.get("strategy") or ""), option_type,
+                 float(trade["strike"]) if trade.get("strike") else None,
+                 str(trade.get("expiry") or "") or None, quantity,
+                 str(trade.get("entry_date")), entry_price,
+                 float(trade["stop_loss"]) if trade.get("stop_loss") else None,
+                 float(trade["target_price"]) if trade.get("target_price") else None,
+                 max(0.0, float(trade.get("fees") or 0)), str(trade.get("notes") or ""),
+                 str(trade.get("recommendation_run_id") or "") or None,
+                 str(trade.get("hold_until") or "") or None),
+            )
+            connection.commit()
+            return int(cursor.lastrowid)
+
+    def list_actual_trades(self, status: str | None = None) -> list[dict[str, Any]]:
+        query = "SELECT * FROM actual_trades"
+        parameters: tuple[Any, ...] = ()
+        if status:
+            status = status.upper()
+            if status not in {"OPEN", "CLOSED"}:
+                raise ValueError("Trade status must be OPEN or CLOSED.")
+            query += " WHERE status = ?"
+            parameters = (status,)
+        query += " ORDER BY entry_date DESC, id DESC"
+        with closing(self._connect()) as connection:
+            return [dict(row) for row in connection.execute(query, parameters).fetchall()]
+
+    def close_actual_trade(self, trade_id: int, exit_date: str, exit_price: float,
+                           additional_fees: float = 0) -> float:
+        exit_price, additional_fees = float(exit_price), max(0.0, float(additional_fees))
+        if exit_price <= 0:
+            raise ValueError("Exit price must be positive.")
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM actual_trades WHERE id = ?", (int(trade_id),)
+            ).fetchone()
+            if not row or row["status"] != "OPEN":
+                raise ValueError("Open trade was not found.")
+            direction = 1 if row["side"] == "BUY" else -1
+            fees = float(row["fees"] or 0) + additional_fees
+            pnl = (exit_price - float(row["entry_price"])) * int(row["quantity"]) * direction - fees
+            connection.execute(
+                """UPDATE actual_trades SET status='CLOSED', exit_date=?, exit_price=?,
+                   fees=?, realized_pnl=? WHERE id=?""",
+                (str(exit_date), exit_price, fees, round(pnl, 2), int(trade_id)),
+            )
+            connection.commit()
+            return round(pnl, 2)
+
+    def delete_actual_trade(self, trade_id: int) -> bool:
+        with closing(self._connect()) as connection:
+            cursor = connection.execute("DELETE FROM actual_trades WHERE id = ?", (int(trade_id),))
+            connection.commit()
+            return cursor.rowcount == 1
+
+    def actual_trade_summary(self) -> dict[str, Any]:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """SELECT COUNT(*) total,
+                          SUM(CASE WHEN status='OPEN' THEN 1 ELSE 0 END) open_count,
+                          SUM(CASE WHEN status='CLOSED' THEN 1 ELSE 0 END) closed_count,
+                          COALESCE(SUM(realized_pnl), 0) realized_pnl
+                   FROM actual_trades"""
+            ).fetchone()
+        return {"total": int(row["total"] or 0), "open": int(row["open_count"] or 0),
+                "closed": int(row["closed_count"] or 0),
+                "realized_pnl": round(float(row["realized_pnl"] or 0), 2)}
+
+    def counts(self) -> dict[str, int]:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """SELECT COUNT(*) AS reports,
+                          COALESCE(SUM(trades_generated), 0) AS generated_trades
+                   FROM report_runs"""
+            ).fetchone()
+        return {"reports": int(row["reports"]), "generated_trades": int(row["generated_trades"])}

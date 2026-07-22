@@ -1,6 +1,7 @@
 """Regression coverage for the explainable news-analysis integration."""
 
 import unittest
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -61,6 +62,33 @@ class NewsAnalysisServiceTests(unittest.TestCase):
         self.assertEqual(result["news_state"], "FETCH_FAILED")
         self.assertEqual(result["score"], 0)
         self.assertEqual(result["analysis_method"], "AI_UNAVAILABLE")
+
+    @patch("src.news.analysis_service.requests.get")
+    def test_old_undated_and_duplicate_news_is_not_analyzed(self, get):
+        current = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+        rss = f"""<rss><channel>
+        <item><title>Fresh result</title><source>Wire</source><pubDate>{current}</pubDate></item>
+        <item><title>Fresh result</title><source>Wire</source><pubDate>{current}</pubDate></item>
+        <item><title>Old result</title><source>Wire</source><pubDate>Mon, 20 Jul 2020 10:00:00 GMT</pubDate></item>
+        <item><title>Unknown date</title><source>Wire</source></item>
+        </channel></rss>""".encode()
+        response = Mock(content=rss)
+        response.raise_for_status.return_value = None
+        get.return_value = response
+        analyzer = Mock(model="test-model")
+        analyzer.analyze.return_value = {
+            "sentiment": "NEUTRAL", "score": 0, "confidence": 80,
+            "materiality": "LOW", "events": [], "reasoning": ["Current."],
+            "trade_impact": "NONE", "article_assessments": [],
+            "analysis_provider": "LOCAL_FINBERT",
+        }
+
+        result = NewsAnalysisService.analyze("SBIN", analyzer=analyzer)
+
+        self.assertEqual(result["article_count"], 1)
+        self.assertEqual(result["stale_article_count"], 2)
+        analyzer.analyze.assert_called_once()
+        self.assertEqual(analyzer.analyze.call_args.args[1][0]["title"], "Fresh result")
 
     def test_local_finbert_and_spacy_analyze_without_paid_api(self):
         sentiment_pipeline = Mock(return_value=[
