@@ -131,7 +131,16 @@ The UI provides:
 
 ## AI Analyst, MCP, and Codex
 
-Add an OpenAI API key to `.env` to enable the AI Analyst in Streamlit:
+The AI Analyst offers four providers:
+
+- **Codex via ChatGPT Plus** (default): uses an authenticated Codex CLI and plan limits, without
+  requiring an OpenAI API key;
+- **OpenAI API**: optional embedded assistant with separately billed API usage;
+- **Local model (Ollama)**: runs on your computer without OpenAI API charges;
+- **ChatGPT via MCP**: keeps the conversation in ChatGPT while exposing bounded read-only project
+  and report tools.
+
+Only the OpenAI API provider needs these optional values:
 
 ```env
 OPENAI_API_KEY=your_openai_api_key
@@ -160,8 +169,12 @@ Set `CODEX_EXECUTABLE` only when it is not available as `codex` on `PATH`. Its m
 
 ```bash
 npm install -g @openai/codex
-codex login
+codex
 ```
+
+Choose **Sign in with ChatGPT** when prompted. On Windows PowerShell, use `npm.cmd install -g
+@openai/codex` if `npm` is not directly executable. ChatGPT subscriptions and API billing are
+separate.
 
 - `EXPLAIN`: read-only inspection and explanation;
 - `PROPOSE`: read-only diagnosis and patch plan;

@@ -7,6 +7,7 @@ from src.assistant.codex_service import CodexService
 from src.assistant.context_tools import StockAnalyzerTools, UIContext
 from src.assistant.openai_assistant import (OpenAIAnalyst, OpenAIAuthenticationError,
                                             OpenAIConfigurationError)
+from src.assistant.local_assistant import OllamaAnalyst, OllamaConfigurationError
 from src.ui.database import ReportDatabase
 
 
@@ -80,6 +81,15 @@ class AssistantIntegrationTests(unittest.TestCase):
         service = CodexService(self.root, executable="definitely-not-installed-codex")
         with self.assertRaises(PermissionError):
             service.run("change code", "IMPLEMENT", confirmed=False)
+
+    @patch("src.assistant.local_assistant.requests.post")
+    def test_ollama_answer_uses_grounded_context(self, post):
+        response = Mock(ok=True)
+        response.json.return_value = {"message": {"content": "Local answer"}}
+        post.return_value = response
+        result = OllamaAnalyst(model="test-model").answer("Why?", {"symbol": "SBIN"})
+        self.assertEqual(result["text"], "Local answer")
+        self.assertIn("SBIN", post.call_args.kwargs["json"]["messages"][-1]["content"])
 
 
 if __name__ == "__main__":

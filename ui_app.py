@@ -22,7 +22,7 @@ from src.application.errors import PlatformError
 from src.application.platform import TradingPlatform
 from src.assistant import (CodexService, CodexUnavailableError, OpenAIAnalyst,
                            OpenAIAuthenticationError, OpenAIConfigurationError,
-                           StockAnalyzerTools)
+                           OllamaAnalyst, OllamaConfigurationError, StockAnalyzerTools)
 from src.assistant.context_tools import UIContext
 from src.news.ai_sentiment import AISentimentAnalyzer
 from src.presenter.daily_report import DailyReportPresenter
@@ -2674,15 +2674,53 @@ def render_ai_chat(database: ReportDatabase, symbol: str | None = None,
     """Context-aware analyst conversation grounded in saved data and safe source reads."""
     tools = StockAnalyzerTools(database, Path(__file__).resolve().parent)
     session_api_key = st.session_state.get("_openai_session_api_key")
-    analyst = OpenAIAnalyst(api_key=session_api_key)
+    provider = st.selectbox(
+        "Assistant provider",
+        ("Codex via ChatGPT Plus", "OpenAI API", "Local model (Ollama)", "ChatGPT via MCP"),
+        key=f"ai-provider-{scope}",
+        help="Codex uses your ChatGPT sign-in and plan limits. OpenAI API is billed separately.")
+    if provider == "Codex via ChatGPT Plus":
+        analyst = CodexService(Path(__file__).resolve().parent)
+        provider_ready = analyst.configured
+    elif provider == "OpenAI API":
+        analyst = OpenAIAnalyst(api_key=session_api_key)
+        provider_ready = analyst.configured
+    elif provider == "Local model (Ollama)":
+        analyst = OllamaAnalyst()
+        provider_ready = True
+    else:
+        analyst, provider_ready = None, False
     report_id = _report_id_for(database, report)
     history_key = f"ai_chat_history_{scope}"
     history = st.session_state.setdefault(history_key, [])
     status_columns = st.columns(3)
-    status_columns[0].metric("OpenAI", "READY" if analyst.configured else "SETUP NEEDED")
+    status_columns[0].metric("Provider", "READY" if provider_ready else "SETUP NEEDED")
     status_columns[1].metric("Report", report.get("run_id", "Latest") if report else "Latest")
     status_columns[2].metric("Stock context", symbol or "Entire report")
-    if not analyst.configured:
+    if provider == "ChatGPT via MCP":
+        st.info("This mode keeps the conversation in ChatGPT and gives it read-only access to this "
+                "project through MCP. It does not use an OpenAI API key in Streamlit.")
+        with st.expander("Connect this project to ChatGPT", expanded=True):
+            st.markdown("1. Start the MCP HTTP server on the machine hosting this app.\n"
+                        "2. Put it behind an authenticated HTTPS URL or secure development tunnel.\n"
+                        "3. In ChatGPT, enable Developer mode and add that URL as an MCP app.\n"
+                        "4. Ask ChatGPT to use **Stock Analyzer** for project questions.")
+            st.code(".venv\\Scripts\\python.exe run_mcp.py --transport streamable-http",
+                    language="powershell")
+            st.caption("Do not expose the endpoint publicly without authentication.")
+        return
+    if provider == "Codex via ChatGPT Plus" and not provider_ready:
+        st.warning("Install Codex, then run `codex` and choose **Sign in with ChatGPT**. Restart "
+                   "Streamlit afterward. No OpenAI API key is required.")
+        st.code("winget install OpenJS.NodeJS.LTS\nnpm.cmd install -g @openai/codex\ncodex",
+                language="powershell")
+    elif provider == "Local model (Ollama)":
+        st.info(f"Using local model `{analyst.model}` at `{analyst.base_url}`. No OpenAI API "
+                "billing applies; your computer supplies the compute.")
+        with st.expander("Local model setup"):
+            st.code(f"winget install Ollama.Ollama\nollama pull {analyst.model}\nollama serve",
+                    language="powershell")
+    elif provider == "OpenAI API" and not provider_ready:
         st.warning("OpenAI sign-in is required before live answers can be generated.")
         with st.form(f"openai-sign-in-{scope}", clear_on_submit=True):
             supplied_key = st.text_input(
@@ -2698,7 +2736,7 @@ def render_ai_chat(database: ReportDatabase, symbol: str | None = None,
                 st.error("Enter an OpenAI API key to continue.")
         st.caption("For persistent server-side setup, configure OPENAI_API_KEY in `.env` and restart. "
                    "A ChatGPT subscription login is separate from OpenAI API authentication.")
-    elif session_api_key:
+    elif provider == "OpenAI API" and session_api_key:
         signout_col, note_col = st.columns([1, 3])
         if signout_col.button("Sign out", key=f"openai-sign-out-{scope}"):
             st.session_state.pop("_openai_session_api_key", None)
@@ -2721,7 +2759,7 @@ def render_ai_chat(database: ReportDatabase, symbol: str | None = None,
     with st.form(f"ai-question-{scope}", clear_on_submit=True):
         question = st.text_area("Ask about the current stock, report, UI, or project code",
                                 height=80, placeholder=suggestions[0], key=f"ai-input-{scope}")
-        ask = st.form_submit_button("Ask AI", type="primary", disabled=not analyst.configured)
+        ask = st.form_submit_button("Ask AI", type="primary", disabled=not provider_ready)
     clear_col, context_col = st.columns(2)
     if clear_col.button("Clear conversation", key=f"clear-ai-{scope}", disabled=not history):
         st.session_state[history_key] = []
@@ -2755,7 +2793,8 @@ def render_ai_chat(database: ReportDatabase, symbol: str | None = None,
             history.append({"role": "assistant", "content":
                             "Authentication is required before I can answer. Please sign in above."})
             st.rerun()
-        except (OpenAIConfigurationError, RuntimeError) as exc:
+        except (OpenAIConfigurationError, OllamaConfigurationError, CodexUnavailableError,
+                RuntimeError) as exc:
             history.append({"role": "assistant", "content": f"I could not answer: {exc}"})
             st.rerun()
 
@@ -2792,9 +2831,10 @@ def codex_workspace_page(database: ReportDatabase) -> None:
         st.warning("Codex CLI is not installed or not on PATH. Install and authenticate Codex on the "
                    "server running Streamlit, then restart the UI.")
         with st.expander("Codex setup and login", expanded=True):
-            st.code("npm install -g @openai/codex\ncodex login", language="bash")
-            st.caption("Complete the Codex login in the server terminal or browser it opens. "
-                       "Credentials are managed by Codex and are never collected by this UI.")
+            st.code("npm.cmd install -g @openai/codex\ncodex", language="powershell")
+            st.caption("Choose Sign in with ChatGPT and complete login in the browser. ChatGPT Plus "
+                       "can be used subject to Codex plan limits; no API key is required. Credentials "
+                       "are managed by Codex and are never collected by this UI.")
             if st.button("Refresh Codex status", key="refresh-codex-status"):
                 st.rerun()
     st.info("Codex is instructed not to place trades, push, deploy, install dependencies, use network "
