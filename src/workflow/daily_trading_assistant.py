@@ -609,6 +609,7 @@ class DailyTradingAssistant:
                         adverse_percent=self.platform.settings.bullish_max_adverse_move_percent,
                         horizon_days=self.platform.settings.bullish_barrier_horizon_days,
                         minimum_samples=self.platform.settings.bullish_intraday_barrier_minimum_samples,
+                        direction="BULLISH",
                     )
                     adverse_move_risk["daily_fallback"] = daily_barrier
             except Exception as exc:

@@ -44,6 +44,8 @@ from src.sector.sector_mapper import SectorMapper
 from src.trade_plan.trade_plan import TradePlanEngine
 from src.trading_engine.engine import TradingEngine
 from src.workflow.daily_trading_assistant import DailyTradingAssistant
+from src.workflow.context_enrichment import ContextEnrichment
+from src.risk.adverse_move import AdverseMoveRisk
 from src.learning.outcome_repository import OutcomeRepository
 from src.historical.current_month_seasonality import CurrentMonthSeasonality
 from src.historical.regime_performance import RegimePerformance
@@ -167,8 +169,91 @@ class TradingPlatform:
                 "confirmed": all(checks[name] for name in
                                  ("bearish_trend", "price_below_ema20", "macd_below_signal"))}
 
+    @staticmethod
+    def _bearish_trade_plan(report: dict[str, Any]) -> dict[str, Any]:
+        analysis, levels = report["analysis"], report["entry"]
+        entry = float(analysis["current_price"])
+        atr = max(float(analysis.get("atr") or levels.get("atr") or 0), entry * .005)
+        resistance = levels.get("resistance")
+        support = levels.get("support")
+        stop = (float(resistance) if resistance and float(resistance) > entry
+                else entry + max(atr * .75, entry * .0075))
+        risk = stop - entry
+        target1 = (float(support) if support and float(support) < entry
+                   else entry - max(atr, risk))
+        target2 = min(target1, entry - max(atr * 2, risk * 2))
+        target3 = min(target2, entry - max(atr * 3, risk * 3))
+        reward = entry - target1
+        return {"entry": round(entry, 2), "stop_loss": round(stop, 2),
+                "target1": round(target1, 2), "target2": round(target2, 2),
+                "target3": round(target3, 2), "risk": round(risk, 2),
+                "reward": round(reward, 2),
+                "risk_reward": round(reward / risk, 2) if risk > 0 else 0,
+                "expected_reward": round(reward, 2), "target_basis": "BEARISH_SUPPORT"}
+
+    @staticmethod
+    def _bearish_stock_selection_filters(*, plan: dict, analysis: dict, adverse: dict,
+                                         relative_strength: dict, sector: dict,
+                                         liquidity: dict, settings) -> dict[str, Any]:
+        entry, stop = float(plan.get("entry") or 0), float(plan.get("stop_loss") or 0)
+        stop_percent = ((stop - entry) * 100 / entry if entry > 0 and stop > entry else float("inf"))
+        target_first = adverse.get("probability_target_before_adverse_barrier")
+        no_gap = adverse.get("probability_no_overnight_gap_beyond_barrier")
+        raw_rs = relative_strength.get("relative_strength")
+        sector_score = sector.get("score")
+        extension_atr = max(0.0, (float(analysis.get("ema20") or entry) - entry)
+                            / max(float(analysis.get("atr") or 0), .000001))
+        checks = [
+            {"name": "logical_stop_within_limit", "passed": stop_percent <= settings.bearish_max_technical_stop_percent,
+             "reason": f"Bearish technical stop is {stop_percent:.2f}% above entry; maximum is {settings.bearish_max_technical_stop_percent}%."},
+            {"name": "intraday_path_sample_quality", "passed": bool(adverse.get("available")),
+             "reason": adverse.get("reason", "Intraday bearish path sample is sufficient.")},
+            {"name": "target_before_adverse_probability",
+             "passed": target_first is not None and float(target_first) >= settings.bearish_min_target_before_adverse_probability,
+             "reason": f"Downside-target-before-+3% probability is {target_first}%; minimum is {settings.bearish_min_target_before_adverse_probability}%."},
+            {"name": "overnight_gap_safety",
+             "passed": no_gap is not None and float(no_gap) >= settings.bearish_min_no_overnight_gap_probability,
+             "reason": f"Probability of avoiding an adverse overnight gap is {no_gap}%; minimum is {settings.bearish_min_no_overnight_gap_probability}%."},
+            {"name": "negative_relative_strength", "passed": bool(relative_strength.get("available"))
+                       and raw_rs is not None and float(raw_rs) <= settings.bearish_max_relative_strength_percent,
+             "reason": f"Stock-minus-Nifty return is {raw_rs}%; maximum for a bearish selection is {settings.bearish_max_relative_strength_percent}%."},
+            {"name": "weak_sector", "passed": bool(sector.get("available")) and sector_score is not None
+                                          and float(sector_score) <= settings.bearish_max_sector_score,
+             "reason": f"Sector score is {sector_score}; bearish maximum is {settings.bearish_max_sector_score}."},
+            {"name": "not_overextended_below_ema20", "passed": extension_atr <= settings.entry_max_extension_atr,
+             "reason": f"Price is {extension_atr:.2f} ATR below EMA20; maximum is {settings.entry_max_extension_atr}."},
+            {"name": "volume_confirmation", "passed": float(analysis.get("relative_volume") or 0) >= settings.entry_min_relative_volume,
+             "reason": f"Relative volume is {float(analysis.get('relative_volume') or 0):.2f}x; minimum is {settings.entry_min_relative_volume}x."},
+            {"name": "reward_to_support", "passed": float(plan.get("risk_reward") or 0) >= settings.equity_min_risk_reward,
+             "reason": f"Bearish reward/risk is {plan.get('risk_reward')}:1; minimum is {settings.equity_min_risk_reward}:1."},
+            {"name": "exit_liquidity", "passed": float(liquidity.get("score") or 0) >= settings.candidate_min_liquidity_score,
+             "reason": f"Liquidity score is {liquidity.get('score')}; minimum is {settings.candidate_min_liquidity_score}."},
+        ]
+        failed = [item for item in checks if not item["passed"]]
+        return {"passed": not failed, "checks": checks,
+                "failed_checks": [item["name"] for item in failed],
+                "blocking_reasons": [item["reason"] for item in failed]}
+
     def bearish_option_candidates(self, limit: int = 2, minimum_score: int = 60,
                                   option_month: str | None = None) -> dict[str, Any]:
+        """Run the bearish scan against a fresh live snapshot."""
+        begin = getattr(self.provider, "begin_live_refresh", None)
+        end = getattr(self.provider, "end_live_refresh", None)
+        already_active = bool(getattr(self.provider, "live_refresh_active", False))
+        started = False
+        try:
+            if begin is not None and not already_active:
+                with self._analysis_cache_lock:
+                    self._analysis_cache.clear()
+                begin(self._universe_symbols())
+                started = True
+            return self._bearish_option_candidates(limit, minimum_score, option_month)
+        finally:
+            if started and end is not None:
+                end()
+
+    def _bearish_option_candidates(self, limit: int = 2, minimum_score: int = 60,
+                                   option_month: str | None = None) -> dict[str, Any]:
         """Return up to two evidence-backed, structurally valid bearish debit trades."""
         if not isinstance(limit, int) or not 1 <= limit <= 5:
             raise ValidationError("bearish option limit must be between 1 and 5")
@@ -177,6 +262,11 @@ class TradingPlatform:
         symbols = self._universe_symbols()
         reviewed, qualified = 0, []
         rejection_counts: dict[str, int] = {}
+        enrichment = ContextEnrichment(
+            self.settings.market_data_source == "kite",
+            sector_history_provider=(self.provider if self.settings.market_data_source == "kite" else None),
+        )
+        _, sector_strength = enrichment.market_and_sectors(force_refresh=True)
         for symbol in symbols:
             try:
                 report = self.analyze(symbol)
@@ -193,9 +283,36 @@ class TradingPlatform:
             if liquidity["score"] < self.settings.candidate_min_liquidity_score:
                 rejection_counts["STOCK_LIQUIDITY_LOW"] = rejection_counts.get("STOCK_LIQUIDITY_LOW", 0) + 1
                 continue
+            plan = self._bearish_trade_plan(report)
+            target_percent = float(plan["expected_reward"]) * 100 / max(float(plan["entry"]), .000001)
+            try:
+                adverse = AdverseMoveRisk.assess_intraday(
+                    self.provider.get_intraday_history(symbol, period="6mo", interval="15minute"),
+                    target_percent, adverse_percent=self.settings.bullish_max_adverse_move_percent,
+                    horizon_days=self.settings.bullish_barrier_horizon_days,
+                    minimum_samples=self.settings.bullish_intraday_barrier_minimum_samples,
+                    direction="BEARISH",
+                )
+            except Exception as exc:
+                adverse = {"available": False, "sample_count": 0,
+                           "reason": f"Bearish path study failed: {exc.__class__.__name__}"}
+            relative_strength = enrichment.relative_strength(symbol)
+            sector = SectorMapper().get_sector(symbol)
+            sector_data = sector_strength.get(
+                sector, {"available": False, "score": None, "rating": "UNAVAILABLE"}
+            )
+            stock_filters = self._bearish_stock_selection_filters(
+                plan=plan, analysis=analysis, adverse=adverse,
+                relative_strength=relative_strength, sector=sector_data,
+                liquidity=liquidity, settings=self.settings,
+            )
+            if not stock_filters["passed"]:
+                for code in stock_filters["failed_checks"]:
+                    rejection_counts[code.upper()] = rejection_counts.get(code.upper(), 0) + 1
+                continue
             candidate = {
                 "symbol": symbol, "action": "SELL", "current_price": analysis["current_price"],
-                "trade_plan": report["trade_plan"],
+                "trade_plan": plan,
                 "analysis_report": {"analysis": analysis, "entry": report["entry"],
                                     "breakout": report["breakout"], "candlestick": report["candlestick"],
                                     "setup_evaluation": report["setup_evaluation"]},
@@ -203,7 +320,9 @@ class TradingPlatform:
             option = self._option_trade_plan(candidate, option_month)
             structure = OptionStructureValidator.validate(option, self.settings)
             trade = option.get("trade") or {}
-            bearish_structure = trade.get("strategy") in {"Long Put", "Bear Put Spread"}
+            bearish_structure = trade.get("strategy") in {
+                "Long Put", "Bear Put Spread", "Bear Call Spread"
+            }
             approval = {
                 "result_type": "OptionTradeApprovalResult",
                 "status": "APPROVED" if structure["valid"] and bearish_structure else "REJECTED",
@@ -221,12 +340,13 @@ class TradingPlatform:
                 "rsi": analysis["rsi"], "relative_volume": analysis["relative_volume"],
                 "levels": {"support": report["entry"].get("support"),
                            "resistance": report["entry"].get("resistance"),
-                           "entry": report["trade_plan"].get("entry"),
-                           "stop_loss": report["trade_plan"].get("stop_loss"),
-                           "target_1": report["trade_plan"].get("target1"),
-                           "target_2": report["trade_plan"].get("target2"),
-                           "target_3": report["trade_plan"].get("target3")},
+                           "entry": plan.get("entry"), "stop_loss": plan.get("stop_loss"),
+                           "target_1": plan.get("target1"), "target_2": plan.get("target2"),
+                           "target_3": plan.get("target3")},
                 "stock_liquidity": liquidity, "option": option,
+                "adverse_move_risk": adverse, "relative_strength": relative_strength,
+                "sector": sector, "sector_context": sector_data,
+                "stock_selection_filters": stock_filters,
                 "option_structure": structure, "option_trade_approval": approval,
             })
         qualified.sort(key=lambda row: (row["bearish_score"], row["stock_liquidity"]["score"]), reverse=True)
@@ -665,8 +785,10 @@ class TradingPlatform:
                                             "equity_independent": True},
                     })
             candle = candidate.get("candlestick") or {}
-            technical_support = candidate["trade_plan"]["stop_loss"]
-            technical_resistance = candidate["trade_plan"]["target1"]
+            technical_support = (candidate["trade_plan"]["target1"] if direction == "BEARISH"
+                                 else candidate["trade_plan"]["stop_loss"])
+            technical_resistance = (candidate["trade_plan"]["stop_loss"] if direction == "BEARISH"
+                                    else candidate["trade_plan"]["target1"])
             if candle_overlay.get("status") == "CONFIRMED":
                 technical_support = candle.get("pattern_low") or technical_support
                 technical_resistance = candle.get("pattern_high") or technical_resistance

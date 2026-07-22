@@ -23,6 +23,7 @@ from src.news.ai_sentiment import AISentimentAnalyzer
 from src.presenter.daily_report import DailyReportPresenter
 from src.ui.database import ReportDatabase
 from src.ui.live_prices import KiteLivePriceFeed
+from src.ui.stock_explainer import explain_stock_question
 from src.workflow.context_enrichment import ContextEnrichment
 
 
@@ -1218,7 +1219,7 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
     summary_cards(report)
     st.caption(f"Report {report.get('date', 'latest')} · Run {report.get('run_id', 'unavailable')} · "
                "Actionable decisions are green; watch conditions are amber.")
-    tabs = st.tabs(["Overview", "Candidates", "Market", "News", "Rejections", "Diagnostics"])
+    tabs = st.tabs(["Overview", "Candidates", "Ask report", "Market", "News", "Rejections", "Diagnostics"])
     with tabs[0]:
         all_candidates = [*report.get("trades", []), *report.get("watchlist", [])]
         top_report = {**report, "trades": report.get("trades", [])[:3],
@@ -1276,6 +1277,23 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
             st.subheader("Expanded candidate details")
             selected_stock_details(platform, report, database)
     with tabs[2]:
+        st.subheader("Ask why a stock was selected")
+        st.caption("Answers use only the scores, filters, risks, and decisions saved in this report. "
+                   "Try: “Why did you suggest IDEA?”")
+        chat_key = f"report_explainer_{report.get('run_id', 'latest')}"
+        messages = st.session_state.setdefault(chat_key, [])
+        if not messages:
+            messages.append({"role": "assistant", "content":
+                             "Ask me about any trade, watchlist, or rejected symbol in this report."})
+        for message in messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+        if prompt := st.chat_input("Why did you suggest IDEA?", key=f"prompt_{chat_key}"):
+            messages.append({"role": "user", "content": prompt})
+            messages.append({"role": "assistant",
+                             "content": explain_stock_question(report, prompt)})
+            st.rerun()
+    with tabs[3]:
         market = report.get("market", {})
         st.subheader("Global markets")
         global_rows = snapshot_rows(market.get("global", {}))
@@ -1301,9 +1319,9 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
         st.json(report.get("context_statistics", {}), expanded=True)
         st.subheader("Dependency health")
         st.json(report.get("dependency_health", {}), expanded=True)
-    with tabs[3]:
-        show_news(report)
     with tabs[4]:
+        show_news(report)
+    with tabs[5]:
         rejected = report.get("rejected", [])
         if rejected:
             grouped = rejection_summary(rejected)
@@ -1324,7 +1342,7 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
                         st.write(f"• {reason}")
         else:
             st.success("No candidates were rejected.")
-    with tabs[5]:
+    with tabs[6]:
         st.caption("Advanced operational and raw-data views.")
         diagnostic_tabs = st.tabs(["Health", "Complete text", "Raw JSON"])
         with diagnostic_tabs[0]:
@@ -1600,7 +1618,7 @@ def positions_page(platform: TradingPlatform, database: ReportDatabase) -> None:
 
 def bearish_options_page(platform: TradingPlatform, database: ReportDatabase) -> None:
     st.title("Bearish option opportunities")
-    st.caption("Shows up to two validated Long Put or Bear Put Spread structures; it never forces a trade.")
+    st.caption("Shows up to two validated bearish stocks with Long Put, Bear Put Spread, or hedged Bear Call Spread structures; it never forces a trade.")
     with st.form("bearish-options-form"):
         left, right = st.columns(2)
         minimum_score = left.number_input("Minimum bearish score", 0, 100, 60)
@@ -1628,6 +1646,16 @@ def bearish_options_page(platform: TradingPlatform, database: ReportDatabase) ->
             columns[1].metric("RSI", candidate["rsi"])
             columns[2].metric("Relative volume", candidate["relative_volume"])
             columns[3].metric("Approval", candidate["option_trade_approval"]["status"])
+            risk = candidate.get("adverse_move_risk", {})
+            filters = candidate.get("stock_selection_filters", {})
+            st.dataframe(pd.DataFrame([{
+                "Bearish stock filters": "PASS" if filters.get("passed") else "FAIL",
+                "Target before +3%": risk.get("probability_target_before_adverse_barrier"),
+                "No upward overnight gap": risk.get("probability_no_overnight_gap_beyond_barrier"),
+                "Path samples": risk.get("sample_count"),
+                "Relative strength vs Nifty": candidate.get("relative_strength", {}).get("relative_strength"),
+                "Sector score": candidate.get("sector_context", {}).get("score"),
+            }]), width="stretch", hide_index=True)
             levels = candidate.get("levels", {})
             st.dataframe(pd.DataFrame([{
                 "Support": levels.get("support"), "Resistance": levels.get("resistance"),

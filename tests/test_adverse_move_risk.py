@@ -22,6 +22,22 @@ class AdverseMoveRiskTests(unittest.TestCase):
             previous_close = session_close
         return pd.DataFrame(rows, index=pd.DatetimeIndex(index))
 
+    @staticmethod
+    def bearish_intraday_history(gap_percent=0.0):
+        rows, index = [], []
+        previous_close = 150.0
+        for day in pd.bdate_range("2025-01-01", periods=130):
+            session_close = previous_close * .997
+            session_open = previous_close * (1 + gap_percent / 100)
+            prices = [session_open, (session_open + session_close) / 2,
+                      session_close * 1.001, session_close]
+            for offset, price in enumerate(prices):
+                index.append(day + pd.Timedelta(hours=9, minutes=15 + offset * 15))
+                rows.append({"Open": price, "High": price * 1.004,
+                             "Low": price * .996, "Close": price})
+            previous_close = session_close
+        return pd.DataFrame(rows, index=pd.DatetimeIndex(index))
+
     def test_stable_bullish_history_reports_high_three_percent_hold_probability(self):
         rows = []
         close = 100.0
@@ -68,6 +84,23 @@ class AdverseMoveRiskTests(unittest.TestCase):
         result = AdverseMoveRisk.assess_intraday(
             self.intraday_history(gap_percent=-4), target_percent=1, adverse_percent=3,
             horizon_days=5, minimum_samples=40,
+        )
+        self.assertTrue(result["available"])
+        self.assertEqual(result["probability_overnight_gap_beyond_barrier"], 100.0)
+        self.assertEqual(result["probability_target_before_adverse_barrier"], 0.0)
+
+    def test_bearish_model_uses_downside_target_and_upside_adverse_barrier(self):
+        result = AdverseMoveRisk.assess_intraday(
+            self.bearish_intraday_history(), 1, 3, 5, 30, direction="BEARISH"
+        )
+        self.assertTrue(result["available"])
+        self.assertEqual(result["direction"], "BEARISH")
+        self.assertGreater(result["probability_target_before_adverse_barrier"], 90)
+        self.assertEqual(result["probability_no_overnight_gap_beyond_barrier"], 100.0)
+
+    def test_bearish_model_counts_upward_overnight_gap_as_adverse(self):
+        result = AdverseMoveRisk.assess_intraday(
+            self.bearish_intraday_history(gap_percent=4), 1, 3, 5, 30, direction="BEARISH"
         )
         self.assertTrue(result["available"])
         self.assertEqual(result["probability_overnight_gap_beyond_barrier"], 100.0)

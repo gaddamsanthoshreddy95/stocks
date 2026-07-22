@@ -74,6 +74,11 @@ class PlatformSettings:
     bullish_min_target_before_adverse_probability: float = 55.0
     bullish_min_no_overnight_gap_probability: float = 95.0
     bullish_min_relative_strength_score: float = 55.0
+    bearish_max_technical_stop_percent: float = 3.0
+    bearish_min_target_before_adverse_probability: float = 55.0
+    bearish_min_no_overnight_gap_probability: float = 95.0
+    bearish_max_relative_strength_percent: float = 0.0
+    bearish_max_sector_score: float = 45.0
     option_call_resistance_near_percent: float = 1.5
     option_long_delta_min: float = 0.35
     option_long_delta_max: float = 0.70
@@ -228,6 +233,12 @@ class PlatformSettings:
                 or not 0 <= self.bullish_min_no_overnight_gap_probability <= 100
                 or not 0 <= self.bullish_min_relative_strength_score <= 100):
             raise ValueError("Bullish stock-selection thresholds are invalid")
+        if (not 0 < self.bearish_max_technical_stop_percent < 100
+                or not 0 <= self.bearish_min_target_before_adverse_probability <= 100
+                or not 0 <= self.bearish_min_no_overnight_gap_probability <= 100
+                or not -100 <= self.bearish_max_relative_strength_percent <= 100
+                or not 0 <= self.bearish_max_sector_score <= 100):
+            raise ValueError("Bearish stock-selection thresholds are invalid")
         if not 0 <= self.market_low_confidence_threshold <= self.market_confirmed_confidence_threshold <= 100:
             raise ValueError("Market confidence thresholds are invalid")
         if not (0 <= self.event_stale_multiplier <= self.event_delayed_multiplier
@@ -381,6 +392,15 @@ class PlatformSettings:
                 "BULLISH_MIN_NO_OVERNIGHT_GAP_PROBABILITY", 95),
             bullish_min_relative_strength_score=env_float(
                 "BULLISH_MIN_RELATIVE_STRENGTH_SCORE", 55),
+            bearish_max_technical_stop_percent=env_float(
+                "BEARISH_MAX_TECHNICAL_STOP_PERCENT", 3),
+            bearish_min_target_before_adverse_probability=env_float(
+                "BEARISH_MIN_TARGET_BEFORE_ADVERSE_PROBABILITY", 55),
+            bearish_min_no_overnight_gap_probability=env_float(
+                "BEARISH_MIN_NO_OVERNIGHT_GAP_PROBABILITY", 95),
+            bearish_max_relative_strength_percent=env_float(
+                "BEARISH_MAX_RELATIVE_STRENGTH_PERCENT", 0),
+            bearish_max_sector_score=env_float("BEARISH_MAX_SECTOR_SCORE", 45),
             option_call_resistance_near_percent=env_float("OPTION_CALL_RESISTANCE_NEAR_PERCENT", 1.5),
             option_long_delta_min=env_float("OPTION_LONG_DELTA_MIN", .35),
             option_long_delta_max=env_float("OPTION_LONG_DELTA_MAX", .70),
