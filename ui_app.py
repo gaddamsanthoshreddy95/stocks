@@ -854,10 +854,12 @@ def start_recommended_trade_control(platform: TradingPlatform, database: ReportD
         confirmed = st.checkbox("I confirm the quantity, side, entry price, and review date",
                                 key=f"confirm-start-{widget_scope}")
         submitted = st.form_submit_button(
-            "Mark TRADED & start tracking", type="primary",
-            disabled=not override_confirmed or not confirmed
+            "Mark TRADED & start tracking", type="primary"
         )
     if submitted:
+        if not override_confirmed or not confirmed:
+            st.error("Confirm the trade details and any discretionary override before saving.")
+            return
         try:
             database.add_actual_trade({
                 "symbol": symbol, "instrument_type": "EQUITY", "side": side,
@@ -1581,28 +1583,35 @@ def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabas
             if trade.get("instrument_type") == "OPTION" and current is None:
                 st.warning("Live option P&L needs the exact NSE option trading symbol. "
                            "This position remains tracked, but its price must be entered when completing it.")
-            with st.form(f"complete-active-{trade['id']}", clear_on_submit=False):
-                finish = st.columns(3)
-                exit_price = finish[0].number_input(
-                    "Exit price", min_value=0.01, value=float(current or trade["entry_price"]),
-                    step=0.05, key=f"position-exit-price-{trade['id']}")
-                exit_date = finish[1].date_input("Exit date", value=date.today(),
-                                                 key=f"position-exit-date-{trade['id']}")
-                exit_fees = finish[2].number_input("Exit fees", min_value=0.0, value=0.0,
-                                                   key=f"position-exit-fees-{trade['id']}")
-                projected = ((exit_price - float(trade["entry_price"])) * int(trade["quantity"])
-                             * (1 if trade["side"] == "BUY" else -1)
-                             - float(trade.get("fees") or 0) - exit_fees)
-                st.caption(f"Projected realized P&L: {money(projected)}")
-                confirmed = st.checkbox("Confirm this exit and freeze realized P&L",
-                                        key=f"confirm-position-exit-{trade['id']}")
-                completed = st.form_submit_button("Mark completed", type="primary", disabled=not confirmed)
+            st.markdown("**Exit at live market price**")
+            projected = (None if current is None else
+                         (current - float(trade["entry_price"])) * int(trade["quantity"])
+                         * (1 if trade["side"] == "BUY" else -1)
+                         - float(trade.get("fees") or 0))
+            if current is None:
+                st.error("A live market price is unavailable, so this position cannot be auto-closed.")
+            else:
+                st.info(f"Current exit reference: {money(current)} · Projected realized P&L: "
+                        f"{money(projected)}")
+            confirmed = st.checkbox("Confirm exit at the latest live market price",
+                                    key=f"confirm-position-exit-{trade['id']}")
+            completed = st.button("Exit position now", type="primary",
+                                  disabled=not confirmed or current is None,
+                                  key=f"mark-position-completed-{trade['id']}")
             if completed:
                 try:
-                    pnl = database.close_actual_trade(trade["id"], exit_date.isoformat(),
-                                                      exit_price, exit_fees)
+                    # Discard the five-second REST fallback cache and resolve the
+                    # freshest quote available at the actual click rerun.
+                    _polled_equity_price.clear()
+                    execution_price = _latest_trade_price(platform, trade, feed)
+                    if execution_price is None:
+                        st.error("The live quote became unavailable. The position remains open.")
+                        continue
+                    pnl = database.close_actual_trade(
+                        trade["id"], date.today().isoformat(), execution_price, 0)
                     outcome = "PROFIT" if pnl >= 0 else "LOSS"
-                    st.success(f"Completed as {outcome}. Final P&L: ₹{pnl:,.2f}")
+                    st.success(f"Exited at {money(execution_price)} · {outcome} · "
+                               f"Final P&L: ₹{pnl:,.2f}")
                     st.rerun()
                 except ValueError as exc:
                     st.error(f"Could not complete this position: {exc}")
@@ -1996,8 +2005,11 @@ def trade_tracker_page(platform: TradingPlatform, database: ReportDatabase) -> N
                     if stop_loss else None)
             st.info(f"Capital recorded: {money(capital)} · Risk to stop: {money(risk)}")
             add_confirmed = st.checkbox("I confirm these trade and risk details are correct")
-            add = st.form_submit_button("Save actual trade", type="primary", disabled=not add_confirmed)
+            add = st.form_submit_button("Save actual trade", type="primary")
         if add:
+            if not add_confirmed:
+                st.error("Confirm the trade and risk details before saving.")
+                return
             try:
                 trade_id = database.add_actual_trade({
                     "symbol": symbol, "instrument_type": instrument, "side": side,
@@ -2032,28 +2044,6 @@ def trade_tracker_page(platform: TradingPlatform, database: ReportDatabase) -> N
     st.download_button("Export position history CSV",
                        trade_frame[display_columns].to_csv(index=False).encode(),
                        file_name="position-history.csv", mime="text/csv")
-
-    open_trades = [trade for trade in trades if trade["status"] == "OPEN"]
-    if open_trades:
-        st.subheader("Close an open trade")
-        open_labels = {f"#{trade['id']} — {trade['symbol']} — {trade['side']} {trade['quantity']}": trade["id"]
-                       for trade in open_trades}
-        with st.form("close-actual-trade"):
-            close_label = st.selectbox("Open trade", list(open_labels))
-            close_columns = st.columns(3)
-            exit_date = close_columns[0].date_input("Exit date", value=date.today())
-            exit_price = close_columns[1].number_input("Exit price", min_value=0.01, value=1.0, step=0.05)
-            exit_fees = close_columns[2].number_input("Additional exit fees", min_value=0.0, value=0.0)
-            close_confirmed = st.checkbox("I confirm this trade should be closed permanently")
-            close = st.form_submit_button("Close trade", type="primary", disabled=not close_confirmed)
-        if close:
-            try:
-                pnl = database.close_actual_trade(open_labels[close_label], exit_date.isoformat(),
-                                                  exit_price, exit_fees)
-                st.success(f"Trade closed. Realized P&L: ₹{pnl:,.2f}")
-                st.rerun()
-            except ValueError as exc:
-                st.error(str(exc))
 
     st.subheader("Delete an incorrectly entered trade")
     trade_labels = {f"#{trade['id']} — {trade['symbol']} — {trade['status']}": trade["id"] for trade in trades}
