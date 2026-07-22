@@ -355,6 +355,29 @@ class TradingPlatform:
 
     def suggest_stocks(self, limit: int = 5, minimum_score: int = 40,
                        enrich: bool = True) -> dict[str, Any]:
+        """Rank candidates using a fresh live snapshot when Kite is configured."""
+        if not isinstance(limit, int) or not 1 <= limit <= 50:
+            raise ValidationError("limit must be an integer between 1 and 50")
+        if not isinstance(minimum_score, int) or not 0 <= minimum_score <= 100:
+            raise ValidationError("minimum_score must be an integer between 0 and 100")
+
+        begin_live_refresh = getattr(self.provider, "begin_live_refresh", None)
+        end_live_refresh = getattr(self.provider, "end_live_refresh", None)
+        refresh_already_active = bool(getattr(self.provider, "live_refresh_active", False))
+        refresh_started = False
+        try:
+            if begin_live_refresh is not None and not refresh_already_active:
+                with self._analysis_cache_lock:
+                    self._analysis_cache.clear()
+                begin_live_refresh(self._universe_symbols())
+                refresh_started = True
+            return self._suggest_stocks(limit, minimum_score, enrich)
+        finally:
+            if refresh_started and end_live_refresh is not None:
+                end_live_refresh()
+
+    def _suggest_stocks(self, limit: int = 5, minimum_score: int = 40,
+                        enrich: bool = True) -> dict[str, Any]:
         """Rank the configured stock universe and return actionable setups.
 
         A candidate must meet the score threshold and receive BUY, BUY ON DIP,
@@ -373,6 +396,7 @@ class TradingPlatform:
             raise DataUnavailableError("No stocks are available to screen")
 
         stage_counts = {"analysis_succeeded": 0, "analysis_failed": 0,
+                        "live_data_failed": 0,
                         "technical_passed": 0, "liquidity_passed": 0,
                         "trust_passed": 0}
         count_lock = Lock()
@@ -382,6 +406,11 @@ class TradingPlatform:
                 stage_counts[key] += 1
 
         def evaluate(symbol: str) -> dict[str, Any] | None:
+            has_live_candle = getattr(self.provider, "has_live_candle", None)
+            if (self.settings.market_data_source == "kite"
+                    and has_live_candle is not None and not has_live_candle(symbol)):
+                increment("live_data_failed")
+                return None
             try:
                 report = self.analyze(symbol)
             except (DataUnavailableError, ValueError, KeyError, TypeError):

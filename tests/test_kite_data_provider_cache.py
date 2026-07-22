@@ -128,6 +128,8 @@ def test_live_refresh_overlays_quote_without_redownloading_history(tmp_path):
 
     data.get_data("RELIANCE")
     data.begin_live_refresh(["RELIANCE"])
+    assert data.live_refresh_active is True
+    assert data.has_live_candle("RELIANCE") is True
     refreshed = data.get_data("RELIANCE")
     data.end_live_refresh()
 
@@ -135,6 +137,8 @@ def test_live_refresh_overlays_quote_without_redownloading_history(tmp_path):
     assert provider.bulk_live_calls == [["RELIANCE"]]
     assert provider.live_calls == []
     assert refreshed.iloc[-1]["Close"] == 104.0
+    assert data.live_refresh_active is False
+    assert data.has_live_candle("RELIANCE") is False
 
 
 def test_missing_bulk_quote_keeps_cached_history(tmp_path):
@@ -144,6 +148,7 @@ def test_missing_bulk_quote_keeps_cached_history(tmp_path):
     original = data.get_data("BANKNIFTY")
 
     data.begin_live_refresh(["BANKNIFTY"])
+    assert data.has_live_candle("BANKNIFTY") is False
     refreshed = data.get_data("BANKNIFTY")
     data.end_live_refresh()
 

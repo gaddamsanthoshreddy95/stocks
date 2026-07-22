@@ -68,6 +68,16 @@ class KiteDataProvider:
             self._live_candles = {}
             self._live_candles_prefetched = False
 
+    @property
+    def live_refresh_active(self) -> bool:
+        """Whether reads are currently using a live intraday snapshot."""
+        return self._live_refresh
+
+    def has_live_candle(self, symbol: str) -> bool:
+        """Return true only when the current snapshot contains this symbol."""
+        key = symbol.upper().removesuffix(".NS")
+        return self._live_refresh and key in self._live_candles
+
     def _with_live_candle(self, symbol: str, history: pd.DataFrame) -> pd.DataFrame:
         """Overlay today's quote without redownloading a year of candles."""
         if history is None or history.empty:
