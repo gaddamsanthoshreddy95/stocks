@@ -15,12 +15,14 @@ class AdverseMoveRisk:
         if (intraday is None or intraday.empty or not required.issubset(intraday.columns)
                 or not isinstance(intraday.index, pd.DatetimeIndex)):
             return {"available": False, "reason": "Ordered intraday OHLC history is unavailable.",
-                    "sample_count": 0, "data_resolution": "UNAVAILABLE"}
+                    "sample_count": 0, "minimum_samples": minimum_samples,
+                    "reliability": "UNAVAILABLE", "data_resolution": "UNAVAILABLE"}
         data = intraday.sort_index().copy()
         direction = direction.upper()
         if direction not in {"BULLISH", "BEARISH"}:
             return {"available": False, "reason": f"Unsupported direction: {direction}",
-                    "sample_count": 0, "data_resolution": "15_MINUTE"}
+                    "sample_count": 0, "minimum_samples": minimum_samples,
+                    "reliability": "UNAVAILABLE", "data_resolution": "15_MINUTE"}
         for column in required:
             data[column] = pd.to_numeric(data[column], errors="coerce")
         data = data.dropna(subset=list(required))
@@ -67,13 +69,18 @@ class AdverseMoveRisk:
         count = len(observations)
         if count < minimum_samples:
             return {"available": False, "reason": f"Only {count} comparable intraday paths; "
-                    f"{minimum_samples} required.", "sample_count": count, "data_resolution": "15_MINUTE"}
+                    f"{minimum_samples} required.", "sample_count": count,
+                    "minimum_samples": minimum_samples, "reliability": "INSUFFICIENT_SAMPLE",
+                    "data_resolution": "15_MINUTE", "direction": direction,
+                    "horizon_days": horizon_days, "target_percent": round(target_percent, 3),
+                    "adverse_barrier_percent": round(adverse_percent, 3)}
         drawdowns = sorted(item[3] for item in observations)
         return {
             "available": True, "model": "ORDERED_INTRADAY_OVERNIGHT_BARRIER_STUDY",
             "data_resolution": "15_MINUTE", "direction": direction, "horizon_days": horizon_days,
             "target_percent": round(target_percent, 3),
             "adverse_barrier_percent": round(adverse_percent, 3), "sample_count": count,
+            "minimum_samples": minimum_samples, "reliability": "HIGH",
             "probability_stays_above_adverse_barrier": round(
                 100 * sum(not item[1] for item in observations) / count, 2),
             "probability_target_before_adverse_barrier": round(
@@ -93,14 +100,20 @@ class AdverseMoveRisk:
                horizon_days: int = 5, minimum_samples: int = 60) -> dict:
         required = {"High", "Low", "Close"}
         if history is None or history.empty or not required.issubset(history.columns):
-            return {"available": False, "reason": "OHLC history is unavailable.", "sample_count": 0}
+            return {"available": False, "reason": "OHLC history is unavailable.",
+                    "sample_count": 0, "minimum_samples": minimum_samples,
+                    "reliability": "UNAVAILABLE", "data_resolution": "DAILY",
+                    "direction": "BULLISH", "horizon_days": horizon_days,
+                    "target_percent": round(target_percent, 3),
+                    "adverse_barrier_percent": round(adverse_percent, 3)}
         data = history.copy()
         for column in required:
             data[column] = pd.to_numeric(data[column], errors="coerce")
         data = data.dropna(subset=list(required))
         if len(data) < max(25, horizon_days + 21) or target_percent <= 0 or adverse_percent <= 0:
             return {"available": False, "reason": "Insufficient history or invalid barriers.",
-                    "sample_count": 0}
+                    "sample_count": 0, "minimum_samples": minimum_samples,
+                    "reliability": "UNAVAILABLE"}
         data["SMA20"] = data["Close"].rolling(20).mean()
         data["RETURN5"] = data["Close"].pct_change(5)
         observations = []
@@ -131,7 +144,11 @@ class AdverseMoveRisk:
         sample_count = len(observations)
         if sample_count < minimum_samples:
             return {"available": False, "reason": f"Only {sample_count} comparable bullish windows; "
-                    f"{minimum_samples} required.", "sample_count": sample_count}
+                    f"{minimum_samples} required.", "sample_count": sample_count,
+                    "minimum_samples": minimum_samples, "reliability": "INSUFFICIENT_SAMPLE",
+                    "data_resolution": "DAILY", "direction": "BULLISH",
+                    "horizon_days": horizon_days, "target_percent": round(target_percent, 3),
+                    "adverse_barrier_percent": round(adverse_percent, 3)}
         stayed_above = sum(not item[1] for item in observations)
         target_first = sum(item[0] for item in observations)
         drawdowns = sorted(item[2] for item in observations)
@@ -140,6 +157,8 @@ class AdverseMoveRisk:
             "available": True, "model": "EMPIRICAL_BULLISH_BARRIER_STUDY",
             "horizon_days": horizon_days, "target_percent": round(target_percent, 3),
             "adverse_barrier_percent": round(adverse_percent, 3), "sample_count": sample_count,
+            "minimum_samples": minimum_samples, "reliability": "MEDIUM",
+            "data_resolution": "DAILY", "direction": "BULLISH",
             "probability_stays_above_adverse_barrier": round(stayed_above * 100 / sample_count, 2),
             "probability_target_before_adverse_barrier": round(target_first * 100 / sample_count, 2),
             "probability_adverse_barrier_before_target": round(

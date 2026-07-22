@@ -49,6 +49,9 @@ class AdverseMoveRiskTests(unittest.TestCase):
             horizon_days=5, minimum_samples=60,
         )
         self.assertTrue(result["available"])
+        self.assertEqual(result["minimum_samples"], 60)
+        self.assertEqual(result["reliability"], "MEDIUM")
+        self.assertEqual(result["data_resolution"], "DAILY")
         self.assertEqual(result["probability_stays_above_adverse_barrier"], 100.0)
         self.assertEqual(result["probability_adverse_barrier_before_target"], 0.0)
         self.assertGreater(result["probability_target_before_adverse_barrier"], 90)
@@ -78,6 +81,8 @@ class AdverseMoveRiskTests(unittest.TestCase):
             horizon_days=5, minimum_samples=40,
         )
         self.assertTrue(result["available"])
+        self.assertEqual(result["minimum_samples"], 40)
+        self.assertEqual(result["reliability"], "HIGH")
         self.assertEqual(result["data_resolution"], "15_MINUTE")
         self.assertEqual(result["probability_no_overnight_gap_beyond_barrier"], 100.0)
         self.assertGreater(result["probability_target_before_adverse_barrier"], 90)

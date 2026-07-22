@@ -124,6 +124,52 @@ The UI provides:
 - candidate, rejected-candidate, context, dependency-health, text, and JSON views;
 - single-symbol analysis;
 - SQLite-backed immutable report snapshots and downloadable JSON.
+- a report-grounded AI Analyst that can explain the current candidate, risk, and safe project source;
+- a guarded Codex Developer workspace with read-only explain/propose modes and an explicitly
+  confirmed implementation mode;
+- a read-only MCP server exposing the same candidate and project-context tools.
+
+## AI Analyst, MCP, and Codex
+
+Add an OpenAI API key to `.env` to enable the AI Analyst in Streamlit:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_ANALYST_MODEL=gpt-5.6-terra
+```
+
+The key remains server-side. Assistant context excludes `.env`, credentials, `.git`, caches,
+market-data files, and arbitrary filesystem paths. The analyst reads saved report snapshots and
+bounded safe source snippets; it cannot place orders or change analytical decisions.
+
+Run the same read-only tools as an MCP server over standard input:
+
+```bash
+.venv/bin/python run_mcp.py --transport stdio
+```
+
+For a ChatGPT developer-mode app, run the streamable HTTP transport behind an authenticated HTTPS
+endpoint or secure development tunnel:
+
+```bash
+.venv/bin/python run_mcp.py --transport streamable-http
+```
+
+The Streamlit Codex workspace requires an installed and authenticated Codex CLI on the server.
+Set `CODEX_EXECUTABLE` only when it is not available as `codex` on `PATH`. Its modes are:
+
+```bash
+npm install -g @openai/codex
+codex login
+```
+
+- `EXPLAIN`: read-only inspection and explanation;
+- `PROPOSE`: read-only diagnosis and patch plan;
+- `IMPLEMENT`: repository writes only after an explicit UI confirmation.
+
+Codex is instructed not to read secrets, place trades, push, deploy, install dependencies, or use
+network access. Review the Git diff and test result after every implementation run. Keep this
+developer workspace private; do not expose it as a public unauthenticated page.
 
 To stop the UI, close its Command Prompt window or press `Ctrl+C`.
 

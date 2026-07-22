@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import inspect
 import os
+from pathlib import Path
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from threading import Lock
@@ -19,6 +20,10 @@ from plotly.subplots import make_subplots
 
 from src.application.errors import PlatformError
 from src.application.platform import TradingPlatform
+from src.assistant import (CodexService, CodexUnavailableError, OpenAIAnalyst,
+                           OpenAIAuthenticationError, OpenAIConfigurationError,
+                           StockAnalyzerTools)
+from src.assistant.context_tools import UIContext
 from src.news.ai_sentiment import AISentimentAnalyzer
 from src.presenter.daily_report import DailyReportPresenter
 from src.ui.database import ReportDatabase
@@ -136,6 +141,57 @@ def hero(title: str, subtitle: str, badges: list[Any] | None = None) -> None:
 @st.cache_resource
 def services() -> tuple[TradingPlatform, ReportDatabase]:
     return TradingPlatform(), ReportDatabase()
+
+
+def missing_required_credentials(environment: dict[str, str] | None = None) -> list[str]:
+    """Return credentials that must exist before the selected data provider can start."""
+    environment = environment or os.environ
+    if str(environment.get("MARKET_DATA_SOURCE", "kite")).lower() != "kite":
+        return []
+    return [name for name in ("KITE_API_KEY", "KITE_ACCESS_TOKEN")
+            if not str(environment.get(name, "")).strip()]
+
+
+def apply_session_credentials() -> None:
+    """Restore temporary secrets on every Streamlit rerun without persisting them."""
+    for name in ("KITE_API_KEY", "KITE_ACCESS_TOKEN", "OPENAI_API_KEY"):
+        value_ = st.session_state.get(f"_session_credential_{name}")
+        if value_:
+            os.environ[name] = value_
+
+
+def required_credential_gate() -> None:
+    """Ask for required broker credentials before constructing the application platform."""
+    missing = missing_required_credentials()
+    if not missing:
+        return
+    apply_theme({})
+    hero("Connect market data", "Required credentials are missing. Sign in to continue; "
+         "values are kept only in this Streamlit process.", ["CREDENTIALS REQUIRED"])
+    st.warning("Kite market-data mode cannot start until the required credentials are supplied. "
+               "Nothing entered here is written to SQLite or project files.")
+    with st.form("required-kite-credentials", clear_on_submit=True):
+        api_key = (st.text_input("Kite API key", type="password", autocomplete="off")
+                   if "KITE_API_KEY" in missing else "")
+        access_token = (st.text_input("Kite access token", type="password", autocomplete="off",
+                                      help="Kite access tokens normally need daily renewal.")
+                        if "KITE_ACCESS_TOKEN" in missing else "")
+        submitted = st.form_submit_button("Sign in and continue", type="primary")
+    if submitted:
+        supplied = {"KITE_API_KEY": api_key, "KITE_ACCESS_TOKEN": access_token}
+        empty = [name for name in missing if not supplied.get(name, "").strip()]
+        if empty:
+            st.error("Enter all required values: " + ", ".join(empty))
+        else:
+            for name in missing:
+                value_ = supplied[name].strip()
+                st.session_state[f"_session_credential_{name}"] = value_
+                os.environ[name] = value_
+            services.clear()
+            st.rerun()
+    st.caption("For persistent local configuration, place KITE_API_KEY and KITE_ACCESS_TOKEN in "
+               "`.env`, then restart. Never commit that file.")
+    st.stop()
 
 
 @st.cache_resource
@@ -408,6 +464,70 @@ def adverse_before_target_probability(risk: dict[str, Any] | None) -> float | No
     return None if stayed_above is None else round(100 - float(stayed_above), 2)
 
 
+def _compact_percent(value_: Any, default: str = "—") -> str:
+    if value_ is None:
+        return default
+    numeric = float(value_)
+    return f"{numeric:g}%"
+
+
+def adverse_risk_view(risk: dict[str, Any] | None) -> dict[str, Any]:
+    """Build consistent, plain-language adverse-path content for every UI surface."""
+    risk = risk or {}
+    probability = adverse_before_target_probability(risk)
+    barrier = risk.get("adverse_barrier_percent")
+    target = risk.get("target_percent")
+    direction = str(risk.get("direction") or "BULLISH").upper()
+    movement = "Rise" if direction == "BEARISH" else "Fall"
+    past_tense = "rose" if direction == "BEARISH" else "fell"
+    barrier_text = _compact_percent(barrier, "adverse barrier")
+    label = f"{movement} {barrier_text} before target"
+    sample_count = int(risk.get("sample_count") or 0)
+    available = bool(risk.get("available")) and probability is not None
+    reliability = str(risk.get("reliability") or (
+        "HIGH" if available and risk.get("data_resolution") == "15_MINUTE"
+        else "MEDIUM" if available else "UNAVAILABLE"
+    )).replace("_", " ")
+    if available:
+        cases = f"{probability:g}"
+        explanation = (f"In {cases} of every 100 comparable historical cases, the stock "
+                       f"{past_tense} {barrier_text} before reaching this target.")
+    else:
+        explanation = ("This probability is unavailable. "
+                       + str(risk.get("reason") or "There is not enough comparable history."))
+    return {
+        "available": available, "probability": probability, "label": label,
+        "explanation": explanation, "sample_count": sample_count,
+        "minimum_samples": risk.get("minimum_samples"),
+        "horizon": (f"{int(risk['horizon_days'])} trading days"
+                    if risk.get("horizon_days") is not None else "Unavailable"),
+        "target": _compact_percent(target, "Unavailable"),
+        "barrier": barrier_text,
+        "resolution": str(risk.get("data_resolution") or "UNAVAILABLE").replace("_", " "),
+        "reliability": reliability,
+        "status": "AVAILABLE" if available else "UNAVAILABLE",
+    }
+
+
+def render_adverse_risk_panel(risk: dict[str, Any] | None) -> None:
+    """Show the percentage first, followed by its meaning and evidence quality."""
+    view = adverse_risk_view(risk)
+    probability = f"{view['probability']:.1f}%" if view["probability"] is not None else "—"
+    st.markdown("**Historical price-path risk**")
+    render_metric_cards([
+        (view["label"], probability),
+        ("Comparable cases", view["sample_count"]),
+        ("Time horizon", view["horizon"]),
+        ("Target move", view["target"]),
+        ("Data resolution", view["resolution"]),
+        ("Estimate reliability", view["reliability"]),
+    ])
+    (st.info if view["available"] else st.warning)(view["explanation"])
+    minimum = view.get("minimum_samples")
+    if minimum is not None:
+        st.caption(f"Availability: {view['status']} · Sample requirement: at least {minimum} comparable cases.")
+
+
 def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | None = None) -> list[dict[str, Any]]:
     execution_marks = execution_marks or {}
     rows = []
@@ -433,13 +553,14 @@ def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | Non
             "Resistance": trade.get("levels", {}).get("resistance"),
             "Relative strength": trade.get("relative_strength", {}).get("score"),
             "RS status": trade.get("relative_strength", {}).get("status"),
-            "Stay above -3%": trade.get("adverse_move_risk", {}).get(
+            "Stay above adverse barrier": trade.get("adverse_move_risk", {}).get(
                 "probability_stays_above_adverse_barrier"),
-            "Target before -3%": trade.get("adverse_move_risk", {}).get(
+            "Target before adverse barrier": trade.get("adverse_move_risk", {}).get(
                 "probability_target_before_adverse_barrier"),
-            "Fall 3% before target": adverse_before_target_probability(
+            "Adverse move before target": adverse_before_target_probability(
                 trade.get("adverse_move_risk")),
-            "No overnight gap >3%": trade.get("adverse_move_risk", {}).get(
+            "Adverse barrier": trade.get("adverse_move_risk", {}).get("adverse_barrier_percent"),
+            "No overnight gap beyond barrier": trade.get("adverse_move_risk", {}).get(
                 "probability_no_overnight_gap_beyond_barrier"),
             "Event risk": event.get("event_risk_score"),
             "Event data": event.get("event_data_availability_state"),
@@ -596,10 +717,11 @@ def candidate_table_config() -> dict[str, Any]:
         "Resistance": st.column_config.NumberColumn(format="₹%.2f"),
         "Trigger price": st.column_config.NumberColumn(format="₹%.2f"),
         "Event risk": st.column_config.NumberColumn(format="%.0f"),
-        "Stay above -3%": st.column_config.NumberColumn(format="%.1f%%"),
-        "Target before -3%": st.column_config.NumberColumn(format="%.1f%%"),
-        "Fall 3% before target": st.column_config.NumberColumn(format="%.1f%%"),
-        "No overnight gap >3%": st.column_config.NumberColumn(format="%.1f%%"),
+        "Stay above adverse barrier": st.column_config.NumberColumn(format="%.1f%%"),
+        "Target before adverse barrier": st.column_config.NumberColumn(format="%.1f%%"),
+        "Adverse move before target": st.column_config.NumberColumn(format="%.1f%%"),
+        "Adverse barrier": st.column_config.NumberColumn(format="%.1f%%"),
+        "No overnight gap beyond barrier": st.column_config.NumberColumn(format="%.1f%%"),
         "Selection reason": st.column_config.TextColumn(width="large"),
     }
 
@@ -742,6 +864,7 @@ def render_candidate_cards(platform: TradingPlatform, report: dict[str, Any],
             with column.container(border=True):
                 levels = trade.get("levels") or {}
                 adverse = trade.get("adverse_move_risk") or {}
+                adverse_view = adverse_risk_view(adverse)
                 status = trade.get("status", "WATCHLIST")
                 symbol = str(trade.get("symbol", "UNKNOWN"))
                 option_signal = option_confirmation(trade)
@@ -762,8 +885,8 @@ def render_candidate_cards(platform: TradingPlatform, report: dict[str, Any],
                     f'<div class="candidate-targets">Targets: {money(levels.get("target_1"))} · '
                     f'{money(levels.get("target_2"))}<br>Readiness: '
                     f'{number(trade.get("execution_readiness_score"), 0)}<br>'
-                    f'Fall 3% before target: '
-                    f'{number(adverse_before_target_probability(adverse), 1)}%</div>',
+                    f'{adverse_view["label"]}: '
+                    f'{_compact_percent(adverse_view["probability"])}</div>',
                     unsafe_allow_html=True,
                 )
                 if st.button("Open trade details",
@@ -803,7 +926,7 @@ def render_candidate_comparison(report: dict[str, Any]) -> None:
         ("Stop loss", lambda item: (item.get("levels") or {}).get("stop_loss")),
         ("Relative strength", lambda item: (item.get("relative_strength") or {}).get("score")),
         ("Event risk", lambda item: (item.get("event_risk") or {}).get("event_risk_score")),
-        ("Fall 3% before target (%)", lambda item: adverse_before_target_probability(
+        ("Adverse move before target (%)", lambda item: adverse_before_target_probability(
             item.get("adverse_move_risk"))),
         ("Option approval", lambda item: (item.get("option_trade_approval") or {}).get("status")),
     )
@@ -819,6 +942,7 @@ def render_trade_detail(platform: TradingPlatform, report: dict[str, Any], trade
                         key_prefix: str = "detail") -> None:
     levels = trade.get("levels") or {}
     adverse = trade.get("adverse_move_risk") or {}
+    adverse_view = adverse_risk_view(adverse)
     run_id, symbol = str(report.get("run_id", "")), str(trade.get("symbol", ""))
     selection = trade.get("entry_selection") or {}
     selection_status = trade.get("selection_status") or selection.get("status")
@@ -831,17 +955,17 @@ def render_trade_detail(platform: TradingPlatform, report: dict[str, Any], trade
         ("Resistance", money(levels.get("resistance"))),
         ("Risk / reward", number(levels.get("risk_reward"))),
         ("Quality", number(trade.get("quality_score"), 0)),
-        ("Fall 3% before target", (number(adverse_before_target_probability(adverse), 1) + "%")
-         if adverse_before_target_probability(adverse) is not None else "—"),
+        (adverse_view["label"], _compact_percent(adverse_view["probability"])),
     ])
     render_price_chart(platform, symbol, levels)
     option = trade.get("option_strategy") or {}
     plan = option.get("trade") or {}
-    detail_tabs = st.tabs(["Trade plan", "Decision trail", "Evidence", "Options", "Record trade"])
+    detail_tabs = st.tabs(["Trade plan", "Decision trail", "Evidence", "Options", "Ask AI", "Record trade"])
     with detail_tabs[0]:
         st.dataframe(pd.DataFrame([{"Entry": levels.get("entry"), "Stop loss": levels.get("stop_loss"),
             "Target 1": levels.get("target_1"), "Target 2": levels.get("target_2"),
             "Target 3": levels.get("target_3")}]), width="stretch", hide_index=True)
+        render_adverse_risk_panel(adverse)
         st.markdown("**Execution checklist**")
         for check in decision_checks(trade):
             icon = "✓" if check["passed"] else "✕"
@@ -873,6 +997,12 @@ def render_trade_detail(platform: TradingPlatform, report: dict[str, Any], trade
         else:
             st.info((option.get("rejection") or {}).get("reason", "No executable option structure approved."))
     with detail_tabs[4]:
+        if database:
+            render_ai_chat(database, symbol=symbol, report=report,
+                           scope=f"candidate-{run_id}-{symbol}", compact=True)
+        else:
+            st.info("AI context requires the local report database.")
+    with detail_tabs[5]:
         if database:
             start_recommended_trade_control(platform, database, run_id, trade, key_prefix)
         else:
@@ -1098,6 +1228,7 @@ def selected_stock_details(platform: TradingPlatform, report: dict[str, Any],
                 "Target 1": levels.get("target_1"), "Target 2": levels.get("target_2"),
                 "Target 3": levels.get("target_3"),
             }]), width="stretch", hide_index=True)
+            render_adverse_risk_panel(trade.get("adverse_move_risk"))
             st.write(f"**Option strategy:** {plan.get('strategy', option.get('strategy', 'UNAVAILABLE'))}")
             st.write(f"**Expiry:** {plan.get('expiry', option.get('expiry', 'UNAVAILABLE'))}")
             st.write(f"**Canonical structure:** {trade.get('option_structure', {}).get('status', 'UNAVAILABLE')}")
@@ -1289,7 +1420,8 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
                          column_config=candidate_table_config(),
                          column_order=("Symbol", "Status", "Action", "Quality", "Quality score",
                                        "Readiness", "R:R", "Trigger price", "Support", "Resistance",
-                                       "Fall 3% before target", "Target before -3%",
+                                       "Adverse barrier", "Adverse move before target",
+                                       "Target before adverse barrier",
                                        "Option approval", "Event risk", "Selection reason"))
             st.download_button("Export candidate CSV", pd.DataFrame(filtered).to_csv(index=False).encode(),
                                file_name=f"candidates-{report.get('date', 'latest')}.csv",
@@ -1672,15 +1804,19 @@ def bearish_options_page(platform: TradingPlatform, database: ReportDatabase) ->
             columns[2].metric("Relative volume", candidate["relative_volume"])
             columns[3].metric("Approval", candidate["option_trade_approval"]["status"])
             risk = candidate.get("adverse_move_risk", {})
+            risk_view = adverse_risk_view(risk)
             filters = candidate.get("stock_selection_filters", {})
             st.dataframe(pd.DataFrame([{
                 "Bearish stock filters": "PASS" if filters.get("passed") else "FAIL",
-                "Target before +3%": risk.get("probability_target_before_adverse_barrier"),
+                f"Target before +{risk_view['barrier']}": risk.get(
+                    "probability_target_before_adverse_barrier"),
+                risk_view["label"]: risk_view["probability"],
                 "No upward overnight gap": risk.get("probability_no_overnight_gap_beyond_barrier"),
                 "Path samples": risk.get("sample_count"),
                 "Relative strength vs Nifty": candidate.get("relative_strength", {}).get("relative_strength"),
                 "Sector score": candidate.get("sector_context", {}).get("score"),
             }]), width="stretch", hide_index=True)
+            render_adverse_risk_panel(risk)
             levels = candidate.get("levels", {})
             st.dataframe(pd.DataFrame([{
                 "Support": levels.get("support"), "Resistance": levels.get("resistance"),
@@ -2522,7 +2658,187 @@ def system_page(platform: TradingPlatform, database: ReportDatabase) -> None:
     )
 
 
+def _report_id_for(database: ReportDatabase, report: dict[str, Any] | None) -> int | None:
+    if not report:
+        rows = database.list_reports(1)
+        return int(rows[0]["id"]) if rows else None
+    run_id = str(report.get("run_id") or "")
+    row = next((item for item in database.list_reports(100)
+                if str(item.get("run_id")) == run_id), None)
+    return int(row["id"]) if row else None
+
+
+def render_ai_chat(database: ReportDatabase, symbol: str | None = None,
+                   report: dict[str, Any] | None = None, scope: str = "global",
+                   compact: bool = False) -> None:
+    """Context-aware analyst conversation grounded in saved data and safe source reads."""
+    tools = StockAnalyzerTools(database, Path(__file__).resolve().parent)
+    session_api_key = st.session_state.get("_openai_session_api_key")
+    analyst = OpenAIAnalyst(api_key=session_api_key)
+    report_id = _report_id_for(database, report)
+    history_key = f"ai_chat_history_{scope}"
+    history = st.session_state.setdefault(history_key, [])
+    status_columns = st.columns(3)
+    status_columns[0].metric("OpenAI", "READY" if analyst.configured else "SETUP NEEDED")
+    status_columns[1].metric("Report", report.get("run_id", "Latest") if report else "Latest")
+    status_columns[2].metric("Stock context", symbol or "Entire report")
+    if not analyst.configured:
+        st.warning("OpenAI sign-in is required before live answers can be generated.")
+        with st.form(f"openai-sign-in-{scope}", clear_on_submit=True):
+            supplied_key = st.text_input(
+                "OpenAI API key", type="password", autocomplete="off",
+                help="Used only in this Streamlit session. It is not saved to SQLite or project files.")
+            sign_in = st.form_submit_button("Sign in for this session", type="primary")
+        if sign_in:
+            if supplied_key.strip():
+                st.session_state["_openai_session_api_key"] = supplied_key.strip()
+                st.session_state.pop("_openai_auth_error", None)
+                st.rerun()
+            else:
+                st.error("Enter an OpenAI API key to continue.")
+        st.caption("For persistent server-side setup, configure OPENAI_API_KEY in `.env` and restart. "
+                   "A ChatGPT subscription login is separate from OpenAI API authentication.")
+    elif session_api_key:
+        signout_col, note_col = st.columns([1, 3])
+        if signout_col.button("Sign out", key=f"openai-sign-out-{scope}"):
+            st.session_state.pop("_openai_session_api_key", None)
+            st.rerun()
+        note_col.caption("Signed in with a session-only API key; it will be forgotten when this session ends.")
+    if st.session_state.get("_openai_auth_error"):
+        st.error(st.session_state["_openai_auth_error"])
+    for message in history[-12:]:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            if message.get("meta"):
+                st.caption(message["meta"])
+    suggestions = (["Why was this stock selected?", "Explain the fall risk in simple language.",
+                    "Which checks passed or failed?", "How is this calculation implemented?"]
+                   if symbol else
+                   ["Summarize today's selected stocks.", "Which candidate has the lowest path risk?",
+                    "Why are stocks on the watchlist?", "Explain the project decision architecture."])
+    if not compact:
+        st.caption("Suggested: " + " · ".join(suggestions))
+    with st.form(f"ai-question-{scope}", clear_on_submit=True):
+        question = st.text_area("Ask about the current stock, report, UI, or project code",
+                                height=80, placeholder=suggestions[0], key=f"ai-input-{scope}")
+        ask = st.form_submit_button("Ask AI", type="primary", disabled=not analyst.configured)
+    clear_col, context_col = st.columns(2)
+    if clear_col.button("Clear conversation", key=f"clear-ai-{scope}", disabled=not history):
+        st.session_state[history_key] = []
+        st.rerun()
+    if context_col.toggle("Show context preview", key=f"context-preview-{scope}"):
+        preview = tools.context_for_question(
+            question or "current selection", UIContext(page="AI Assistant", symbol=symbol,
+                                                        report_id=report_id))
+        st.json(preview, expanded=False)
+    if ask and question.strip():
+        user_question = question.strip()
+        history.append({"role": "user", "content": user_question})
+        context = tools.context_for_question(
+            user_question, UIContext(page="Candidate Ask AI" if symbol else "AI Assistant",
+                                     symbol=symbol, report_id=report_id, active_tab="Ask AI"))
+        try:
+            with st.spinner("Reading the current report and relevant project evidence…"):
+                result = analyst.answer(user_question, context, history[:-1])
+            source_bits = [f"model {result['model']}"]
+            if report_id:
+                source_bits.append(f"report #{report_id}")
+            if context.get("project_search", {}).get("results"):
+                paths = sorted({item["path"] for item in context["project_search"]["results"]})[:4]
+                source_bits.append("code: " + ", ".join(paths))
+            history.append({"role": "assistant", "content": result["text"],
+                            "meta": " · ".join(source_bits)})
+            st.rerun()
+        except OpenAIAuthenticationError as exc:
+            st.session_state.pop("_openai_session_api_key", None)
+            st.session_state["_openai_auth_error"] = str(exc)
+            history.append({"role": "assistant", "content":
+                            "Authentication is required before I can answer. Please sign in above."})
+            st.rerun()
+        except (OpenAIConfigurationError, RuntimeError) as exc:
+            history.append({"role": "assistant", "content": f"I could not answer: {exc}"})
+            st.rerun()
+
+
+def ai_assistant_page(database: ReportDatabase) -> None:
+    hero("AI Analyst", "Ask grounded questions about the current UI, saved reports, candidates, "
+         "risk calculations, and safe project source.", ["READ ONLY", "REPORT GROUNDED"])
+    reports = database.list_reports(100)
+    if not reports:
+        st.info("Generate and save a daily report before asking report-specific questions.")
+        render_ai_chat(database, scope="global-no-report")
+        return
+    labels = {f"{row['report_date']} · {row['run_id']}": row for row in reports}
+    selected_label = st.selectbox("Report context", list(labels), key="ai-report-context")
+    selected_row = labels[selected_label]
+    report = database.get_report(int(selected_row["id"])) or {}
+    candidates = [*report.get("trades", []), *report.get("watchlist", []), *report.get("rejected", [])]
+    symbols = ["Entire report", *dict.fromkeys(str(item.get("symbol")) for item in candidates
+                                               if item.get("symbol"))]
+    selected_symbol = st.selectbox("Stock context", symbols, key="ai-symbol-context")
+    render_ai_chat(database, None if selected_symbol == "Entire report" else selected_symbol,
+                   report, scope=f"global-{selected_row['run_id']}-{selected_symbol}")
+
+
+def codex_workspace_page(database: ReportDatabase) -> None:
+    hero("Codex Developer", "Inspect, propose, and—with explicit approval—implement project fixes.",
+         ["REPOSITORY SANDBOX", "NO TRADING"])
+    service = CodexService(Path(__file__).resolve().parent)
+    left, right, third = st.columns(3)
+    left.metric("Codex CLI", "READY" if service.configured else "SETUP NEEDED")
+    right.metric("Repository", "stock-analyzer")
+    third.metric("Default permission", "PROPOSE")
+    if not service.configured:
+        st.warning("Codex CLI is not installed or not on PATH. Install and authenticate Codex on the "
+                   "server running Streamlit, then restart the UI.")
+        with st.expander("Codex setup and login", expanded=True):
+            st.code("npm install -g @openai/codex\ncodex login", language="bash")
+            st.caption("Complete the Codex login in the server terminal or browser it opens. "
+                       "Credentials are managed by Codex and are never collected by this UI.")
+            if st.button("Refresh Codex status", key="refresh-codex-status"):
+                st.rerun()
+    st.info("Codex is instructed not to place trades, push, deploy, install dependencies, use network "
+            "access, or read credentials. Review every result and Git diff before keeping a change.")
+    mode = st.radio("Permission mode", ("EXPLAIN", "PROPOSE", "IMPLEMENT"), index=1,
+                    horizontal=True, key="codex-mode",
+                    help="EXPLAIN and PROPOSE are read-only. IMPLEMENT can edit project files.")
+    with st.form("codex-request-form"):
+        request = st.text_area("Development request", height=140,
+                               placeholder="Find why the risk label is unavailable and propose a tested fix.")
+        confirmation = (st.checkbox(
+            "I authorize Codex to edit repository files for this request. I will review the diff.")
+            if mode == "IMPLEMENT" else True)
+        run_codex = st.form_submit_button(
+            "Run Codex", type="primary", disabled=not service.configured or not confirmation)
+    if run_codex and request.strip():
+        try:
+            with st.spinner(f"Codex {mode.lower()} session is running…"):
+                result = service.run(request.strip(), mode, confirmed=bool(confirmation))
+            st.session_state["last_codex_result"] = {
+                "mode": result.mode, "output": result.output,
+                "return_code": result.return_code, "event_count": len(result.events),
+            }
+        except (CodexUnavailableError, PermissionError, ValueError, RuntimeError, OSError) as exc:
+            st.error(str(exc))
+    result = st.session_state.get("last_codex_result")
+    if result:
+        st.subheader(f"Latest Codex result · {result['mode']}")
+        auth_needed = (result["return_code"] != 0 and any(
+            phrase in result["output"].lower()
+            for phrase in ("login", "log in", "authentication", "unauthorized", "sign in")))
+        if auth_needed:
+            st.warning("Codex login is required. Run `codex login` on the Streamlit server, complete "
+                       "authentication, then use Refresh Codex status.")
+        else:
+            (st.success if result["return_code"] == 0 else st.error)(
+                f"Process exit code {result['return_code']} · {result['event_count']} streamed events")
+        st.markdown(result["output"])
+        st.caption("Inspect `git diff` before retaining code changes. Codex does not commit or push.")
+
+
 def main() -> None:
+    apply_session_credentials()
+    required_credential_gate()
     platform, database = services()
     preferences = database.get_preferences()
     apply_theme(preferences)
@@ -2538,6 +2854,7 @@ def main() -> None:
             "Dashboard": "Dashboard", "Opportunities": "Opportunities",
             "Positions": "Positions", "Daily report": "Daily report",
             "Analyze stock": "Analyze", "Bearish options": "Bearish options",
+            "AI analyst": "AI Assistant", "Codex developer": "Codex",
             "Watchlists & alerts": "Watchlists", "Report history": "History",
             "System & diagnostics": "System",
         }
@@ -2624,6 +2941,10 @@ def main() -> None:
         analyze_page(platform)
     elif page == "Bearish options":
         bearish_options_page(platform, database)
+    elif page == "AI Assistant":
+        ai_assistant_page(database)
+    elif page == "Codex":
+        codex_workspace_page(database)
     elif page == "History":
         history_page(platform, database)
     elif page == "Watchlists":

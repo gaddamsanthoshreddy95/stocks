@@ -1,0 +1,86 @@
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+from src.assistant.codex_service import CodexService
+from src.assistant.context_tools import StockAnalyzerTools, UIContext
+from src.assistant.openai_assistant import (OpenAIAnalyst, OpenAIAuthenticationError,
+                                            OpenAIConfigurationError)
+from src.ui.database import ReportDatabase
+
+
+class AssistantIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.directory.name)
+        (self.root / "src").mkdir()
+        (self.root / "src" / "risk.py").write_text(
+            "def adverse_probability():\n    return 18\n", encoding="utf-8")
+        (self.root / ".env").write_text("OPENAI_API_KEY=secret", encoding="utf-8")
+        self.database = ReportDatabase(self.root / "reports.db")
+        self.report_id = self.database.save_report({
+            "run_id": "run-ai", "date": "2026-07-22", "market": {}, "summary": {},
+            "trades": [{"symbol": "SBIN", "status": "TRADE", "final_action": "BUY",
+                        "selection_reason": "Strong evidence", "quality_score": 82,
+                        "levels": {"entry": 800, "target_1": 850},
+                        "adverse_move_risk": {
+                            "available": True, "adverse_barrier_percent": 3,
+                            "probability_adverse_barrier_before_target": 18}}],
+            "watchlist": [], "rejected": [],
+        }, "cache")
+        self.tools = StockAnalyzerTools(self.database, self.root)
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def test_candidate_summary_is_grounded_in_saved_report(self):
+        result = self.tools.candidate_summary("sbin", self.report_id)
+        self.assertTrue(result["available"])
+        self.assertEqual(result["decision"]["quality_score"], 82)
+        self.assertEqual(result["adverse_move_risk"][
+            "probability_adverse_barrier_before_target"], 18)
+
+    def test_project_search_and_read_exclude_secrets(self):
+        results = self.tools.search_project("adverse probability")["results"]
+        self.assertEqual(results[0]["path"], "src/risk.py")
+        with self.assertRaises(ValueError):
+            self.tools.read_project_file(".env")
+        with self.assertRaises(ValueError):
+            self.tools.read_project_file("../outside.py")
+
+    def test_question_context_adds_candidate_and_relevant_source(self):
+        context = self.tools.context_for_question(
+            "How is adverse probability calculated in code?",
+            UIContext(symbol="SBIN", report_id=self.report_id),
+        )
+        self.assertEqual(context["candidate"]["decision"]["symbol"], "SBIN")
+        self.assertEqual(context["project_snippets"][0]["path"], "src/risk.py")
+
+    def test_unconfigured_openai_client_fails_with_setup_instruction(self):
+        client = OpenAIAnalyst(api_key="")
+        client.api_key = None
+        with self.assertRaises(OpenAIConfigurationError):
+            client.answer("why", {})
+
+    def test_openai_output_parser_handles_responses_message(self):
+        payload = {"output": [{"type": "message", "content": [
+            {"type": "output_text", "text": "Grounded answer"}]}]}
+        self.assertEqual(OpenAIAnalyst._output_text(payload), "Grounded answer")
+
+    @patch("src.assistant.openai_assistant.requests.post")
+    def test_invalid_openai_key_becomes_login_request(self, post):
+        response = Mock(ok=False, status_code=401, text="unauthorized")
+        response.json.return_value = {"error": {"message": "invalid key"}}
+        post.return_value = response
+        with self.assertRaises(OpenAIAuthenticationError):
+            OpenAIAnalyst(api_key="bad-key").answer("why", {})
+
+    def test_codex_implementation_requires_confirmation(self):
+        service = CodexService(self.root, executable="definitely-not-installed-codex")
+        with self.assertRaises(PermissionError):
+            service.run("change code", "IMPLEMENT", confirmed=False)
+
+
+if __name__ == "__main__":
+    unittest.main()

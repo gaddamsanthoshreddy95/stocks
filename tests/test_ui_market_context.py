@@ -3,16 +3,46 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from ui_app import (candidate_rows, likely_news_reaction, news_impact, news_rows,
+from ui_app import (adverse_risk_view, candidate_rows, likely_news_reaction, news_impact, news_rows,
                     data_age, decision_checks, decision_timeline, display_date,
                     candidate_history_rows, opportunity_groups, option_leg_rows, outcome_rows,
                     option_confirmation, freshness_status, ranking_explanation,
                     ranked_opportunity_rows, price_figure, report_changes,
+                    missing_required_credentials,
                     portfolio_snapshot, primary_blocker, rejection_summary, snapshot_rows,
                     trade_override_required, trade_performance, _trade_status)
 
 
 class UIMarketContextTests(unittest.TestCase):
+    def test_required_credentials_depend_on_market_data_mode(self):
+        self.assertEqual(missing_required_credentials({"MARKET_DATA_SOURCE": "cache"}), [])
+        self.assertEqual(
+            missing_required_credentials({"MARKET_DATA_SOURCE": "kite", "KITE_API_KEY": "key"}),
+            ["KITE_ACCESS_TOKEN"],
+        )
+        self.assertEqual(missing_required_credentials({
+            "MARKET_DATA_SOURCE": "kite", "KITE_API_KEY": "key",
+            "KITE_ACCESS_TOKEN": "token"}), [])
+
+    def test_adverse_risk_view_uses_dynamic_barrier_and_plain_language(self):
+        result = adverse_risk_view({
+            "available": True, "direction": "BULLISH", "adverse_barrier_percent": 2.5,
+            "target_percent": 4, "horizon_days": 5, "sample_count": 80,
+            "data_resolution": "15_MINUTE", "reliability": "HIGH",
+            "probability_adverse_barrier_before_target": 18,
+        })
+        self.assertEqual(result["label"], "Fall 2.5% before target")
+        self.assertIn("In 18 of every 100 comparable historical cases", result["explanation"])
+        self.assertEqual(result["horizon"], "5 trading days")
+        self.assertEqual(result["target"], "4%")
+        self.assertEqual(result["resolution"], "15 MINUTE")
+
+    def test_adverse_risk_view_explains_unavailable_estimate(self):
+        result = adverse_risk_view({"available": False, "sample_count": 12,
+                                    "reason": "40 comparable cases required."})
+        self.assertFalse(result["available"])
+        self.assertIn("unavailable", result["explanation"].lower())
+
     def test_option_confirmation_scores_approved_liquid_tight_structure(self):
         result = option_confirmation({
             "option_status": "CONFIRMED",
