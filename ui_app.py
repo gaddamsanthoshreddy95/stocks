@@ -427,6 +427,134 @@ def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | Non
     return rows
 
 
+def option_confirmation(candidate: dict[str, Any]) -> dict[str, Any]:
+    """Summarize existing Zerodha option evidence without inventing missing signals."""
+    approval = candidate.get("option_trade_approval") or {}
+    option = candidate.get("option_strategy") or {}
+    plan = option.get("trade") or {}
+    legs = plan.get("legs") or []
+    context = candidate.get("option_context") or {}
+    directional = str(candidate.get("option_status") or
+                      context.get("directional_support") or "UNAVAILABLE").upper()
+    scores: list[float] = []
+    reasons: list[str] = []
+    if approval:
+        approved = bool(approval.get("approved") or approval.get("status") == "APPROVED")
+        scores.append(100.0 if approved else 25.0)
+        reasons.append("structure approved" if approved else "structure not approved")
+    if directional not in {"", "UNAVAILABLE", "UNKNOWN", "NONE"}:
+        directional_score = {"CONFIRMED": 100, "STRONG": 100, "SUPPORTIVE": 85,
+                             "NEUTRAL": 55, "MIXED": 45, "WEAK": 35,
+                             "CONFLICT": 10, "UNRELIABLE": 10}.get(directional, 50)
+        scores.append(float(directional_score))
+        reasons.append(f"directional evidence {directional.lower()}")
+    spreads = []
+    liquid_legs = 0
+    for leg in legs:
+        bid, ask = leg.get("bid"), leg.get("ask")
+        try:
+            midpoint = (float(bid) + float(ask)) / 2
+            if midpoint > 0:
+                spreads.append((float(ask) - float(bid)) / midpoint * 100)
+        except (TypeError, ValueError):
+            pass
+        try:
+            liquid_legs += int(float(leg.get("open_interest") or 0) > 0 and
+                               float(leg.get("volume") or 0) > 0)
+        except (TypeError, ValueError):
+            pass
+    if spreads:
+        average_spread = sum(spreads) / len(spreads)
+        scores.append(90 if average_spread <= 2 else 70 if average_spread <= 5 else
+                      40 if average_spread <= 10 else 15)
+        reasons.append(f"average bid/ask spread {average_spread:.1f}%")
+    else:
+        average_spread = None
+    if legs:
+        liquidity_ratio = liquid_legs / len(legs)
+        scores.append(liquidity_ratio * 100)
+        reasons.append(f"{liquid_legs}/{len(legs)} legs have OI and volume")
+    if not scores:
+        return {"score": None, "label": "Unavailable", "reason": "No option evidence recorded.",
+                "spread_percent": None}
+    score = round(sum(scores) / len(scores))
+    label = "Confirmed" if score >= 75 else "Mixed" if score >= 45 else "Avoid options"
+    return {"score": score, "label": label, "reason": "; ".join(reasons),
+            "spread_percent": round(average_spread, 2) if average_spread is not None else None}
+
+
+def freshness_status(generated_at: Any, now: datetime | None = None) -> dict[str, str]:
+    """Classify report age so cached or old recommendations are visually obvious."""
+    age = data_age(generated_at, now)
+    try:
+        timestamp = datetime.fromisoformat(str(generated_at).replace("Z", "+00:00"))
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        hours = max(0, ((now or datetime.now(timezone.utc)) - timestamp).total_seconds() / 3600)
+    except (TypeError, ValueError):
+        return {"label": "UNKNOWN", "age": age}
+    label = "FRESH" if hours <= 1 else "AGING" if hours <= 24 else "STALE"
+    return {"label": label, "age": age}
+
+
+def ranking_explanation(candidate: dict[str, Any]) -> str:
+    """Explain the strongest positive and negative contributors in plain language."""
+    positives, negatives = [], []
+    quality = candidate.get("quality_score")
+    readiness = candidate.get("execution_readiness_score")
+    rr = (candidate.get("levels") or {}).get("risk_reward")
+    relative = (candidate.get("relative_strength") or {}).get("score")
+    options = option_confirmation(candidate)
+    if quality is not None:
+        (positives if float(quality) >= 70 else negatives).append(f"quality {float(quality):.0f}")
+    if readiness is not None:
+        (positives if float(readiness) >= 70 else negatives).append(f"readiness {float(readiness):.0f}")
+    if rr is not None:
+        (positives if float(rr) >= 2 else negatives).append(f"R:R {float(rr):.2f}")
+    if relative is not None:
+        (positives if float(relative) >= 60 else negatives).append(f"relative strength {float(relative):.0f}")
+    if options["score"] is not None:
+        (positives if options["score"] >= 75 else negatives).append(
+            f"options {options['label'].lower()} ({options['score']})")
+    parts = []
+    if positives:
+        parts.append("Supports: " + ", ".join(positives[:3]))
+    if negatives:
+        parts.append("Limits: " + ", ".join(negatives[:3]))
+    return ". ".join(parts) or "Insufficient scoring evidence."
+
+
+def ranked_opportunity_rows(candidates: list[dict[str, Any]], generated_at: Any,
+                            previous: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Build one sortable decision table across trades, watchlist, and rejections."""
+    changes = {row["Symbol"]: row for row in report_changes(
+        {"trades": [c for c in candidates if c.get("_opportunity_source") == "TRADE"],
+         "watchlist": [c for c in candidates if c.get("_opportunity_source") == "WATCHLIST"],
+         "rejected": [c for c in candidates if c.get("_opportunity_source") == "REJECTED"]}, previous)}
+    freshness = freshness_status(generated_at)
+    ordered = sorted(candidates, key=lambda item: (
+        -float(item.get("quality_score") or 0),
+        -float(item.get("execution_readiness_score") or 0), str(item.get("symbol"))))
+    rows = []
+    for rank, item in enumerate(ordered, 1):
+        option = option_confirmation(item)
+        change = changes.get(str(item.get("symbol")), {})
+        rows.append({"Rank": rank, "Symbol": item.get("symbol"),
+                     "Action": item.get("final_action") or item.get("status"),
+                     "Quality": item.get("quality_score"),
+                     "Readiness": item.get("execution_readiness_score"),
+                     "R:R": (item.get("levels") or {}).get("risk_reward"),
+                     "Sector strength": (item.get("sector_context") or {}).get("score"),
+                     "Options": option["label"], "Option score": option["score"],
+                     "Data": f"{freshness['label']} · {freshness['age']}",
+                     "Change": change.get("Change", "UNCHANGED"),
+                     "Score Δ": change.get("Score change"),
+                     "Why ranked": ranking_explanation(item),
+                     "Primary blocker": primary_blocker(item) if
+                     item.get("_opportunity_source") == "REJECTED" else "—"})
+    return rows
+
+
 def option_leg_rows(trade: dict[str, Any]) -> list[dict[str, Any]]:
     option = trade.get("option_strategy", {})
     plan = option.get("trade") or {}
@@ -590,10 +718,11 @@ def render_candidate_cards(platform: TradingPlatform, report: dict[str, Any],
                 levels = trade.get("levels") or {}
                 status = trade.get("status", "WATCHLIST")
                 symbol = str(trade.get("symbol", "UNKNOWN"))
+                option_signal = option_confirmation(trade)
                 st.markdown(
                     f'<div class="candidate-title">{symbol}</div>'
                     f'<div class="badge-row">{badge(status)}{badge(trade.get("final_action"))}'
-                    f'{badge(trade.get("quality_grade"))}</div>',
+                    f'{badge(trade.get("quality_grade"))}{badge("OPTIONS " + option_signal["label"])}</div>',
                     unsafe_allow_html=True,
                 )
                 st.markdown(f'<div class="candidate-reason">{trade.get("selection_reason") or "No summary supplied."}</div>',
@@ -695,6 +824,14 @@ def render_trade_detail(platform: TradingPlatform, report: dict[str, Any], trade
             for note in filter(None, notes):
                 st.write(f"• {note}")
     with detail_tabs[3]:
+        option_signal = option_confirmation(trade)
+        render_metric_cards([
+            ("Option confirmation", option_signal["label"]),
+            ("Confirmation score", number(option_signal["score"], 0)),
+            ("Average spread", (number(option_signal["spread_percent"], 1) + "%")
+             if option_signal["spread_percent"] is not None else "—"),
+        ])
+        st.caption(option_signal["reason"])
         st.caption(f"{plan.get('strategy', option.get('strategy', 'No approved strategy'))} · "
                    f"Expiry {plan.get('expiry', option.get('expiry', 'unavailable'))}")
         legs = option_leg_rows(trade)
@@ -1289,8 +1426,9 @@ def dashboard(platform: TradingPlatform, database: ReportDatabase) -> None:
 
 def opportunities_page(platform: TradingPlatform, database: ReportDatabase) -> None:
     """Decision-oriented view of the newest immutable report."""
-    history = database.list_reports(1)
+    history = database.list_reports(2)
     latest = database.get_report(history[0]["id"]) if history else None
+    previous = database.get_report(history[1]["id"]) if len(history) > 1 else None
     hero("Opportunities", "Actionable trades and research candidates grouped by the next decision.")
     render_health_strip(platform, database, latest)
     if not latest:
@@ -1305,24 +1443,73 @@ def opportunities_page(platform: TradingPlatform, database: ReportDatabase) -> N
         *[{**item, "_opportunity_source": "WATCHLIST"} for item in latest.get("watchlist", [])],
         *[{**item, "_opportunity_source": "REJECTED"} for item in latest.get("rejected", [])],
     ]
+    summary = latest.get("summary") or {}
+    scanned = int(summary.get("stocks_scanned") or len(candidates))
+    qualified = len(latest.get("trades", [])) + len(latest.get("watchlist", []))
+    funnel = st.columns(4)
+    funnel[0].metric("Scanned", scanned)
+    funnel[1].metric("Qualified", qualified,
+                     f"{qualified / scanned * 100:.0f}%" if scanned else None)
+    funnel[2].metric("Watchlist", len(latest.get("watchlist", [])))
+    funnel[3].metric("Buy now", len(latest.get("trades", [])))
+
+    generated_at = history[0].get("generated_at") if history else None
+    freshness = freshness_status(generated_at)
+    st.markdown(f"Data freshness: {badge(freshness['label'])} {freshness['age']}",
+                unsafe_allow_html=True)
+    ranked_rows = ranked_opportunity_rows(candidates, generated_at, previous)
+    st.subheader("Ranked opportunity board")
+    st.caption("One sortable view of every candidate. Option confirmation uses recorded Zerodha "
+               "chain evidence and never upgrades an otherwise rejected equity setup.")
+    if ranked_rows:
+        st.dataframe(pd.DataFrame(ranked_rows), width="stretch", hide_index=True,
+                     column_config={
+                         "Quality": st.column_config.ProgressColumn(min_value=0, max_value=100,
+                                                                    format="%.0f"),
+                         "Readiness": st.column_config.ProgressColumn(min_value=0, max_value=100,
+                                                                      format="%.0f"),
+                         "Option score": st.column_config.ProgressColumn(min_value=0, max_value=100,
+                                                                         format="%.0f"),
+                         "R:R": st.column_config.NumberColumn(format="%.2f"),
+                         "Score Δ": st.column_config.NumberColumn(format="%+.0f"),
+                         "Why ranked": st.column_config.TextColumn(width="large"),
+                         "Primary blocker": st.column_config.TextColumn(width="medium"),
+                     })
+    else:
+        st.info("No candidates are available for ranking.")
+
     sectors = sorted({str(item.get("sector")) for item in candidates if item.get("sector")})
     grades = sorted({str(item.get("quality_grade")) for item in candidates if item.get("quality_grade")})
+    preset_values = {
+        "Custom": (0, 0, False, False),
+        "High-quality swing": (2.0, 70, False, False),
+        "F&O liquid": (1.5, 60, False, True),
+        "HAL-like momentum": (2.0, 70, True, False),
+    }
+    preset = st.selectbox("Saved filter preset", list(preset_values), key="opportunity-preset",
+                          help="Choose a starting screen; you can still refine symbol, sector, and grade.")
+    preset_rr, preset_readiness, preset_news, preset_options = preset_values[preset]
     controls = st.columns([2, 1, 1, 1])
     query = controls[0].text_input("Search symbol", placeholder="RELIANCE", key="opportunity-search")
     sector = controls[1].selectbox("Sector", ["All", *sectors], key="opportunity-sector")
     grade = controls[2].selectbox("Grade", ["All", *grades], key="opportunity-grade")
-    minimum_rr = controls[3].number_input("Minimum R:R", min_value=0.0, value=0.0,
-                                         step=0.25, key="opportunity-min-rr")
+    minimum_rr = controls[3].number_input("Minimum R:R", min_value=0.0, value=float(preset_rr),
+                                         step=0.25, key=f"opportunity-min-rr-{preset}")
     advanced = st.columns([1, 1, 1])
     minimum_readiness = advanced[0].number_input(
-        "Minimum readiness", min_value=0, max_value=100, value=0, key="opportunity-readiness",
+        "Minimum readiness", min_value=0, max_value=100, value=int(preset_readiness),
+        key=f"opportunity-readiness-{preset}",
         help="Readiness estimates how close the setup is to execution; it is not trade approval.")
-    complete_only = advanced[1].toggle("Only complete news data", key="opportunity-complete")
+    complete_only = advanced[1].toggle("Only complete news data", value=preset_news,
+                                       key=f"opportunity-complete-{preset}")
     density_options = ("Comfortable", "Compact", "Table only")
     density = advanced[2].selectbox(
         "Display density", density_options,
         index=density_options.index(preferences.get("opportunity_density", "Comfortable")),
         key="opportunity-density")
+    option_only = st.toggle("Only candidates with confirmed option evidence", value=preset_options,
+                            key=f"opportunity-options-confirmed-{preset}",
+                            help="This is a confirmation filter, not a substitute for equity quality gates.")
 
     def included(item: dict[str, Any]) -> bool:
         rr = float((item.get("levels") or {}).get("risk_reward") or 0)
@@ -1332,7 +1519,8 @@ def opportunities_page(platform: TradingPlatform, database: ReportDatabase) -> N
                 and (sector == "All" or str(item.get("sector")) == sector)
                 and (grade == "All" or str(item.get("quality_grade")) == grade)
                 and rr >= minimum_rr and readiness >= minimum_readiness
-                and (not complete_only or news_state in {"ANALYZED", "NO_RELEVANT_NEWS"}))
+                and (not complete_only or news_state in {"ANALYZED", "NO_RELEVANT_NEWS"})
+                and (not option_only or option_confirmation(item)["label"] == "Confirmed"))
 
     filtered = [item for item in candidates if included(item)]
     with st.expander("Candidate history"):
@@ -1815,12 +2003,24 @@ def report_changes(current: dict[str, Any], previous: dict[str, Any] | None) -> 
         latest, older = now.get(symbol), before.get(symbol)
         old_score = (older or {}).get("quality_score")
         new_score = (latest or {}).get("quality_score")
+        old_action = (older or {}).get("final_action")
+        new_action = (latest or {}).get("final_action")
+        old_rank, new_rank = (older or {}).get("rank"), (latest or {}).get("rank")
+        old_breakout = bool(((older or {}).get("technical") or {}).get("breakout", {}).get("confirmed"))
+        new_breakout = bool(((latest or {}).get("technical") or {}).get("breakout", {}).get("confirmed"))
         if latest and not older:
             change = "NEW"
         elif older and not latest:
             change = "REMOVED"
         elif latest["_status"] != older["_status"]:
-            change = "STATUS CHANGED"
+            change = ("BLOCKER CLEARED" if older["_status"] == "REJECTED"
+                      and latest["_status"] != "REJECTED" else "STATUS CHANGED")
+        elif old_action != new_action:
+            change = "ACTION CHANGED"
+        elif not old_breakout and new_breakout:
+            change = "BREAKOUT CONFIRMED"
+        elif old_rank is not None and new_rank is not None and old_rank != new_rank:
+            change = "RANK MOVED"
         elif old_score != new_score:
             change = "SCORE CHANGED"
         else:
@@ -1829,6 +2029,7 @@ def report_changes(current: dict[str, Any], previous: dict[str, Any] | None) -> 
                      "Previous status": (older or {}).get("_status", "—"),
                      "Current status": (latest or {}).get("_status", "—"),
                      "Previous score": old_score, "Current score": new_score,
+                     "Previous rank": old_rank, "Current rank": new_rank,
                      "Score change": (float(new_score) - float(old_score)
                                       if new_score is not None and old_score is not None else None)})
     return rows

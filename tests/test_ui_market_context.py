@@ -6,12 +6,46 @@ import pandas as pd
 from ui_app import (candidate_rows, likely_news_reaction, news_impact, news_rows,
                     data_age, decision_checks, decision_timeline, display_date,
                     candidate_history_rows, opportunity_groups, option_leg_rows, outcome_rows,
-                    price_figure, report_changes,
+                    option_confirmation, freshness_status, ranking_explanation,
+                    ranked_opportunity_rows, price_figure, report_changes,
                     portfolio_snapshot, primary_blocker, rejection_summary, snapshot_rows,
                     trade_override_required, trade_performance, _trade_status)
 
 
 class UIMarketContextTests(unittest.TestCase):
+    def test_option_confirmation_scores_approved_liquid_tight_structure(self):
+        result = option_confirmation({
+            "option_status": "CONFIRMED",
+            "option_trade_approval": {"status": "APPROVED", "approved": True},
+            "option_strategy": {"trade": {"legs": [
+                {"bid": 99, "ask": 101, "open_interest": 1000, "volume": 100},
+            ]}},
+        })
+        self.assertEqual(result["label"], "Confirmed")
+        self.assertGreaterEqual(result["score"], 75)
+        self.assertEqual(result["spread_percent"], 2)
+
+    def test_option_confirmation_does_not_invent_missing_data(self):
+        self.assertEqual(option_confirmation({})["label"], "Unavailable")
+
+    def test_freshness_status_has_actionable_bands(self):
+        now = datetime(2026, 7, 22, 12, 0, tzinfo=timezone.utc)
+        self.assertEqual(freshness_status("2026-07-22T11:30:00+00:00", now)["label"], "FRESH")
+        self.assertEqual(freshness_status("2026-07-22T02:00:00+00:00", now)["label"], "AGING")
+        self.assertEqual(freshness_status("2026-07-20T02:00:00+00:00", now)["label"], "STALE")
+
+    def test_ranked_rows_are_sorted_and_explain_contributors(self):
+        candidates = [
+            {"symbol": "LOW", "quality_score": 50, "execution_readiness_score": 60,
+             "levels": {"risk_reward": 1.2}, "_opportunity_source": "WATCHLIST"},
+            {"symbol": "HAL", "quality_score": 85, "execution_readiness_score": 80,
+             "levels": {"risk_reward": 2.5}, "_opportunity_source": "TRADE"},
+        ]
+        rows = ranked_opportunity_rows(candidates, "2026-07-22T11:30:00+00:00")
+        self.assertEqual([row["Symbol"] for row in rows], ["HAL", "LOW"])
+        self.assertIn("Supports", rows[0]["Why ranked"])
+        self.assertIn("Limits", ranking_explanation(candidates[0]))
+
     def test_position_dates_and_timestamp_ages_are_compact(self):
         self.assertEqual(display_date("2026-07-31"), "31 Jul 2026")
         now = datetime(2026, 7, 22, 10, 0, tzinfo=timezone.utc)
