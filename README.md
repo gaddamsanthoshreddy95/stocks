@@ -1,6 +1,6 @@
-# AI Quantitative Trading Platform
+# Alphatrace
 
-An analysis-first trading platform for NSE equities. It uses Zerodha Kite for
+Alphatrace is an analysis-first trading platform for NSE equities. It uses Zerodha Kite for
 historical OHLCV and live quotes, then provides technical analysis, trade
 planning, backtesting, and a stateful paper-trading workflow.
 Live order placement is intentionally not exposed by the public platform API.

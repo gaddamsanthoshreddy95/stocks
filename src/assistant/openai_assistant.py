@@ -49,7 +49,7 @@ class OpenAIAnalyst:
             raise OpenAIConfigurationError(
                 "OPENAI_API_KEY is not configured. Add it to .env and restart the UI.")
         instructions = (
-            "You are the Stock Analyzer assistant. Answer from the supplied report, UI, and project "
+            "You are the Alphatrace assistant. Answer from the supplied report, UI, and project "
             "evidence only. The analytical engine is the source of truth. Explain decisions and "
             "probabilities in plain language, cite report IDs and project file paths when present, "
             "distinguish facts from inference, and say when evidence is unavailable. Never claim a "

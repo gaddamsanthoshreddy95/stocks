@@ -34,7 +34,7 @@ from src.ui.stock_explainer import explain_stock_question
 from src.workflow.context_enrichment import ContextEnrichment
 
 
-st.set_page_config(page_title="Stock Analyzer", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Alphatrace", page_icon="📈", layout="wide")
 
 
 APP_CSS = """
@@ -2711,7 +2711,7 @@ def render_ai_chat(database: ReportDatabase, symbol: str | None = None,
             st.markdown("1. Start the MCP HTTP server on the machine hosting this app.\n"
                         "2. Put it behind an authenticated HTTPS URL or secure development tunnel.\n"
                         "3. In ChatGPT, enable Developer mode and add that URL as an MCP app.\n"
-                        "4. Ask ChatGPT to use **Stock Analyzer** for project questions.")
+                        "4. Ask ChatGPT to use **Alphatrace** for project questions.")
             st.code(".venv\\Scripts\\python.exe run_mcp.py --transport streamable-http",
                     language="powershell")
             st.caption("Do not expose the endpoint publicly without authentication.")
@@ -2863,7 +2863,7 @@ def codex_workspace_page(database: ReportDatabase) -> None:
     service = CodexService(Path(__file__).resolve().parent)
     left, right, third = st.columns(3)
     left.metric("Codex CLI", "READY" if service.configured else "SETUP NEEDED")
-    right.metric("Repository", "stock-analyzer")
+    right.metric("Repository", "alphatrace")
     third.metric("Default permission", "PROPOSE")
     if not service.configured:
         st.warning("Codex CLI is not installed or not on PATH. Install and authenticate Codex on the "
@@ -2926,7 +2926,7 @@ def main() -> None:
         # Apply navigation requests before the keyed sidebar radio is created.
         st.session_state["nav_page"] = pending_page
     with st.sidebar:
-        st.markdown("## 📈 Stock Analyzer")
+        st.markdown("## 📈 Alphatrace")
         st.caption("Research & paper-trading desk")
         navigation = {
             "Dashboard": "Dashboard", "Opportunities": "Opportunities",

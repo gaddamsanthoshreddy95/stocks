@@ -17,7 +17,7 @@ def create_mcp_server(database_path: str | Path = "data/ui/stock_analyzer.db",
         raise RuntimeError("The optional 'mcp' package is required to run the MCP server.") from exc
 
     tools = StockAnalyzerTools(ReportDatabase(database_path), repository_root)
-    server = FastMCP("Stock Analyzer", instructions=(
+    server = FastMCP("Alphatrace", instructions=(
         "Read-only access to saved stock-analysis reports and secret-safe project source. "
         "Use report values as the source of truth and never infer live prices or place trades."
     ))

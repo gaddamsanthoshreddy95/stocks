@@ -1,7 +1,7 @@
 """
 AI Trading Pipeline
 
-Central orchestration layer for the complete AI Quantitative Trading Platform.
+Central orchestration layer for Alphatrace.
 
 Current Pipeline
 ----------------

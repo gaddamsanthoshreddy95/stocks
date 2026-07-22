@@ -108,7 +108,7 @@ class CodexService:
                history: list[dict[str, str]] | None = None) -> dict[str, Any]:
         """Use an authenticated Codex CLI session as a read-only grounded analyst."""
         prompt = (
-            "Answer as the Stock Analyzer assistant, not as a coding agent. Use only the supplied "
+            "Answer as the Alphatrace assistant, not as a coding agent. Use only the supplied "
             "grounded UI/report context. Explain probabilities in plain language, distinguish facts "
             "from inference, say when evidence is unavailable, and never promise returns or place trades.\n\n"
             f"Recent conversation:\n{json.dumps((history or [])[-8:], default=str)}\n\n"

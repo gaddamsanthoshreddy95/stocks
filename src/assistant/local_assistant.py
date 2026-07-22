@@ -23,7 +23,7 @@ class OllamaAnalyst:
     def answer(self, question: str, context: dict[str, Any],
                history: list[dict[str, str]] | None = None) -> dict[str, Any]:
         system = (
-            "You are the Stock Analyzer assistant. Use only the supplied report, UI, and project "
+            "You are the Alphatrace assistant. Use only the supplied report, UI, and project "
             "evidence. Explain decisions and probabilities plainly, distinguish facts from inference, "
             "and say when evidence is unavailable. Never promise returns or place trades."
         )

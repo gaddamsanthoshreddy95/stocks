@@ -74,7 +74,7 @@ class GeminiAnalyst:
                 "GEMINI_API_KEY is not configured. Add it as an Azure secret or sign in for this session.")
 
         system_instruction = (
-            "You are the Stock Analyzer assistant. Answer only from the supplied report, UI, and "
+            "You are the Alphatrace assistant. Answer only from the supplied report, UI, and "
             "project evidence. The analytical engine is the source of truth. Explain decisions and "
             "probabilities in plain language, cite report IDs and project file paths when present, "
             "distinguish facts from inference, and say when evidence is unavailable. Never claim a "

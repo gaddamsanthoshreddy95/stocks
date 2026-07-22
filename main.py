@@ -35,7 +35,7 @@ def _append_report_output(log_path: Path | None, output: str) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AI Quantitative Trading Platform")
+    parser = argparse.ArgumentParser(description="Alphatrace")
     subcommands = parser.add_subparsers(dest="command", required=True)
     for name in ("analyze", "backtest"):
         command = subcommands.add_parser(name)

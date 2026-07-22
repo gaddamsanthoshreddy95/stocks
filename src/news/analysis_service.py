@@ -76,7 +76,7 @@ class NewsAnalysisService:
         url = "https://news.google.com/rss/search?q=" + search + "&hl=en-IN&gl=IN&ceid=IN:en"
         network_started = perf_counter()
         try:
-            response = requests.get(url, timeout=timeout, headers={"User-Agent": "stock-analyzer/1.0"})
+            response = requests.get(url, timeout=timeout, headers={"User-Agent": "alphatrace/1.0"})
             response.raise_for_status()
             root = ElementTree.fromstring(response.content)
         except (requests.RequestException, ElementTree.ParseError) as exc:

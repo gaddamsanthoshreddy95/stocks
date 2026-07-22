@@ -10,7 +10,7 @@ from src.application.errors import PlatformError
 from src.application.platform import TradingPlatform
 from src.news.ai_sentiment import AISentimentAnalyzer
 
-app = FastAPI(title="AI Quantitative Trading Platform", version="1.0.0")
+app = FastAPI(title="Alphatrace", version="1.0.0")
 platform = TradingPlatform()
 
 

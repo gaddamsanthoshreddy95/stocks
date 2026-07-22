@@ -1,4 +1,4 @@
-"""Run the read-only Stock Analyzer MCP server."""
+"""Run the read-only Alphatrace MCP server."""
 
 import argparse
 
@@ -6,7 +6,7 @@ from src.assistant.mcp_server import create_mcp_server
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Stock Analyzer read-only MCP server")
+    parser = argparse.ArgumentParser(description="Alphatrace read-only MCP server")
     parser.add_argument("--transport", choices=("stdio", "streamable-http"), default="stdio")
     parser.add_argument("--database", default="data/ui/stock_analyzer.db")
     args = parser.parse_args()
