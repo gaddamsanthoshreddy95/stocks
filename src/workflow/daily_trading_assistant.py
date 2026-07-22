@@ -601,8 +601,17 @@ class DailyTradingAssistant:
         setup = setup_evaluation.get("stage_1", {}).get("category") or classify_setup(
             analysis["analysis"]["trend"], analysis["analysis"]["rsi_signal"]
         )
-        confirmation_required = setup in {"BREAKOUT", "PULLBACK", "REVERSAL CANDIDATE"}
+        confirmation_required = setup in {
+            "BREAKOUT", "PULLBACK", "REVERSAL CANDIDATE", "TREND FOLLOWING"
+        }
         entry_confirmation = EntryConfirmationResult.from_setup(setup_evaluation, confirmation_required)
+        entry_quality = setup_evaluation.get("entry_quality", {
+            "score": entry_confirmation.score,
+            "grade": "A" if entry_confirmation.score >= 85 else "B" if entry_confirmation.score >= 75
+                     else "C" if entry_confirmation.score >= 65 else "D",
+            "entry_mode": "LEGACY", "extension_band": "UNKNOWN",
+            "position_size_guidance": "NORMAL" if entry_confirmation.passed else "ZERO_UNTIL_RETEST",
+        })
         atr = float(technical.get("atr") or analysis.get("entry", {}).get("atr") or 0)
         resistance = float(analysis["entry"].get("resistance") or 0)
         clearance_atr = ((resistance - float(plan["entry"])) / atr
@@ -617,6 +626,10 @@ class DailyTradingAssistant:
                 (*entry_confirmation.failed_checks, "resistance_clearance"),
                 entry_confirmation.timestamp,
             )
+            entry_quality = {
+                **entry_quality, "score": min(float(entry_quality["score"]), 64.99), "grade": "D",
+                "entry_mode": "WAIT_FOR_CLEARANCE", "position_size_guidance": "ZERO_UNTIL_RETEST",
+            }
         entry_eligible = entry_confirmation.passed
         probability = self._technical_probability(
             {**candidate, "breakout": analysis["breakout"]},
@@ -791,6 +804,11 @@ class DailyTradingAssistant:
                                  "event_adjusted_probability": event_adjusted_probability},
             "trade_eligibility": eligibility,
             "entry_confirmation": entry_confirmation.to_dict(),
+            "entry_quality_score": entry_quality["score"],
+            "entry_quality_grade": entry_quality["grade"],
+            "entry_mode": entry_quality["entry_mode"],
+            "extension_band": entry_quality["extension_band"],
+            "position_size_guidance": entry_quality["position_size_guidance"],
             "equity_eligibility": {
                 "eligible": equity_eligible,
                 "status": "APPROVED" if equity_eligible else "REJECTED",
@@ -812,7 +830,14 @@ class DailyTradingAssistant:
                             "effective_risk_percent": scaled_risk["effective_risk_percent"],
                             "market_confidence": market.get("confidence", 0), "position_scale": risk_scale,
                             "event_position_scale": event_multiplier,
-                            "combined_position_scale": round(risk_scale * event_multiplier, 3)},
+                            "entry_position_scale": (.5 if entry_quality.get("position_size_guidance") == "REDUCED"
+                                                     else 0 if entry_quality.get("position_size_guidance") == "ZERO_UNTIL_RETEST"
+                                                     else 1),
+                            "combined_position_scale": round(
+                                risk_scale * event_multiplier *
+                                (.5 if entry_quality.get("position_size_guidance") == "REDUCED"
+                                 else 0 if entry_quality.get("position_size_guidance") == "ZERO_UNTIL_RETEST"
+                                 else 1), 3)},
             "risk_reward_policy": rr_tier,
             "risk_reward": {
                 "nearest_target_rr": round(float(plan.get("nearest_target_reward", 0)) / float(plan["risk"]), 2)
@@ -1006,17 +1031,25 @@ class DailyTradingAssistant:
             self.platform.settings.capital, self.platform.settings.risk_percent,
             plan["entry"], plan["stop_loss"],
         )
-        base_market_quantity = int(base_risk.get("quantity", 0) * risk_scale)
+        entry_position_multiplier = (.5 if entry_quality.get("position_size_guidance") == "REDUCED"
+                                     else 0.0 if entry_quality.get("position_size_guidance") == "ZERO_UNTIL_RETEST"
+                                     else 1.0)
+        base_market_quantity = int(base_risk.get("quantity", 0) * risk_scale * entry_position_multiplier)
         planned_quantity = int(base_market_quantity * event_multiplier)
         planned_position = {
             **base_risk,
             "base_market_adjusted_quantity": base_market_quantity,
             "quantity": planned_quantity,
-            "capital_used": round(base_risk.get("capital_used", 0) * risk_scale * event_multiplier, 2),
-            "risk_amount": round(base_risk.get("risk_amount", 0) * risk_scale * event_multiplier, 2),
-            "actual_risk": round(base_risk.get("actual_risk", 0) * risk_scale * event_multiplier, 2),
+            "capital_used": round(base_risk.get("capital_used", 0) * risk_scale * event_multiplier
+                                  * entry_position_multiplier, 2),
+            "risk_amount": round(base_risk.get("risk_amount", 0) * risk_scale * event_multiplier
+                                 * entry_position_multiplier, 2),
+            "actual_risk": round(base_risk.get("actual_risk", 0) * risk_scale * event_multiplier
+                                 * entry_position_multiplier, 2),
             "market_confidence_scale": risk_scale, "event_position_multiplier": event_multiplier,
-            "effective_risk_percent": round(self.platform.settings.risk_percent * risk_scale * event_multiplier, 3),
+            "entry_position_multiplier": entry_position_multiplier,
+            "effective_risk_percent": round(self.platform.settings.risk_percent * risk_scale
+                                            * event_multiplier * entry_position_multiplier, 3),
         }
         trade["planned_position_if_confirmed"] = planned_position
         if executable and planned_quantity > 0:

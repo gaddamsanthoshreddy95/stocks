@@ -6,8 +6,10 @@ from src.candlestick.pattern_detector import PatternDetector
 
 
 class CandlestickPatternTests(unittest.TestCase):
-    def test_supported_set_is_the_compact_sixteen_patterns(self):
-        self.assertEqual(len(PatternDetector.SUPPORTED_PATTERNS), 16)
+    def test_supported_set_includes_contextual_tweezers(self):
+        self.assertEqual(len(PatternDetector.SUPPORTED_PATTERNS), 18)
+        self.assertIn("TWEEZER TOP", PatternDetector.SUPPORTED_PATTERNS)
+        self.assertIn("TWEEZER BOTTOM", PatternDetector.SUPPORTED_PATTERNS)
         self.assertNotIn("HANGING MAN", PatternDetector.SUPPORTED_PATTERNS)
         self.assertNotIn("INVERTED HAMMER", PatternDetector.SUPPORTED_PATTERNS)
 
@@ -48,3 +50,24 @@ class CandlestickPatternTests(unittest.TestCase):
                    for close in (100, 103, 106, 109, 112, 115, 118, 121)]
         self.assertNotEqual(PatternDetector.detect(pd.DataFrame([*advance, hammer]))["pattern"],
                             "HAMMER")
+
+    def test_tweezer_top_uses_atr_tolerance_and_requires_uptrend(self):
+        advance = [{"Open": close - 1, "Close": close, "High": close + 1, "Low": close - 2,
+                    "ATR": 3, "RSI": 65, "MACD": .2, "MACD_SIGNAL": .3, "RVOL": 1.4}
+                   for close in (100, 103, 106, 109, 112, 115, 118, 121)]
+        pair = [{"Open": 122, "Close": 124, "High": 125, "Low": 121, "ATR": 3},
+                {"Open": 124, "Close": 122.5, "High": 125.2, "Low": 121, "ATR": 3,
+                 "RSI": 68, "MACD": .2, "MACD_SIGNAL": .3, "RVOL": 1.5}]
+        result = PatternDetector.detect(pd.DataFrame([*advance, *pair]))
+        self.assertEqual(result["pattern"], "TWEEZER TOP")
+        self.assertEqual(result["signal"], "SELL")
+
+    def test_doji_is_actionable_only_at_support_or_resistance(self):
+        advance = [{"Open": close - 1, "Close": close, "High": close + 1, "Low": close - 1,
+                    "ATR": 2} for close in (100, 102, 104, 106, 108, 110, 112, 114)]
+        doji = {"Open": 115, "Close": 115.05, "High": 117, "Low": 113,
+                "ATR": 2, "RVOL": 1, "RSI": 60, "MACD": 0, "MACD_SIGNAL": 0}
+        result = PatternDetector.detect(pd.DataFrame([*advance, doji]))
+        self.assertEqual(result["pattern"], "DOJI")
+        self.assertTrue(result["context_validated"])
+        self.assertEqual(result["location_context"], "RESISTANCE")

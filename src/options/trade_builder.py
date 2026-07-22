@@ -36,10 +36,93 @@ class OptionTradeBuilder:
         return min(liquid, key=lambda item: abs(item.strike - target)) if liquid else None
 
     @classmethod
+    def _credit_structure(cls, chain: OptionChain, strategy: str, support: float | None,
+                          resistance: float | None, risk_budget: float | None,
+                          capital_available: float | None) -> dict[str, Any]:
+        """Build only hedged, defined-risk premium-selling structures."""
+        normalized = strategy.upper().replace("_", " ")
+        specs = []
+        if normalized == "BULL PUT SPREAD":
+            sell_target = support if support and support < chain.spot_price else chain.spot_price * .98
+            sold = cls._nearest([item for item in chain.puts if item.strike <= sell_target], sell_target)
+            hedge_pool = [item for item in chain.puts if sold and item.strike < sold.strike]
+            hedge = cls._nearest(hedge_pool, sold.strike * .98) if sold else None
+            specs = [("SELL", sold), ("BUY", hedge)]
+        elif normalized == "BEAR CALL SPREAD":
+            sell_target = resistance if resistance and resistance > chain.spot_price else chain.spot_price * 1.02
+            sold = cls._nearest([item for item in chain.calls if item.strike >= sell_target], sell_target)
+            hedge_pool = [item for item in chain.calls if sold and item.strike > sold.strike]
+            hedge = cls._nearest(hedge_pool, sold.strike * 1.02) if sold else None
+            specs = [("SELL", sold), ("BUY", hedge)]
+        elif normalized == "IRON CONDOR":
+            put_target = support if support and support < chain.spot_price else chain.spot_price * .97
+            call_target = resistance if resistance and resistance > chain.spot_price else chain.spot_price * 1.03
+            sold_put = cls._nearest([item for item in chain.puts if item.strike <= put_target], put_target)
+            sold_call = cls._nearest([item for item in chain.calls if item.strike >= call_target], call_target)
+            put_pool = [item for item in chain.puts if sold_put and item.strike < sold_put.strike]
+            call_pool = [item for item in chain.calls if sold_call and item.strike > sold_call.strike]
+            hedge_put = cls._nearest(put_pool, sold_put.strike * .98) if sold_put else None
+            hedge_call = cls._nearest(call_pool, sold_call.strike * 1.02) if sold_call else None
+            specs = [("BUY", hedge_put), ("SELL", sold_put),
+                     ("SELL", sold_call), ("BUY", hedge_call)]
+        if not specs or any(contract is None for _, contract in specs):
+            reason = "No complete liquid hedge structure passes option liquidity filters."
+            return {"available": False, "strategy": "Wait", "analysis_strategy": strategy,
+                    "expiry": chain.expiry, "spot_price": round(chain.spot_price, 2), "legs": [],
+                    "risk_defined": False, "structure_type": "NONE", "reason": reason,
+                    "rejection": {"code": "NO_LIQUID_HEDGED_STRUCTURE", "category": "LIQUIDITY",
+                                  "reason": reason}}
+        lot_size = max(int(contract.lot_size) for _, contract in specs)
+        credit = sum(cls._price(contract) * (1 if side == "SELL" else -1)
+                     for side, contract in specs)
+        if credit <= 0:
+            reason = "Hedged premium-selling structure does not produce a positive credit."
+            return {"available": False, "strategy": "Wait", "analysis_strategy": strategy,
+                    "expiry": chain.expiry, "spot_price": round(chain.spot_price, 2), "legs": [],
+                    "risk_defined": True, "structure_type": "DEFINED_RISK_CREDIT", "reason": reason,
+                    "rejection": {"code": "NON_POSITIVE_CREDIT", "category": "PRICING", "reason": reason}}
+        if normalized == "IRON CONDOR":
+            widths = [specs[1][1].strike - specs[0][1].strike,
+                      specs[3][1].strike - specs[2][1].strike]
+            width = max(widths)
+        else:
+            width = abs(specs[0][1].strike - specs[1][1].strike)
+        max_loss_unit = max(width - credit, 0)
+        max_loss_lot = round(max_loss_unit * lot_size, 2)
+        max_profit_lot = round(credit * lot_size, 2)
+        lots_by_risk = int((risk_budget or 0) // max_loss_lot) if max_loss_lot > 0 else 0
+        lots_by_capital = (int(capital_available // max_loss_lot)
+                           if capital_available is not None and max_loss_lot > 0 else lots_by_risk)
+        lots = min(lots_by_risk, lots_by_capital)
+        quantity = lots * lot_size
+        legs = [{"side": side, **asdict(contract), "premium": cls._price(contract),
+                 "quantity": quantity} for side, contract in specs]
+        available = lots > 0
+        reason = None if available else "Maximum loss for one hedged lot exceeds the risk or capital budget."
+        return {"available": available, "strategy": strategy, "analysis_strategy": strategy,
+                "expiry": chain.expiry, "spot_price": round(chain.spot_price, 2), "legs": legs,
+                "net_credit": round(credit, 2), "lot_size": lot_size,
+                "recommended_lots": lots, "recommended_quantity": quantity,
+                "maximum_profit": max_profit_lot, "maximum_loss": max_loss_lot,
+                "margin_required_per_lot": max_loss_lot, "capital_required_per_lot": max_loss_lot,
+                "risk_budget": risk_budget, "capital_available": capital_available,
+                "risk_defined": True, "structure_type": "DEFINED_RISK_CREDIT_SPREAD",
+                "technical_support": support, "technical_resistance": resistance, "reason": reason,
+                "rejection": None if available else {"code": "RISK_BUDGET_EXCEEDED", "category": "RISK",
+                                                      "reason": reason, "maximum_loss": max_loss_lot,
+                                                      "available_budget": risk_budget or 0}}
+
+    @classmethod
     def build(cls, chain: OptionChain, strategy: str, direction: str, support: float | None = None,
               resistance: float | None = None, risk_budget: float | None = None,
               capital_available: float | None = None) -> dict[str, Any]:
         """Return a complete recommendation, or an unavailable explanation."""
+        if strategy.upper().replace("_", " ") in {
+            "BULL PUT SPREAD", "BEAR CALL SPREAD", "IRON CONDOR"
+        }:
+            return cls._credit_structure(
+                chain, strategy, support, resistance, risk_budget, capital_available
+            )
         bullish = direction == "BULLISH"
         contracts = chain.calls if bullish else chain.puts
         long_leg = cls._nearest(contracts, chain.spot_price)

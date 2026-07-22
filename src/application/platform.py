@@ -113,6 +113,42 @@ class TradingPlatform:
         return "NEUTRAL"
 
     @staticmethod
+    def _candlestick_option_overlay(candidate: dict[str, Any], iv_rank: float | None) -> dict[str, Any]:
+        """Translate validated candle context into defined-risk option-selling bias."""
+        candle = candidate.get("candlestick") or {}
+        pattern = str(candle.get("pattern") or "NONE").upper()
+        strength = float(candle.get("strength") or 0)
+        validated = bool(candle.get("context_validated"))
+        bearish = {"SHOOTING STAR", "BEARISH ENGULFING", "TWEEZER TOP"}
+        bullish = {"HAMMER", "BULLISH ENGULFING", "TWEEZER BOTTOM"}
+        overlay = {"applicable": False, "pattern": pattern, "validated": validated,
+                   "strategy": None, "direction": None, "status": "NOT_APPLICABLE",
+                   "reason": "No validated premium-selling candlestick overlay."}
+        if not validated:
+            return overlay
+        if pattern in bearish | bullish and strength < 75:
+            return {**overlay, "applicable": True, "status": "WAIT_NEXT_CANDLE",
+                    "direction": "BEARISH" if pattern in bearish else "BULLISH",
+                    "reason": f"{pattern} needs next-candle directional confirmation at strength {strength:.0f}."}
+        if pattern in bearish:
+            return {**overlay, "applicable": True, "status": "CONFIRMED", "direction": "BEARISH",
+                    "strategy": "Bear Call Spread",
+                    "reason": f"Validated {pattern} at resistance supports a defined-risk bearish credit spread."}
+        if pattern in bullish:
+            return {**overlay, "applicable": True, "status": "CONFIRMED", "direction": "BULLISH",
+                    "strategy": "Bull Put Spread",
+                    "reason": f"Validated {pattern} at support supports a defined-risk bullish credit spread."}
+        if pattern == "DOJI":
+            if iv_rank is None or float(iv_rank) < 60:
+                return {**overlay, "applicable": True, "status": "IV_TOO_LOW",
+                        "direction": "NEUTRAL",
+                        "reason": "Contextual Doji requires IV rank of at least 60 for premium selling."}
+            return {**overlay, "applicable": True, "status": "CONFIRMED", "direction": "NEUTRAL",
+                    "strategy": "Iron Condor",
+                    "reason": "Contextual Doji with elevated IV supports a hedged range trade outside the wicks."}
+        return overlay
+
+    @staticmethod
     def _bearish_option_score(analysis: dict[str, Any], candlestick: dict[str, Any]) -> dict[str, Any]:
         """Score explicit bearish evidence independently from the bullish stock score."""
         trend = str(analysis.get("trend", "")).upper()
@@ -517,6 +553,8 @@ class TradingPlatform:
         key = (
             candidate["symbol"], round(float(candidate["current_price"]), 1),
             self.settings.trading_strategy_mode, self._option_direction(candidate), option_month,
+            (candidate.get("candlestick") or {}).get("pattern"),
+            (candidate.get("candlestick") or {}).get("strength"),
         )
         with self._option_cache_lock:
             cached = self._option_cache.get(key)
@@ -595,28 +633,49 @@ class TradingPlatform:
                                        candidate["symbol"], exc.__class__.__name__, exc)
             direction = self._option_direction(candidate)
             analysis = OptionEngine().analyze(chain, direction=direction)
-            if direction == "NEUTRAL":
+            candle_overlay = self._candlestick_option_overlay(candidate, analysis.iv_rank)
+            if candle_overlay["status"] == "CONFIRMED":
+                direction = candle_overlay["direction"]
+                analysis.suggested_strategy = candle_overlay["strategy"]
+                analysis.reasons.append(candle_overlay["reason"])
+            elif candle_overlay["status"] == "WAIT_NEXT_CANDLE":
                 return self._serialize({
-                    "available": False,
-                    "reason": "Underlying direction is not confirmed.",
-                    "strategy": "Wait",
-                    "analysis_strategy": analysis.suggested_strategy,
-                    "confidence": analysis.confidence,
-                    "pcr": analysis.pcr,
-                    "rejection": {"code": "DIRECTION_UNCONFIRMED", "category": "SETUP",
-                                  "reason": "Underlying direction is not confirmed."},
-                    "short_put": short_put,
-                    "option_decision": {
-                        "direction": direction, "selected": "Wait", "candidates": [],
-                        "equity_independent": True,
-                    },
+                    "available": False, "reason": candle_overlay["reason"], "strategy": "Wait",
+                    "analysis_strategy": analysis.suggested_strategy, "direction": candle_overlay["direction"],
+                    "confidence": analysis.confidence, "pcr": analysis.pcr, "candlestick_overlay": candle_overlay,
+                    "rejection": {"code": "CANDLE_CONFIRMATION_REQUIRED", "category": "SETUP",
+                                  "reason": candle_overlay["reason"]}, "short_put": short_put,
+                    "option_decision": {"direction": candle_overlay["direction"], "selected": "Wait",
+                                        "candidates": [], "equity_independent": True},
                 })
+            if direction == "NEUTRAL":
+                if candle_overlay.get("strategy") == "Iron Condor":
+                    pass
+                else:
+                    return self._serialize({
+                        "available": False,
+                        "reason": candle_overlay.get("reason", "Underlying direction is not confirmed."),
+                        "strategy": "Wait", "analysis_strategy": analysis.suggested_strategy,
+                        "confidence": analysis.confidence, "pcr": analysis.pcr,
+                        "candlestick_overlay": candle_overlay,
+                        "rejection": {"code": "DIRECTION_UNCONFIRMED", "category": "SETUP",
+                                      "reason": "Underlying direction is not confirmed."},
+                        "short_put": short_put,
+                        "option_decision": {"direction": direction, "selected": "Wait", "candidates": [],
+                                            "equity_independent": True},
+                    })
+            candle = candidate.get("candlestick") or {}
+            technical_support = candidate["trade_plan"]["stop_loss"]
+            technical_resistance = candidate["trade_plan"]["target1"]
+            if candle_overlay.get("status") == "CONFIRMED":
+                technical_support = candle.get("pattern_low") or technical_support
+                technical_resistance = candle.get("pattern_high") or technical_resistance
             trade = OptionTradeBuilder.build(
                 chain,
                 analysis.suggested_strategy or "Wait",
                 direction,
-                support=candidate["trade_plan"]["stop_loss"],
-                resistance=candidate["trade_plan"]["target1"],
+                support=technical_support,
+                resistance=technical_resistance,
                 risk_budget=self.settings.option_risk_per_trade,
                 capital_available=self.settings.option_capital,
             )
@@ -670,6 +729,7 @@ class TradingPlatform:
                 "strongest_support": analysis.strongest_support,
                 "strongest_resistance": analysis.strongest_resistance,
                 "reasons": analysis.reasons,
+                "candlestick_overlay": candle_overlay,
                 "trade": trade,
                 "entry_validation": validation,
                 "rejection": rejection,

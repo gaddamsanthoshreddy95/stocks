@@ -86,3 +86,27 @@ class SetupEntryEvaluatorTests(unittest.TestCase):
         )
         self.assertFalse(result["stage_2"]["eligible"])
         self.assertIn("not_overextended_above_ema20", result["stage_2"]["missing"])
+
+    def test_breakout_does_not_require_reversal_candle(self):
+        result = SetupEntryEvaluator.evaluate(
+            self.full_frame(last_open=100, last_close=101, ema20=100, atr=2),
+            SimpleNamespace(score=80),
+            {"support": 98, "risk_reward": 2, "broken_resistance": 100.8},
+            {"confirmed": True, "broken_resistance": 100.8}, {"signal": "NONE"},
+        )
+        self.assertEqual(result["stage_1"]["category"], "BREAKOUT")
+        self.assertTrue(result["stage_2"]["eligible"])
+        self.assertNotIn("bullish_reversal_candle", result["stage_2"]["checks"])
+        self.assertEqual(result["entry_quality"]["entry_mode"], "IMMEDIATE_BREAKOUT")
+
+    def test_extended_breakout_waits_for_retest_instead_of_being_rejected_as_bad_stock(self):
+        result = SetupEntryEvaluator.evaluate(
+            self.full_frame(last_open=102, last_close=103.8, ema20=100, atr=2),
+            SimpleNamespace(score=85),
+            {"support": 99, "risk_reward": 2, "broken_resistance": 102},
+            {"confirmed": True, "broken_resistance": 102}, {"signal": "NONE"},
+        )
+        self.assertFalse(result["stage_2"]["eligible"])
+        self.assertEqual(result["entry_quality"]["entry_mode"], "WAIT_FOR_RETEST")
+        self.assertEqual(result["entry_quality"]["extension_band"], "RETEST_REQUIRED")
+        self.assertEqual(result["entry_quality"]["position_size_guidance"], "ZERO_UNTIL_RETEST")

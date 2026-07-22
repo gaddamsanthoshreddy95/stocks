@@ -59,7 +59,11 @@ class PlatformSettings:
     setup_reversal_rsi: float = 35.0
     entry_confirmation_relative_volume: float = 1.2
     entry_min_close_location: float = 0.60
+    entry_normal_extension_atr: float = 1.0
     entry_max_extension_atr: float = 1.50
+    entry_no_chase_extension_atr: float = 2.0
+    breakout_retest_tolerance_atr: float = 0.25
+    breakout_consolidation_max_range_atr: float = 0.80
     entry_max_consecutive_bullish_candles: int = 4
     option_call_resistance_near_percent: float = 1.5
     option_long_delta_min: float = 0.35
@@ -196,8 +200,12 @@ class PlatformSettings:
             raise ValueError("Option long delta range is invalid")
         if self.setup_support_near_percent < 0 or self.entry_confirmation_relative_volume < 0:
             raise ValueError("Setup proximity and volume thresholds cannot be negative")
-        if not 0 <= self.entry_min_close_location <= 1 or self.entry_max_extension_atr <= 0:
+        if (not 0 <= self.entry_min_close_location <= 1
+                or not 0 < self.entry_normal_extension_atr <= self.entry_max_extension_atr
+                <= self.entry_no_chase_extension_atr):
             raise ValueError("Entry candle location and ATR extension settings are invalid")
+        if self.breakout_retest_tolerance_atr < 0 or self.breakout_consolidation_max_range_atr <= 0:
+            raise ValueError("Breakout retest and consolidation thresholds are invalid")
         if self.entry_max_consecutive_bullish_candles < 2:
             raise ValueError("ENTRY_MAX_CONSECUTIVE_BULLISH_CANDLES must be at least two")
         if not 0 <= self.market_low_confidence_threshold <= self.market_confirmed_confidence_threshold <= 100:
@@ -330,7 +338,12 @@ class PlatformSettings:
             setup_reversal_rsi=env_float("SETUP_REVERSAL_RSI", 35),
             entry_confirmation_relative_volume=env_float("ENTRY_CONFIRMATION_RELATIVE_VOLUME", 1.2),
             entry_min_close_location=env_float("ENTRY_MIN_CLOSE_LOCATION", .60),
+            entry_normal_extension_atr=env_float("ENTRY_NORMAL_EXTENSION_ATR", 1.0),
             entry_max_extension_atr=env_float("ENTRY_MAX_EXTENSION_ATR", 1.50),
+            entry_no_chase_extension_atr=env_float("ENTRY_NO_CHASE_EXTENSION_ATR", 2.0),
+            breakout_retest_tolerance_atr=env_float("BREAKOUT_RETEST_TOLERANCE_ATR", .25),
+            breakout_consolidation_max_range_atr=env_float(
+                "BREAKOUT_CONSOLIDATION_MAX_RANGE_ATR", .80),
             entry_max_consecutive_bullish_candles=env_int(
                 "ENTRY_MAX_CONSECUTIVE_BULLISH_CANDLES", 4),
             option_call_resistance_near_percent=env_float("OPTION_CALL_RESISTANCE_NEAR_PERCENT", 1.5),

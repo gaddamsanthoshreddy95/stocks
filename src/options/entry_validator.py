@@ -32,7 +32,8 @@ class OptionEntryValidator:
                 "reason", trade.get("reason", "No executable option legs are available.")))
 
         long_leg = next((leg for leg in trade.get("legs", []) if leg.get("side") == "BUY"), None)
-        if long_leg:
+        credit_structure = str(trade.get("structure_type", "")).startswith("DEFINED_RISK_CREDIT")
+        if long_leg and not credit_structure:
             delta = long_leg.get("delta")
             theta = long_leg.get("theta")
             premium = long_leg.get("premium", 0)

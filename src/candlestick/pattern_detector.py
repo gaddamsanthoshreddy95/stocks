@@ -19,7 +19,7 @@ class PatternDetector:
         "MORNING STAR", "BULLISH ENGULFING", "HAMMER", "PIERCING LINE", "BULLISH HARAMI",
         "THREE WHITE SOLDIERS", "EVENING STAR", "BEARISH ENGULFING", "SHOOTING STAR",
         "DARK CLOUD COVER", "BEARISH HARAMI", "THREE BLACK CROWS", "RISING THREE METHODS",
-        "FALLING THREE METHODS", "DOJI", "SPINNING TOP",
+        "FALLING THREE METHODS", "DOJI", "SPINNING TOP", "TWEEZER TOP", "TWEEZER BOTTOM",
     )
 
     @staticmethod
@@ -67,7 +67,8 @@ class PatternDetector:
         return {"downtrend": downtrend, "uptrend": uptrend, "trend_change": change,
                 "ema20": ema20, "rsi": rsi, "macd": macd, "macd_signal": macd_signal,
                 "rvol": rvol, "atr": atr, "near_support": near_support,
-                "near_resistance": near_resistance}
+                "near_resistance": near_resistance, "pattern_high": current["high"],
+                "pattern_low": current["low"]}
 
     @staticmethod
     def _result(pattern: str, signal: str, geometry: int, context: dict[str, Any],
@@ -94,6 +95,7 @@ class PatternDetector:
         return {"pattern": pattern, "strength": strength, "signal": signal,
                 "base_strength": geometry, "confirmations": confirmations,
                 "context_validated": trend_valid and (location_valid or continuation),
+                "pattern_high": context["pattern_high"], "pattern_low": context["pattern_low"],
                 "component_scores": {"geometry": geometry, "trend": trend_score,
                                      "location": location_score, "volume": volume_score,
                                      "momentum": momentum_score}}
@@ -106,13 +108,20 @@ class PatternDetector:
                                      "volume": 0, "momentum": 0}}
 
     @staticmethod
-    def _neutral(pattern: str, base: int, context: dict[str, Any]) -> dict[str, Any]:
+    def _neutral(pattern: str, base: int, context: dict[str, Any],
+                 location_sensitive: bool = False) -> dict[str, Any]:
         volume = 5 if context["rvol"] >= 1.5 else 0
+        location = ("RESISTANCE" if context["near_resistance"] else
+                    "SUPPORT" if context["near_support"] else "MID_RANGE")
+        context_validated = not location_sensitive or location != "MID_RANGE"
         return {"pattern": pattern, "strength": min(100, base + volume), "signal": "NEUTRAL",
                 "base_strength": base,
-                "confirmations": ([f"relative volume {context['rvol']:.2f}x"] if volume else []),
-                "context_validated": True,
-                "component_scores": {"geometry": base, "trend": 0, "location": 0,
+                "confirmations": ([f"{location.lower()} location"] if context_validated else [])
+                                 + ([f"relative volume {context['rvol']:.2f}x"] if volume else []),
+                "context_validated": context_validated, "location_context": location,
+                "pattern_high": context["pattern_high"], "pattern_low": context["pattern_low"],
+                "component_scores": {"geometry": base, "trend": 0,
+                                     "location": 15 if context_validated and location_sensitive else 0,
                                      "volume": volume, "momentum": 0}}
 
     @classmethod
@@ -160,6 +169,9 @@ class PatternDetector:
                     return cls._result("THREE BLACK CROWS", "SELL", 45, context, True, True)
 
         context = cls._context(df, 2)
+        tolerance = max(context["atr"] * .10, curr["close"] * .001)
+        tweezer_top = abs(curr["high"] - prev["high"]) <= tolerance
+        tweezer_bottom = abs(curr["low"] - prev["low"]) <= tolerance
         bullish_engulfing = (prev["bear"] and curr["bull"] and curr["open"] <= prev["close"]
                              and curr["close"] >= prev["open"])
         bearish_engulfing = (prev["bull"] and curr["bear"] and curr["open"] >= prev["close"]
@@ -168,6 +180,12 @@ class PatternDetector:
             return cls._result("BULLISH ENGULFING", "BUY", 45, context, True, True)
         if bearish_engulfing and context["uptrend"] and context["near_resistance"]:
             return cls._result("BEARISH ENGULFING", "SELL", 45, context, True, True)
+        if (tweezer_top and prev["bull"] and curr["bear"]
+                and context["uptrend"] and context["near_resistance"]):
+            return cls._result("TWEEZER TOP", "SELL", 42, context, True, True)
+        if (tweezer_bottom and prev["bear"] and curr["bull"]
+                and context["downtrend"] and context["near_support"]):
+            return cls._result("TWEEZER BOTTOM", "BUY", 42, context, True, True)
         if (prev["bear"] and curr["bull"] and curr["open"] < prev["close"]
                 and curr["close"] > (prev["open"] + prev["close"]) / 2
                 and context["downtrend"] and context["near_support"]):
@@ -185,7 +203,7 @@ class PatternDetector:
 
         single_context = cls._context(df, 1)
         if curr["body"] / curr["span"] <= .1:
-            return cls._neutral("DOJI", 55, single_context)
+            return cls._neutral("DOJI", 55, single_context, location_sensitive=True)
         if .1 < curr["body"] / curr["span"] <= .3 and curr["upper"] >= curr["body"] and curr["lower"] >= curr["body"]:
             return cls._neutral("SPINNING TOP", 58, single_context)
         lower_shadow_shape = (curr["lower"] >= curr["body"] * 2
