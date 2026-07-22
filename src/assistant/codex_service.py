@@ -35,6 +35,31 @@ class CodexService:
     def configured(self) -> bool:
         return bool(self.executable)
 
+    @staticmethod
+    def _event_text(event: dict[str, Any]) -> str:
+        """Extract user-facing text from both legacy and current Codex JSONL events."""
+        for key in ("message", "text"):
+            value = event.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+
+        item = event.get("item")
+        if not isinstance(item, dict) or item.get("type") != "agent_message":
+            return ""
+        text = item.get("text")
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+        content = item.get("content")
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    parts.append(part["text"])
+            return "\n".join(parts).strip()
+        return ""
+
     def run(self, request: str, mode: str = "EXPLAIN", timeout_seconds: int = 600,
             confirmed: bool = False) -> CodexRun:
         mode = str(mode).upper()
@@ -69,9 +94,9 @@ class CodexService:
             try:
                 event = json.loads(line)
                 events.append(event)
-                message = event.get("message") or event.get("text")
+                message = self._event_text(event)
                 if message:
-                    messages.append(str(message))
+                    messages.append(message)
             except json.JSONDecodeError:
                 if line.strip():
                     messages.append(line.strip())

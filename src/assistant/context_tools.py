@@ -90,11 +90,25 @@ class StockAnalyzerTools:
         items = []
         for bucket in ("trades", "watchlist", "rejected"):
             for item in report.get(bucket, []):
+                adverse = item.get("adverse_move_risk") or {}
                 items.append({"symbol": item.get("symbol"), "bucket": bucket.upper(),
                               "status": item.get("status"), "action": item.get("final_action"),
                               "quality": item.get("quality_score"),
                               "readiness": item.get("execution_readiness_score"),
-                              "reason": item.get("selection_reason") or item.get("rejection_reason")})
+                              "reason": item.get("selection_reason") or item.get("rejection_reason"),
+                              "adverse_move_risk": {
+                                  "available": adverse.get("available", False),
+                                  "horizon_days": adverse.get("horizon_days"),
+                                  "target_percent": adverse.get("target_percent"),
+                                  "adverse_barrier_percent": adverse.get("adverse_barrier_percent"),
+                                  "probability_adverse_barrier_before_target": adverse.get(
+                                      "probability_adverse_barrier_before_target"),
+                                  "probability_target_before_adverse_barrier": adverse.get(
+                                      "probability_target_before_adverse_barrier"),
+                                  "sample_count": adverse.get("sample_count"),
+                                  "reliability": adverse.get("reliability"),
+                                  "reason": adverse.get("reason"),
+                              }})
         return {"available": True, "run_id": report.get("run_id"),
                 "report_date": report.get("date"), "items": items}
 

@@ -151,10 +151,14 @@ OPENAI_ANALYST_MODEL=gpt-5.6-terra
 
 The Gemini provider uses these optional values. Keep the key server-side; unpaid-tier prompts and
 responses may be used by Google to improve its products, so do not send confidential information.
+Current-news questions can use Gemini's Google Search grounding and include source links; search
+grounding is subject to Google's separate availability, quota, and pricing rules.
 
 ```env
 GEMINI_API_KEY=your_google_ai_studio_key
-GEMINI_ANALYST_MODEL=gemini-2.5-flash-lite
+GEMINI_ANALYST_MODEL=gemini-3.5-flash
+GEMINI_FALLBACK_MODEL=gemini-3.1-flash-lite
+GEMINI_WEB_SEARCH=always
 ```
 
 The key remains server-side. Assistant context excludes `.env`, credentials, `.git`, caches,
