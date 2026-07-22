@@ -1496,8 +1496,9 @@ def _trade_status(trade: dict[str, Any], current_price: float | None) -> dict[st
             "stop_distance": stop_distance, "target_distance": target_distance}
 
 
-def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabase) -> None:
-    """Stable interactive view for all trades that have not been completed."""
+@st.fragment(run_every=1)
+def live_trade_status_panel(platform: TradingPlatform, database: ReportDatabase) -> None:
+    """Auto-refreshing read-only prices and P&L for open positions."""
     open_trades = database.list_actual_trades("OPEN")
     st.subheader("Live Positions")
     if not open_trades:
@@ -1523,7 +1524,7 @@ def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabas
                         "CONNECTING / POLLING" if feed else "CACHED PRICE")
     header = st.columns([3, 1])
     header[0].caption(
-        f"{connection_label} · Use Refresh now for the latest displayed prices · "
+        f"{connection_label} · Updating every second · "
         f"{india_now:%d %b %Y, %I:%M:%S %p} IST · Market {'OPEN' if market_open else 'CLOSED'}"
     )
     header[1].button("Refresh now", key="refresh-live-positions", width="stretch")
@@ -1582,16 +1583,31 @@ def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabas
                     st.warning(f"Price may be stale: the last market tick is {int(tick_age)} seconds old.")
             if trade.get("instrument_type") == "OPTION" and current is None:
                 st.warning("Live option P&L needs the exact NSE option trading symbol. "
-                           "This position remains tracked, but its price must be entered when completing it.")
-            st.markdown("**Exit at live market price**")
-            projected = (None if current is None else
-                         (current - float(trade["entry_price"])) * int(trade["quantity"])
-                         * (1 if trade["side"] == "BUY" else -1)
-                         - float(trade.get("fees") or 0))
+                           "This position remains tracked, but cannot be auto-closed without a live quote.")
+
+
+def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabase) -> None:
+    """Combine auto-refreshing status with stable, non-refreshing exit controls."""
+    live_trade_status_panel(platform, database)
+    open_trades = database.list_actual_trades("OPEN")
+    if not open_trades:
+        return
+    st.subheader("Exit positions")
+    st.caption("Exit controls stay stable while the live cards above refresh every second. "
+               "This records a paper exit; it does not send a broker order.")
+    live_provider = getattr(platform.provider, "provider", None)
+    feed = kite_live_price_feed(live_provider) if live_provider is not None else None
+    for trade in open_trades:
+        current = _latest_trade_price(platform, trade, feed)
+        with st.container(border=True):
+            st.markdown(f"**{trade['symbol']} · {trade['side']} {trade['quantity']}**")
             if current is None:
                 st.error("A live market price is unavailable, so this position cannot be auto-closed.")
             else:
-                st.info(f"Current exit reference: {money(current)} · Projected realized P&L: "
+                projected = ((current - float(trade["entry_price"])) * int(trade["quantity"])
+                             * (1 if trade["side"] == "BUY" else -1)
+                             - float(trade.get("fees") or 0))
+                st.info(f"Latest exit reference: {money(current)} · Projected realized P&L: "
                         f"{money(projected)}")
             confirmed = st.checkbox("Confirm exit at the latest live market price",
                                     key=f"confirm-position-exit-{trade['id']}")
