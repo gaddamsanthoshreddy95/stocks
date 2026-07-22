@@ -78,6 +78,8 @@ class AdverseMoveRisk:
                 100 * sum(not item[1] for item in observations) / count, 2),
             "probability_target_before_adverse_barrier": round(
                 100 * sum(item[0] for item in observations) / count, 2),
+            "probability_adverse_barrier_before_target": round(
+                100 * sum(item[1] for item in observations) / count, 2),
             "probability_no_overnight_gap_beyond_barrier": round(
                 100 * sum(not item[2] for item in observations) / count, 2),
             "probability_overnight_gap_beyond_barrier": round(
@@ -140,6 +142,8 @@ class AdverseMoveRisk:
             "adverse_barrier_percent": round(adverse_percent, 3), "sample_count": sample_count,
             "probability_stays_above_adverse_barrier": round(stayed_above * 100 / sample_count, 2),
             "probability_target_before_adverse_barrier": round(target_first * 100 / sample_count, 2),
+            "probability_adverse_barrier_before_target": round(
+                (sample_count - stayed_above) * 100 / sample_count, 2),
             "median_worst_drawdown_percent": round(median_drawdown, 2),
             "same_day_both_hit_policy": "ADVERSE_FIRST_CONSERVATIVE",
         }

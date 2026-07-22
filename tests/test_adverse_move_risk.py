@@ -50,6 +50,7 @@ class AdverseMoveRiskTests(unittest.TestCase):
         )
         self.assertTrue(result["available"])
         self.assertEqual(result["probability_stays_above_adverse_barrier"], 100.0)
+        self.assertEqual(result["probability_adverse_barrier_before_target"], 0.0)
         self.assertGreater(result["probability_target_before_adverse_barrier"], 90)
 
     def test_insufficient_comparable_windows_fail_closed(self):
@@ -69,6 +70,7 @@ class AdverseMoveRiskTests(unittest.TestCase):
         self.assertTrue(result["available"])
         self.assertEqual(result["probability_target_before_adverse_barrier"], 0.0)
         self.assertEqual(result["probability_stays_above_adverse_barrier"], 0.0)
+        self.assertEqual(result["probability_adverse_barrier_before_target"], 100.0)
 
     def test_intraday_model_resolves_order_and_reports_overnight_gap_probability(self):
         result = AdverseMoveRisk.assess_intraday(
@@ -88,6 +90,7 @@ class AdverseMoveRiskTests(unittest.TestCase):
         self.assertTrue(result["available"])
         self.assertEqual(result["probability_overnight_gap_beyond_barrier"], 100.0)
         self.assertEqual(result["probability_target_before_adverse_barrier"], 0.0)
+        self.assertEqual(result["probability_adverse_barrier_before_target"], 100.0)
 
     def test_bearish_model_uses_downside_target_and_upside_adverse_barrier(self):
         result = AdverseMoveRisk.assess_intraday(

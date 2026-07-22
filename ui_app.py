@@ -398,6 +398,16 @@ def summary_cards(report: dict[str, Any]) -> None:
     render_metric_cards(metrics)
 
 
+def adverse_before_target_probability(risk: dict[str, Any] | None) -> float | None:
+    """Read the direct value, with compatibility for reports saved before it existed."""
+    risk = risk or {}
+    direct = risk.get("probability_adverse_barrier_before_target")
+    if direct is not None:
+        return float(direct)
+    stayed_above = risk.get("probability_stays_above_adverse_barrier")
+    return None if stayed_above is None else round(100 - float(stayed_above), 2)
+
+
 def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | None = None) -> list[dict[str, Any]]:
     execution_marks = execution_marks or {}
     rows = []
@@ -427,6 +437,8 @@ def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | Non
                 "probability_stays_above_adverse_barrier"),
             "Target before -3%": trade.get("adverse_move_risk", {}).get(
                 "probability_target_before_adverse_barrier"),
+            "Fall 3% before target": adverse_before_target_probability(
+                trade.get("adverse_move_risk")),
             "No overnight gap >3%": trade.get("adverse_move_risk", {}).get(
                 "probability_no_overnight_gap_beyond_barrier"),
             "Event risk": event.get("event_risk_score"),
@@ -584,6 +596,10 @@ def candidate_table_config() -> dict[str, Any]:
         "Resistance": st.column_config.NumberColumn(format="₹%.2f"),
         "Trigger price": st.column_config.NumberColumn(format="₹%.2f"),
         "Event risk": st.column_config.NumberColumn(format="%.0f"),
+        "Stay above -3%": st.column_config.NumberColumn(format="%.1f%%"),
+        "Target before -3%": st.column_config.NumberColumn(format="%.1f%%"),
+        "Fall 3% before target": st.column_config.NumberColumn(format="%.1f%%"),
+        "No overnight gap >3%": st.column_config.NumberColumn(format="%.1f%%"),
         "Selection reason": st.column_config.TextColumn(width="large"),
     }
 
@@ -725,6 +741,7 @@ def render_candidate_cards(platform: TradingPlatform, report: dict[str, Any],
         for column, trade in zip(columns, candidates[start:start + 2]):
             with column.container(border=True):
                 levels = trade.get("levels") or {}
+                adverse = trade.get("adverse_move_risk") or {}
                 status = trade.get("status", "WATCHLIST")
                 symbol = str(trade.get("symbol", "UNKNOWN"))
                 option_signal = option_confirmation(trade)
@@ -744,7 +761,9 @@ def render_candidate_cards(platform: TradingPlatform, report: dict[str, Any],
                     '</div>'
                     f'<div class="candidate-targets">Targets: {money(levels.get("target_1"))} · '
                     f'{money(levels.get("target_2"))}<br>Readiness: '
-                    f'{number(trade.get("execution_readiness_score"), 0)}</div>',
+                    f'{number(trade.get("execution_readiness_score"), 0)}<br>'
+                    f'Fall 3% before target: '
+                    f'{number(adverse_before_target_probability(adverse), 1)}%</div>',
                     unsafe_allow_html=True,
                 )
                 if st.button("Open trade details",
@@ -784,6 +803,8 @@ def render_candidate_comparison(report: dict[str, Any]) -> None:
         ("Stop loss", lambda item: (item.get("levels") or {}).get("stop_loss")),
         ("Relative strength", lambda item: (item.get("relative_strength") or {}).get("score")),
         ("Event risk", lambda item: (item.get("event_risk") or {}).get("event_risk_score")),
+        ("Fall 3% before target (%)", lambda item: adverse_before_target_probability(
+            item.get("adverse_move_risk"))),
         ("Option approval", lambda item: (item.get("option_trade_approval") or {}).get("status")),
     )
     for metric, getter in fields:
@@ -797,6 +818,7 @@ def render_trade_detail(platform: TradingPlatform, report: dict[str, Any], trade
                         database: ReportDatabase | None = None,
                         key_prefix: str = "detail") -> None:
     levels = trade.get("levels") or {}
+    adverse = trade.get("adverse_move_risk") or {}
     run_id, symbol = str(report.get("run_id", "")), str(trade.get("symbol", ""))
     selection = trade.get("entry_selection") or {}
     selection_status = trade.get("selection_status") or selection.get("status")
@@ -809,6 +831,8 @@ def render_trade_detail(platform: TradingPlatform, report: dict[str, Any], trade
         ("Resistance", money(levels.get("resistance"))),
         ("Risk / reward", number(levels.get("risk_reward"))),
         ("Quality", number(trade.get("quality_score"), 0)),
+        ("Fall 3% before target", (number(adverse_before_target_probability(adverse), 1) + "%")
+         if adverse_before_target_probability(adverse) is not None else "—"),
     ])
     render_price_chart(platform, symbol, levels)
     option = trade.get("option_strategy") or {}
@@ -1265,6 +1289,7 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
                          column_config=candidate_table_config(),
                          column_order=("Symbol", "Status", "Action", "Quality", "Quality score",
                                        "Readiness", "R:R", "Trigger price", "Support", "Resistance",
+                                       "Fall 3% before target", "Target before -3%",
                                        "Option approval", "Event risk", "Selection reason"))
             st.download_button("Export candidate CSV", pd.DataFrame(filtered).to_csv(index=False).encode(),
                                file_name=f"candidates-{report.get('date', 'latest')}.csv",
