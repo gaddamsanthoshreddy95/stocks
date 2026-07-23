@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-23T06:09:02.558538+00:00",
+  "generated_at": "2026-07-23T07:36:38.361287+00:00",
   "events": [
     {
       "event_id": "MARKET-WIDE-20260720",
@@ -17,7 +17,7 @@
       "event_end": null,
       "expected_duration": "ONE_TO_THREE_DAYS",
       "raw_score": 70.0,
-      "decayed_score": 9.23,
+      "decayed_score": 8.85,
       "confidence": 0.95,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -60,7 +60,7 @@
       "event_end": null,
       "expected_duration": "THREE_TO_SEVEN_DAYS",
       "raw_score": 50.0,
-      "decayed_score": 18.75,
+      "decayed_score": 18.23,
       "confidence": 0.9,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -109,7 +109,7 @@
       "event_end": null,
       "expected_duration": "THREE_TO_SEVEN_DAYS",
       "raw_score": 50.0,
-      "decayed_score": 29.99,
+      "decayed_score": 29.15,
       "confidence": 0.9,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -158,7 +158,7 @@
       "event_end": null,
       "expected_duration": "THREE_TO_SEVEN_DAYS",
       "raw_score": 75.0,
-      "decayed_score": 44.98,
+      "decayed_score": 43.73,
       "confidence": 0.9,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -207,7 +207,7 @@
       "event_end": null,
       "expected_duration": "ONE_TO_THREE_DAYS",
       "raw_score": 70.0,
-      "decayed_score": 45.28,
+      "decayed_score": 43.41,
       "confidence": 0.85,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -234,6 +234,50 @@
       ],
       "event_version": 1,
       "meaningful_update_count": 0
+    },
+    {
+      "event_id": "MARKET-WIDE-20260723",
+      "title": "Market-wide STRONG_BEARISH risk",
+      "normalized_event_type": "MARKET_WIDE_STRESS",
+      "category": "MARKET_WIDE",
+      "severity": "HIGH",
+      "direction": "VOLATILITY_ONLY",
+      "status": "ACTIVE",
+      "source_type": "MARKET_DATA",
+      "detected_at": "2026-07-23T07:36:38.361287+00:00",
+      "last_updated_at": "2026-07-23T07:36:38.361287+00:00",
+      "event_start": null,
+      "event_end": null,
+      "expected_duration": "ONE_TO_THREE_DAYS",
+      "raw_score": 70,
+      "decayed_score": 70,
+      "confidence": 0.95,
+      "freshness_score": 100.0,
+      "materiality": 1.0,
+      "gap_risk": 70,
+      "affected_sectors": [],
+      "affected_symbols": [],
+      "affected_regions": [],
+      "affected_commodities": [],
+      "reasons": [
+        "Existing regime STRONG_BEARISH; VIX 13.637499809265137."
+      ],
+      "source_titles": [],
+      "source_urls_or_ids": [],
+      "is_scheduled": false,
+      "is_confirmed": true,
+      "is_duplicate": false,
+      "duplicate_of": null,
+      "half_life_hours": 24.0,
+      "decay_model": "EXPONENTIAL",
+      "expiry_time": null,
+      "canonical_event_id": "a5567137fd8d1e9e",
+      "related_article_ids": [
+        "MARKET-WIDE-20260723",
+        "MARKET-WIDE-20260723"
+      ],
+      "event_version": 1,
+      "meaningful_update_count": 1
     }
   ]
 }
