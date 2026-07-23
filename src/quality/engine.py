@@ -392,7 +392,15 @@ class CandidateQualityEngine:
             return QualityScore(0, "FAIL", 100, reason_codes=["INVALID_STOP"])
         if target <= entry:
             return QualityScore(0, "FAIL", 100, reason_codes=["INVALID_TARGET"])
-        risk, reward = entry - stop, target - entry
+        risk = entry - stop
+        target_basis = str(plan.get("target_basis") or "NEAREST_RESISTANCE")
+        projected_basis = target_basis in {
+            "BREAKOUT_WEIGHTED_TARGETS", "SECOND_TARGET_BREAKOUT",
+        }
+        reward = (
+            float(plan.get("expected_reward") or 0)
+            if projected_basis else target - entry
+        )
         ratio = reward / risk if risk > 1e-9 else 0
         score = 100 if ratio >= 4 else 90 if ratio >= 3 else 75 if ratio >= 2 else (
             55 if ratio >= 1.5 else 25 if ratio >= 1 else 0)

@@ -114,6 +114,18 @@ def combine_strategy_eligibility(entry_confirmed: bool, equity_risk_reward: floa
     }
 
 
+def composite_failure_disposition(failures: list[str]) -> str:
+    """Separate unsafe candidates from sound candidates that need a better entry.
+
+    Reward/risk and target failures are execution-timing failures: they must
+    block a position now, but should not permanently reject an otherwise valid
+    stock setup. Invalid stops and the remaining quality gates stay rejected.
+    """
+    normalized = {str(item).upper() for item in failures}
+    timing_only = {"MINIMUM_RISK_REWARD", "VALID_TARGET"}
+    return "WATCHLIST" if normalized and normalized <= timing_only else "REJECT"
+
+
 def classify_setup(trend: str, momentum: str) -> str:
     trend, momentum = (trend or "").upper(), (momentum or "").upper()
     if "BULLISH" in trend and "BEARISH" in momentum:

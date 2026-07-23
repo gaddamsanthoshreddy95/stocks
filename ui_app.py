@@ -717,26 +717,34 @@ def ranking_explanation(candidate: dict[str, Any]) -> str:
 
 def ranked_opportunity_rows(candidates: list[dict[str, Any]], generated_at: Any,
                             previous: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """Build one sortable decision table across trades, watchlist, and rejections."""
+    """Build an actionability-first table without hiding underlying quality."""
     changes = {row["Symbol"]: row for row in report_changes(
         {"trades": [c for c in candidates if c.get("_opportunity_source") == "TRADE"],
          "watchlist": [c for c in candidates if c.get("_opportunity_source") == "WATCHLIST"],
          "rejected": [c for c in candidates if c.get("_opportunity_source") == "REJECTED"]}, previous)}
     freshness = freshness_status(generated_at)
     ordered = sorted(candidates, key=lambda item: (
-        -float(item.get("quality_score") or 0),
-        -float(item.get("execution_readiness_score") or 0), str(item.get("symbol"))))
+        int(item.get("actionability_rank") or 10_000),
+        -float(item.get("actionability_score") or 0),
+        str(item.get("symbol")),
+    ))
     rows = []
-    for rank, item in enumerate(ordered, 1):
+    for fallback_rank, item in enumerate(ordered, 1):
         option = option_confirmation(item)
         change = changes.get(str(item.get("symbol")), {})
-        rows.append({"Rank": rank, "Symbol": item.get("symbol"),
+        rows.append({"Entry rank": item.get("actionability_rank") or fallback_rank,
+                     "Quality rank": item.get("quality_rank"),
+                     "Option rank": item.get("option_selling_rank"),
+                     "Symbol": item.get("symbol"),
                      "Action": item.get("final_action") or item.get("status"),
+                     "Entry bucket": item.get("actionability_bucket", "UNKNOWN"),
+                     "Entry score": item.get("actionability_score"),
                      "Quality": item.get("quality_score"),
                      "Readiness": item.get("execution_readiness_score"),
                      "R:R": (item.get("levels") or {}).get("risk_reward"),
                      "Sector strength": (item.get("sector_context") or {}).get("score"),
                      "Options": option["label"], "Option score": option["score"],
+                     "Option exclusion": item.get("option_selling_exclusion_reason") or "—",
                      "Data": f"{freshness['label']} · {freshness['age']}",
                      "Change": change.get("Change", "UNCHANGED"),
                      "Score Δ": change.get("Score change"),
@@ -1998,13 +2006,15 @@ def opportunities_page(platform: TradingPlatform, database: ReportDatabase) -> N
                 unsafe_allow_html=True)
     ranked_rows = ranked_opportunity_rows(candidates, generated_at, previous)
     st.subheader("Ranked opportunity board")
-    st.caption("One sortable view of every candidate. Option confirmation uses recorded Zerodha "
-               "chain evidence and never upgrades an otherwise rejected equity setup.")
+    st.caption("Entry rank answers “what is actionable now”; quality rank measures the "
+               "underlying setup; option rank includes only approved, liquid structures.")
     if ranked_rows:
         st.dataframe(pd.DataFrame(ranked_rows), width="stretch", hide_index=True,
                      column_config={
                          "Quality": st.column_config.ProgressColumn(min_value=0, max_value=100,
                                                                     format="%.0f"),
+                         "Entry score": st.column_config.ProgressColumn(
+                             min_value=0, max_value=100, format="%.0f"),
                          "Readiness": st.column_config.ProgressColumn(min_value=0, max_value=100,
                                                                       format="%.0f"),
                          "Option score": st.column_config.ProgressColumn(min_value=0, max_value=100,
@@ -2013,6 +2023,7 @@ def opportunities_page(platform: TradingPlatform, database: ReportDatabase) -> N
                          "Score Δ": st.column_config.NumberColumn(format="%+.0f"),
                          "Why ranked": st.column_config.TextColumn(width="large"),
                          "Primary blocker": st.column_config.TextColumn(width="medium"),
+                         "Option exclusion": st.column_config.TextColumn(width="large"),
                      })
     else:
         st.info("No candidates are available for ranking.")

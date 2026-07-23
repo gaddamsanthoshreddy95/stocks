@@ -23,7 +23,7 @@ from src.workflow.decision_policy import (
     classify_setup, market_alignment, normalize_market_regime,
     option_confidence_status, pcr_adjustment, market_risk_scale,
     combine_strategy_eligibility, risk_reward_tier, adaptive_market_policy,
-    expected_value,
+    expected_value, composite_failure_disposition,
 )
 from src.event_risk import EventRiskService
 from src.event_risk.service import DailyEventContext
@@ -33,6 +33,9 @@ from src.workflow.final_decision import (
     EntryConfirmationResult, FinalConsistencyValidator, FinalDecisionEngine,
 )
 from src.workflow.stock_selection import classify_entry_timing
+from src.workflow.opportunity_ranking import (
+    actionability_sort_key, annotate_opportunity_rankings,
+)
 from src.options.structure_validator import OptionStructureValidator
 from src.quality.engine import CandidateQualityEngine
 from src.quality.portfolio import apply_soft_sector_cap, reduce_correlated_exposure
@@ -922,10 +925,10 @@ class DailyTradingAssistant:
             confirmation_approved, plan["risk_reward"],
             self.platform.settings.equity_min_risk_reward, short_put_approved,
         )
-        risk_reward_rejects_setup = plan["risk_reward"] < absolute_rr_floor
-        equity_execution_failure = (
-            risk_reward_rejects_setup or plan["stop_loss"] <= 0
-        )
+        # Poor reward/risk blocks execution but is often repaired by waiting
+        # for a better entry or for nearby resistance to clear. It is not, by
+        # itself, evidence that the underlying candidate is unsafe.
+        equity_execution_failure = plan["stop_loss"] <= 0
         critical_failure = (
             not validation["approved"]
             or (equity_execution_failure and not short_put_approved)
@@ -1380,10 +1383,13 @@ class DailyTradingAssistant:
                     if quality_failures else
                     f"Composite recommendation is {composite_action}."
                 )
-                trade["status"] = "REJECTED"
-                trade["final_action"] = trade["action"] = trade["recommendation"] = "REJECT"
+                disposition = composite_failure_disposition(quality_failures)
+                trade["status"] = "WATCHLIST" if disposition == "WATCHLIST" else "REJECTED"
+                final_action = "WAIT_FOR_CONFIRMATION" if disposition == "WATCHLIST" else "REJECT"
+                trade["final_action"] = trade["action"] = trade["recommendation"] = final_action
                 trade["trade_eligibility"] = {
-                    **trade["trade_eligibility"], "eligible": False, "status": "REJECTED",
+                    **trade["trade_eligibility"], "eligible": False,
+                    "status": trade["status"],
                     "blocking_reasons": [
                         *trade["trade_eligibility"].get("blocking_reasons", []), reason],
                 }
@@ -1391,7 +1397,10 @@ class DailyTradingAssistant:
                     **trade["risk"], "quantity": 0, "capital_used": 0,
                     "risk_amount": 0, "actual_risk": 0,
                 }
-                trade["selection_status"], trade["selection_reason"] = "AVOID", reason
+                trade["selection_status"] = (
+                    "WAIT FOR BREAKOUT" if disposition == "WATCHLIST" else "AVOID"
+                )
+                trade["selection_reason"] = reason
             elif composite_action == "WATCH":
                 trade["status"] = "WATCHLIST"
                 trade["final_action"] = trade["action"] = trade["recommendation"] = "WATCHLIST"
@@ -1651,7 +1660,8 @@ class DailyTradingAssistant:
                         record_recommendation=False)
             for index, candidate in enumerate(candidates, start=1)
         ]
-        reviewed.sort(key=self._ranking_key, reverse=True)
+        annotate_opportunity_rankings(reviewed)
+        reviewed.sort(key=actionability_sort_key, reverse=True)
         legacy_order = sorted(reviewed, key=self._legacy_ranking_key, reverse=True)
         composite_order = sorted(
             reviewed,

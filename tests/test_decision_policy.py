@@ -8,6 +8,7 @@ from src.workflow.decision_policy import (
     risk_reward_tier,
     adaptive_market_policy,
     expected_value,
+    composite_failure_disposition,
 )
 
 
@@ -56,3 +57,19 @@ class DecisionPolicyTests(unittest.TestCase):
         self.assertFalse(result["equity_approved"])
         self.assertTrue(result["short_put_approved"])
         self.assertTrue(result["any_approved"])
+
+    def test_timing_only_composite_failure_stays_on_watchlist(self):
+        self.assertEqual(
+            composite_failure_disposition(["MINIMUM_RISK_REWARD"]),
+            "WATCHLIST",
+        )
+        self.assertEqual(
+            composite_failure_disposition(["VALID_TARGET", "MINIMUM_RISK_REWARD"]),
+            "WATCHLIST",
+        )
+
+    def test_safety_composite_failure_remains_rejected(self):
+        self.assertEqual(
+            composite_failure_disposition(["VALID_STOP"]),
+            "REJECT",
+        )

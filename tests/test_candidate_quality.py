@@ -223,6 +223,21 @@ def test_risk_reward_bands(ratio, expected):
     assert result.score == expected
 
 
+def test_breakout_quality_uses_the_same_projected_reward_as_trade_plan():
+    result = CandidateQualityEngine.risk_reward_quality({
+        "entry": 100,
+        "stop_loss": 95,
+        "target1": 102,
+        "expected_reward": 10,
+        "risk_reward": 2,
+        "target_basis": "SECOND_TARGET_BREAKOUT",
+    }, 5)
+
+    assert result.status == "PASS"
+    assert result.score == 75
+    assert result.factors["risk_reward"] == 2
+
+
 def test_invalid_stop_and_target_rejected():
     invalid_stop = CandidateQualityEngine.risk_reward_quality({
         "entry": 100, "stop_loss": 101, "target1": 120}, 5)

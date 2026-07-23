@@ -84,6 +84,12 @@ class DailyReportContractTests(unittest.TestCase):
             self.assertIn("execution_readiness_score", trade)
             self.assertIn("execution_status", trade)
             self.assertIn("execution_label", trade)
+            self.assertIn("quality_rank", trade)
+            self.assertIn("actionability_rank", trade)
+            self.assertIn("actionability_score", trade)
+            self.assertIn("actionability_bucket", trade)
+            self.assertIn("option_selling_rank", trade)
+            self.assertIn("option_selling_eligible", trade)
             self.assertIn(trade["trade_readiness"]["classification"], {
                 "EXECUTE", "PREPARE", "WATCH_INTRADAY", "WAIT", "IGNORE",
             })

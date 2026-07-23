@@ -45,9 +45,9 @@ class EntryConfirmationResult:
     def from_setup(cls, setup_evaluation: dict[str, Any], required: bool = True) -> "EntryConfirmationResult":
         canonical = setup_evaluation.get("entry_confirmation")
         if isinstance(canonical, dict):
-            result = cls.from_dict(canonical)
-            return result if required else cls(True, result.score, result.passed_checks,
-                                               result.failed_checks, result.timestamp)
+            # Preserve observed confirmation evidence. Whether confirmation is
+            # required affects eligibility policy, not the truth of the checks.
+            return cls.from_dict(canonical)
         stage = setup_evaluation.get("stage_2") or {}
         checks = stage.get("checks") or {}
         if checks:
