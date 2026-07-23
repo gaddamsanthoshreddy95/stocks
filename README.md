@@ -270,6 +270,19 @@ A daily report follows this sequence:
 8. Save the complete immutable report JSON to SQLite and present the same
    result through Streamlit, REST, CLI text, and downloadable JSON.
 
+Price-action structure is represented as scored supply and demand ranges, not
+only exact support/resistance prices. Zones are built from confirmed swing
+bases, departure strength, formation volume, freshness, and retests. When the
+latest daily candle falls beyond the larger of `RECOVERY_SHOCK_FLOOR_PERCENT`
+or `RECOVERY_SHOCK_ATR_MULTIPLE × ATR%`, the stock remains a reversal-watch
+candidate rather than being automatically accepted or rejected. A bullish
+trade then requires 15-minute evidence: demand must hold, selling must
+stabilize, a higher low and swing-high break must form, price must hold above
+VWAP, green volume must dominate recent red volume, nearby supply must leave
+adequate clearance, and the confirmed entry must retain the configured
+reward/risk. The report exposes `FALLING_KNIFE`, `AT_DEMAND`, `STABILIZING`,
+`RECOVERY_BUILDING`, `REVERSAL_CONFIRMED`, and `FAILED_REVERSAL` states.
+
 ```mermaid
 flowchart TD
     U[Universe] --> H[Historical and live market data]

@@ -8,6 +8,7 @@ from src.config.trading_config import (
     BUY,
     NEUTRAL,
     SIGNAL_WEIGHTS,
+    PRICE_ACTION_SCORE_WEIGHT,
     STRONG_BUY,
     WATCHLIST,
 )
@@ -16,6 +17,30 @@ from src.signals.base_signal import Signal
 
 
 class ScoreEngine:
+
+    @staticmethod
+    def recommendation(score: float) -> str:
+        if score >= STRONG_BUY:
+            return "STRONG BUY"
+        if score >= BUY:
+            return "BUY"
+        if score >= WATCHLIST:
+            return "WATCHLIST"
+        if score >= NEUTRAL:
+            return "NEUTRAL"
+        return "AVOID"
+
+    @classmethod
+    def integrate_setup_score(cls, base_score: float, setup: dict) -> dict:
+        """Blend the new component score into the established final score."""
+        if setup.get("status") != "OK" or not setup.get("direction"):
+            score = round(base_score)
+        else:
+            setup_score = float((setup.get("score") or {}).get("score", 0))
+            score = round(base_score * (1 - PRICE_ACTION_SCORE_WEIGHT)
+                          + setup_score * PRICE_ACTION_SCORE_WEIGHT)
+        return {"score": score, "max_score": 100,
+                "recommendation": cls.recommendation(score)}
 
     @staticmethod
     def calculate(signals: List[Signal]):
@@ -40,25 +65,7 @@ class ScoreEngine:
 
         score = round(weighted_score / total_weight)
 
-        if score >= STRONG_BUY:
-
-            recommendation = "STRONG BUY"
-
-        elif score >= BUY:
-
-            recommendation = "BUY"
-
-        elif score >= WATCHLIST:
-
-            recommendation = "WATCHLIST"
-
-        elif score >= NEUTRAL:
-
-            recommendation = "NEUTRAL"
-
-        else:
-
-            recommendation = "AVOID"
+        recommendation = ScoreEngine.recommendation(score)
 
         return {
 

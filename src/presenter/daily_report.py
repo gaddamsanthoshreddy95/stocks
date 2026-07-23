@@ -39,6 +39,10 @@ class DailyReportPresenter:
                 f"RANKING MODE         : {report.get('ranking_mode', 'EXPECTED_VALUE')}", line]
         for trade in [*report["trades"], *report.get("watchlist", [])]:
             levels, risk = trade["levels"], trade["risk"]
+            zones = trade.get("supply_demand") or {}
+            recovery = trade.get("intraday_recovery") or {}
+            demand = zones.get("nearest_demand") or {}
+            supply = zones.get("nearest_supply") or {}
             rows.extend([
                 f"{trade['status']} #{trade['rank']} — {trade['symbol']}", "-" * 68,
                 "QUALITY",
@@ -79,6 +83,12 @@ class DailyReportPresenter:
                 f"{trade['relative_strength']['rating']} / "
                 f"{trade['relative_strength'].get('score', 'N/A')}",
                 f"Support / resistance : {cls._money(levels['support'])} / {cls._money(levels['resistance'])}",
+                f"Demand zone          : {cls._money(demand.get('lower'))}–{cls._money(demand.get('upper'))} "
+                f"(score {demand.get('score', 'N/A')})",
+                f"Supply zone          : {cls._money(supply.get('lower'))}–{cls._money(supply.get('upper'))} "
+                f"(score {supply.get('score', 'N/A')})",
+                f"15m recovery         : {recovery.get('state', 'NOT_REQUIRED')} "
+                f"({recovery.get('score', 0)}/100; {'CONFIRMED' if recovery.get('confirmed') else 'NOT CONFIRMED'})",
                 f"Entry / stop         : {cls._money(levels['entry'])} / {cls._money(levels['stop_loss'])}",
                 f"Targets              : {cls._money(levels['target_1'])}, {cls._money(levels['target_2'])}, {cls._money(levels['target_3'])}",
                 f"Target model         : {levels.get('target_basis', 'NEAREST_RESISTANCE')} ({levels.get('breakout_probability', 0)}% breakout probability)",

@@ -12,6 +12,8 @@ from src.indicators.pipeline import IndicatorPipeline
 from src.trade_setup.entry_analyzer import EntryAnalyzer
 from src.decision.decision_engine import DecisionEngine
 from src.decision.setup_entry_evaluator import SetupEntryEvaluator
+from src.analysis.price_action_engine import PriceActionEngine
+from src.scoring.score_engine import ScoreEngine
 
 
 class TradingEngine:
@@ -75,6 +77,11 @@ class TradingEngine:
 
         candlestick = PatternDetector.detect(df)
 
+        price_action = PriceActionEngine().analyze(df)
+        integrated_score = ScoreEngine.integrate_setup_score(analysis.score, price_action)
+        analysis.score = integrated_score["score"]
+        analysis.recommendation = integrated_score["recommendation"]
+
         setup_evaluation = SetupEntryEvaluator.evaluate(
             df, analysis, entry, breakout, candlestick, settings=self.settings
         )
@@ -105,6 +112,8 @@ class TradingEngine:
             "breakout": breakout,
 
             "candlestick": candlestick,
+
+            "price_action": price_action,
 
             "market_quality": self._market_quality(df),
 

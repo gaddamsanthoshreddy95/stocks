@@ -186,7 +186,9 @@ class DailyTradingAssistant:
     def _bullish_stock_selection_filters(*, plan: dict, setup: str, technical: dict,
                                          entry_quality: dict, adverse: dict,
                                          relative_strength: dict, sector: dict,
-                                         liquidity: dict, settings) -> dict[str, Any]:
+                                         liquidity: dict, settings,
+                                         intraday_recovery: dict | None = None,
+                                         supply_demand: dict | None = None) -> dict[str, Any]:
         """Hard stock-selection gates, separate from portfolio and position policy."""
         entry = float(plan.get("entry") or 0)
         stop = float(plan.get("stop_loss") or 0)
@@ -199,7 +201,30 @@ class DailyTradingAssistant:
         breakout = setup == "BREAKOUT"
         minimum_volume = (settings.entry_confirmation_relative_volume if breakout
                           else settings.entry_min_relative_volume)
+        recovery = intraday_recovery or {}
+        recovery_required = bool(recovery.get("required") and recovery.get("shock_detected"))
+        recovery_passed = not recovery_required or bool(recovery.get("confirmed"))
+        zones = supply_demand or {}
+        demand = zones.get("nearest_demand") or {}
+        demand_holds = (
+            not zones.get("available") or not demand
+            or float(technical.get("current_price") or entry) >= float(demand.get("lower") or 0)
+        )
         checks = [
+            {"name": "sharp_fall_recovery_confirmation", "passed": recovery_passed,
+             "value": recovery.get("state", "NOT_REQUIRED"),
+             "minimum_or_maximum": "REVERSAL_CONFIRMED",
+             "reason": (recovery.get("reason")
+                        or "A sharp daily fall requires confirmed 15-minute recovery.")},
+            {"name": "demand_zone_not_invalidated", "passed": demand_holds,
+             "value": (
+                 f"{demand.get('lower')}–{demand.get('upper')}" if demand else "UNAVAILABLE"
+             ),
+             "minimum_or_maximum": "PRICE_AT_OR_ABOVE_DEMAND_LOW",
+             "reason": (
+                 "The nearest demand zone remains intact."
+                 if demand_holds else "Price has broken below the nearest demand zone."
+             )},
             {"name": "logical_stop_within_limit", "passed": stop_percent <= settings.bullish_max_technical_stop_percent,
              "value": round(stop_percent, 2), "minimum_or_maximum": settings.bullish_max_technical_stop_percent,
              "reason": f"Technical stop is {stop_percent:.2f}% from entry; maximum is {settings.bullish_max_technical_stop_percent}%."},
@@ -586,6 +611,33 @@ class DailyTradingAssistant:
             candidate.get("entry_report", analysis["entry"]),
             breakout_probability=contextual_breakout_probability,
         ))
+        recovery_plan = (analysis.get("intraday_recovery") or {}).get("recalculated_trade") or {}
+        if (analysis.get("intraday_recovery") or {}).get("confirmed") and recovery_plan:
+            recovery_entry = float(recovery_plan["entry"])
+            recovery_stop = float(recovery_plan["stop_loss"])
+            recovery_target = float(recovery_plan["target"])
+            recovery_risk = recovery_entry - recovery_stop
+            recovery_reward = recovery_target - recovery_entry
+            plan.update({
+                "entry": round(recovery_entry, 2),
+                "stop_loss": round(recovery_stop, 2),
+                "target1": round(recovery_target, 2),
+                "target2": round(max(float(plan["target2"]), recovery_target), 2),
+                "target3": round(max(float(plan["target3"]), recovery_target), 2),
+                "risk": round(recovery_risk, 2),
+                "reward": round(recovery_reward, 2),
+                "expected_reward": round(recovery_reward, 2),
+                "nearest_target_reward": round(recovery_reward, 2),
+                "risk_reward": round(
+                    recovery_reward / recovery_risk, 2
+                ) if recovery_risk > 0 else 0,
+                "target_basis": "15_MINUTE_RECOVERY_TO_SUPPLY",
+                "diagnostics": [
+                    *(plan.get("diagnostics") or []),
+                    "Entry, stop and first target were recalculated from confirmed "
+                    "15-minute recovery and nearest supply/demand zones.",
+                ],
+            })
         adverse_move_risk = {"available": False, "reason": "Not applicable to bearish setup."}
         if direction == "BULLISH":
             target_percent = (float(plan.get("expected_reward") or 0) * 100
@@ -755,6 +807,8 @@ class DailyTradingAssistant:
                                entry_quality=entry_quality, adverse=adverse_move_risk,
                                relative_strength=relative_strength, sector=sector_data,
                                liquidity=candidate["stock_liquidity"], settings=self.platform.settings,
+                               intraday_recovery=analysis.get("intraday_recovery"),
+                               supply_demand=analysis.get("supply_demand"),
                            ))
         reasons = [
             candidate["reason"],
@@ -1020,6 +1074,8 @@ class DailyTradingAssistant:
                 "breakout": analysis["breakout"],
                 "candlestick": analysis["candlestick"],
             },
+            "supply_demand": analysis.get("supply_demand", {}),
+            "intraday_recovery": analysis.get("intraday_recovery", {}),
             "levels": {
                 "support": analysis["entry"]["support"],
                 "resistance": analysis["entry"]["resistance"],
@@ -1410,9 +1466,11 @@ class DailyTradingAssistant:
         # technical, market, liquidity, risk, and execution gates. A three-name
         # buffer allows bearish material news to remove a finalist.
         news_started = perf_counter()
-        news_target_symbols = [
+        news_target_symbols = ([
             trade["symbol"] for trade in preliminary if trade["status"] != "REJECTED"
         ][:min(len(preliminary), limit + 3)]
+                               if self.platform.settings.market_data_source == "kite"
+                               else [])
         news_by_symbol: dict[str, dict[str, Any]] = {}
         results: list[dict[str, Any]] = []
         if self.platform.settings.market_data_source == "kite" and news_target_symbols:

@@ -10,6 +10,7 @@ from src.analysis.analyzer import StockAnalyzer
 from src.data_provider.provider import DataProvider
 from src.indicators.pipeline import IndicatorPipeline
 from src.models.decision_context import DecisionContext
+from src.analysis.price_action_engine import PriceActionEngine
 
 
 class TechnicalEngine:
@@ -57,6 +58,7 @@ class TechnicalEngine:
         # --------------------------------------------------
 
         report = StockAnalyzer.analyze(symbol, df)
+        price_action = PriceActionEngine().analyze(df)
 
         reasons = []
 
@@ -154,7 +156,8 @@ class TechnicalEngine:
 
                 "atr": report.atr,
 
-                "recommendation": report.recommendation
+                "recommendation": report.recommendation,
+                "price_action": price_action,
 
             }
 

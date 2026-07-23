@@ -10,10 +10,78 @@ from ui_app import (adverse_risk_view, candidate_rows, likely_news_reaction, new
                     ranked_opportunity_rows, price_figure, report_changes,
                     missing_required_credentials,
                     portfolio_snapshot, primary_blocker, rejection_summary, snapshot_rows,
-                    trade_override_required, trade_performance, _trade_status)
+                    trade_override_required, trade_performance, _trade_status,
+                    price_action_summary, setup_lifecycle_rows, setup_score_rows,
+                    entry_alternative_rows, grouped_setup_rejections, option_safety_view)
 
 
 class UIMarketContextTests(unittest.TestCase):
+    @staticmethod
+    def _price_action():
+        return {
+            "direction": "BULLISH",
+            "patterns": [{"pattern": "MORNING DOJI STAR", "candle_indexes": ["2026-07-20"]}],
+            "breakout": {"quality": "STRONG", "breakout_candle": "2026-07-21"},
+            "retest": {"retest_quality": "VALID", "retest_type": "WICK_RETEST",
+                       "retest_timestamp": "2026-07-22",
+                       "confirmation_timestamp": "2026-07-23"},
+            "entries": [{"entry_mode": "RETEST_CONFIRMATION", "setup": "Bullish retest",
+                         "entry_price": 100, "stop_loss": 95, "targets": [110, 115],
+                         "risk_reward": [2, 3], "confidence": 84,
+                         "signal_timestamp": "2026-07-23",
+                         "expiry_maximum_waiting_bars": 10}],
+            "score": {"score": 82, "category": "HIGH_CONFIDENCE",
+                      "component_scores": {"trend": 80, "retest": 90},
+                      "weights": {"trend": .4, "retest": .6}},
+            "rejection_reasons": ["LOW_RELATIVE_VOLUME"],
+            "breakout_events": [{"reason_codes": ["STRONG_OPPOSING_ZONE_TOO_CLOSE"]}],
+        }
+
+    def test_price_action_summary_prioritizes_best_entry(self):
+        summary = price_action_summary(self._price_action())
+        self.assertEqual(summary["entry_mode"], "RETEST_CONFIRMATION")
+        self.assertEqual(summary["entry"], 100)
+        self.assertEqual(summary["category"], "HIGH_CONFIDENCE")
+
+    def test_setup_lifecycle_and_score_rows_are_user_facing(self):
+        lifecycle = setup_lifecycle_rows(self._price_action())
+        self.assertEqual([row["Status"] for row in lifecycle], ["COMPLETE"] * 5)
+        scores = setup_score_rows(self._price_action())
+        self.assertEqual(scores[0], {"Component": "Trend", "Score": 80.0, "Weight": 40.0})
+
+    def test_entry_comparison_and_grouped_rejections(self):
+        alternatives = entry_alternative_rows(self._price_action())
+        self.assertEqual(alternatives[0]["Best R:R"], 3)
+        grouped = grouped_setup_rejections(self._price_action())
+        self.assertEqual({row["Category"] for row in grouped},
+                         {"Volume/volatility", "Opposing zone"})
+
+    def test_option_safety_projection_does_not_invent_data(self):
+        self.assertFalse(option_safety_view({})["available"])
+        view = option_safety_view({"technical_validation": {
+            "spot_price": 100, "suggested_strike": 90, "nearest_support": 95,
+            "breakout_status": "VALID", "warnings": ["SAFE_DISTANCE"],
+        }})
+        self.assertTrue(view["available"])
+        self.assertEqual(view["strike"], 90)
+
+    def test_chart_granular_overlays_can_be_disabled(self):
+        frame = pd.DataFrame({
+            "Open": [100, 101], "High": [102, 103], "Low": [99, 100],
+            "Close": [101, 102], "Volume": [1000, 1200],
+        }, index=pd.date_range("2026-01-01", periods=2))
+        levels = {
+            "zones": [{"type": "SUPPORT", "lower": 98, "upper": 99}],
+            "pattern": {"timestamp": frame.index[-1], "price": 102, "name": "Pattern"},
+            "overlay_visibility": {"zones": False, "patterns": False, "swings": False,
+                                   "breakout": False, "retest": False,
+                                   "confirmation": False, "trade_levels": False},
+        }
+        figure = price_figure(frame, "TEST", levels, moving_averages=(),
+                              show_volume=False, show_rsi=False)
+        self.assertEqual(len(figure.data), 1)
+        self.assertFalse(figure.layout.shapes)
+
     def test_required_credentials_depend_on_market_data_mode(self):
         self.assertEqual(missing_required_credentials({"MARKET_DATA_SOURCE": "cache"}), [])
         self.assertEqual(

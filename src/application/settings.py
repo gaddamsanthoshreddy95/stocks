@@ -70,6 +70,11 @@ class PlatformSettings:
     bullish_barrier_horizon_days: int = 5
     bullish_barrier_minimum_samples: int = 60
     bullish_intraday_barrier_minimum_samples: int = 30
+    recovery_shock_floor_percent: float = 4.0
+    recovery_shock_atr_multiple: float = 1.5
+    recovery_minimum_score: float = 70.0
+    recovery_minimum_risk_reward: float = 1.5
+    recovery_green_red_volume_ratio: float = 1.1
     bullish_max_technical_stop_percent: float = 3.0
     bullish_min_target_before_adverse_probability: float = 55.0
     bullish_min_no_overnight_gap_probability: float = 95.0
@@ -228,6 +233,12 @@ class PlatformSettings:
                 or self.bullish_barrier_minimum_samples < 20
                 or self.bullish_intraday_barrier_minimum_samples < 20):
             raise ValueError("Bullish adverse-move probability settings are invalid")
+        if (not 0 < self.recovery_shock_floor_percent < 100
+                or self.recovery_shock_atr_multiple <= 0
+                or not 0 <= self.recovery_minimum_score <= 100
+                or self.recovery_minimum_risk_reward <= 0
+                or self.recovery_green_red_volume_ratio <= 0):
+            raise ValueError("Intraday recovery settings are invalid")
         if (not 0 < self.bullish_max_technical_stop_percent < 100
                 or not 0 <= self.bullish_min_target_before_adverse_probability <= 100
                 or not 0 <= self.bullish_min_no_overnight_gap_probability <= 100
@@ -384,6 +395,12 @@ class PlatformSettings:
             bullish_barrier_minimum_samples=env_int("BULLISH_BARRIER_MINIMUM_SAMPLES", 60),
             bullish_intraday_barrier_minimum_samples=env_int(
                 "BULLISH_INTRADAY_BARRIER_MINIMUM_SAMPLES", 30),
+            recovery_shock_floor_percent=env_float("RECOVERY_SHOCK_FLOOR_PERCENT", 4),
+            recovery_shock_atr_multiple=env_float("RECOVERY_SHOCK_ATR_MULTIPLE", 1.5),
+            recovery_minimum_score=env_float("RECOVERY_MINIMUM_SCORE", 70),
+            recovery_minimum_risk_reward=env_float("RECOVERY_MINIMUM_RISK_REWARD", 1.5),
+            recovery_green_red_volume_ratio=env_float(
+                "RECOVERY_GREEN_RED_VOLUME_RATIO", 1.1),
             bullish_max_technical_stop_percent=env_float(
                 "BULLISH_MAX_TECHNICAL_STOP_PERCENT", 3),
             bullish_min_target_before_adverse_probability=env_float(

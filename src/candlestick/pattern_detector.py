@@ -21,6 +21,10 @@ class PatternDetector:
         "DARK CLOUD COVER", "BEARISH HARAMI", "THREE BLACK CROWS", "RISING THREE METHODS",
         "FALLING THREE METHODS", "DOJI", "SPINNING TOP", "TWEEZER TOP", "TWEEZER BOTTOM",
     )
+    ADVANCED_PATTERNS = (
+        "MORNING DOJI STAR", "BULLISH ABANDONED BABY", "BEARISH THREE-LINE STRIKE",
+        "EVENING DOJI STAR", "BEARISH ABANDONED BABY", "BULLISH THREE-LINE STRIKE",
+    )
 
     @staticmethod
     def _candle(row) -> dict[str, Any]:
@@ -201,6 +205,11 @@ class PatternDetector:
                 and curr["close"] >= prev["open"] and context["uptrend"] and context["near_resistance"]):
             return cls._result("BEARISH HARAMI", "SELL", 35, context, True, True)
 
+        if len(df) >= 3:
+            from src.candlestick.triple_patterns import TripleCandlePatternDetector
+            advanced = TripleCandlePatternDetector().detect(df)
+            if advanced:
+                return advanced
         single_context = cls._context(df, 1)
         if curr["body"] / curr["span"] <= .1:
             return cls._neutral("DOJI", 55, single_context, location_sensitive=True)

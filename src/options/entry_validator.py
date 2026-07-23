@@ -7,7 +7,8 @@ class OptionEntryValidator:
     """Turn option-chain context into explicit go/no-go conditions."""
 
     @staticmethod
-    def validate(chain, trade: dict, direction: str, settings=None) -> dict:
+    def validate(chain, trade: dict, direction: str, settings=None,
+                 technical: dict | None = None, event_risk: bool = False) -> dict:
         if settings is None:
             from src.application.settings import PlatformSettings
             settings = PlatformSettings()
@@ -48,6 +49,15 @@ class OptionEntryValidator:
                 warnings.append(f"high implied volatility ({iv:.1f}%) increases premium/vega risk")
             if long_leg.get("price_change") is not None and long_leg["price_change"] < 0:
                 warnings.append("long option premium is falling")
+        technical_validation = None
+        if technical and trade.get("legs"):
+            from src.options.technical_validator import TechnicalOptionValidator
+            short_leg = next((leg for leg in trade["legs"] if leg.get("side") == "SELL"), trade["legs"][0])
+            technical_validation = TechnicalOptionValidator.validate(
+                direction, float(short_leg.get("strike", spot)), float(spot), technical, event_risk)
+            approved = approved and technical_validation["approved"]
+            warnings.extend(technical_validation["warnings"])
         return {"approved": approved, "reasons": reasons, "warnings": warnings,
                 "call_oi_resistance": call_resistance.strike if call_resistance else None,
-                "call_oi_change": call_resistance.change_in_oi if call_resistance else None}
+                "call_oi_change": call_resistance.change_in_oi if call_resistance else None,
+                "technical_validation": technical_validation}
