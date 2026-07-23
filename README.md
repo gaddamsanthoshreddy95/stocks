@@ -206,6 +206,21 @@ Transformers exposes optional computer-vision modules that reference
 `torchvision`; disabling the watcher prevents misleading `ModuleNotFoundError:
 torchvision` messages without installing an unrelated vision stack.
 
+## Sensibull results calendar
+
+The optional Sensibull calendar scraper uses Playwright because the calendar is
+rendered in the browser. After installing `requirements.txt`, install Chromium
+and its Linux runtime dependencies once:
+
+```bash
+python -m playwright install chromium
+python -m playwright install-deps chromium
+python sensibull_results_calendar.py
+```
+
+The scraper writes the extracted rows to
+`data/cache/events/sensibull_results_calendar.json`.
+
 ## Architecture and data flow
 
 The application is split into four layers. `TradingPlatform` is the supported
