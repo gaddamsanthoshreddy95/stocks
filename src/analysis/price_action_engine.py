@@ -24,7 +24,8 @@ class PriceActionEngine:
         self.config = config
 
     def analyze(self, data: pd.DataFrame,
-                higher_timeframe_data: pd.DataFrame | None = None) -> dict[str, Any]:
+                higher_timeframe_data: pd.DataFrame | None = None,
+                calculate_aggregate_score: bool = True) -> dict[str, Any]:
         df = normalise_ohlcv(data)
         if len(df) > self.config.analysis_lookback_bars:
             df = df.iloc[-self.config.analysis_lookback_bars:]
@@ -83,17 +84,24 @@ class PriceActionEngine:
                                 "zones": higher_zones}
         trend_aligned = ((direction == "BULLISH" and trend == "UPTREND")
                          or (direction == "BEARISH" and trend == "DOWNTREND"))
-        score = SetupScoreEngine(self.config).score({
-            "trend": 80 if trend_aligned else 45,
-            "market_structure": 80 if structure["structure"] == direction else 45,
-            "candlestick_pattern": (pattern or {}).get("confidence", 0),
-            "support_resistance": (nearby or {}).get("strength_score", 0),
-            "breakout": (breakout or {}).get("confidence", 0), "retest": (retest or {}).get("confidence", 0),
-            "volume": min(100, (breakout or {}).get("volume_ratio", 1) * 50),
-            "volatility": 65, "momentum": 50, "opposing_zone_distance": 60,
-            "risk_reward": max((e["confidence"] for e in entries), default=0),
-            "higher_timeframe": higher_timeframe["agreement"], "option_selling": 0,
-        }, [] if entries else ["NO_VALID_ENTRY"])
+        score = (
+            SetupScoreEngine(self.config).score({
+                "trend": 80 if trend_aligned else 45,
+                "market_structure": 80 if structure["structure"] == direction else 45,
+                "candlestick_pattern": (pattern or {}).get("confidence", 0),
+                "support_resistance": (nearby or {}).get("strength_score", 0),
+                "breakout": (breakout or {}).get("confidence", 0),
+                "retest": (retest or {}).get("confidence", 0),
+                "volume": min(100, (breakout or {}).get("volume_ratio", 1) * 50),
+                "volatility": 65, "momentum": 50, "opposing_zone_distance": 60,
+                "risk_reward": max((e["confidence"] for e in entries), default=0),
+                "higher_timeframe": higher_timeframe["agreement"], "option_selling": 0,
+            }, [] if entries else ["NO_VALID_ENTRY"])
+            if calculate_aggregate_score else
+            {"score": None, "max_score": 100, "skipped": True,
+             "reason": "PRICE_ACTION_SCORE_WEIGHT_IS_ZERO",
+             "rejection_reasons": [] if entries else ["NO_VALID_ENTRY"]}
+        )
         return {"status": "OK", "direction": direction, "patterns": active_patterns,
                 "pattern_history": pattern_history,
                 **zones_result, "market_structure": structure, "breakout": breakout,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, is_dataclass
-from copy import deepcopy
+from dataclasses import asdict, is_dataclass, replace
+from copy import copy, deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
@@ -51,6 +51,12 @@ from src.historical.current_month_seasonality import CurrentMonthSeasonality
 from src.historical.regime_performance import RegimePerformance
 from src.market_structure.supply_demand import SupplyDemandEngine
 from src.market_structure.intraday_recovery import IntradayRecoveryEngine
+from src.screener.lightweight_screen import (
+    LightweightDataError,
+    StockAnalysisContext,
+    run_lightweight_screen,
+    support_compatibility_report,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -548,13 +554,81 @@ class TradingPlatform:
             return []
         return sorted(path.name.removesuffix(".NS.csv") for path in Path(DATA_FOLDER).glob("*.NS.csv"))
 
-    def enrich_candidate(self, candidate: dict[str, Any], option_month: str | None = None) -> dict[str, Any]:
-        """Add expensive long-history and option context to one finalist."""
+    def enrich_candidate(self, candidate: dict[str, Any], option_month: str | None = None,
+                         include_options: bool = True) -> dict[str, Any]:
+        """Add advanced technical/history context to one shortlisted candidate."""
         candidate = deepcopy(candidate)
+        context = candidate.pop("_analysis_context", None)
+        if isinstance(context, StockAnalysisContext):
+            candidate["_quality_daily_data"] = context.historical_data
+            advanced = self._analyze_shortlisted_candidate(candidate["symbol"], context)
+            candidate["candlestick"] = advanced["candlestick"]
+            candidate["setup_evaluation"] = advanced["setup_evaluation"]
+            candidate["trade_plan"] = advanced["trade_plan"]
+            candidate["entry_report"] = advanced["entry"]
+            candidate["analysis_report"] = {
+                "analysis": advanced["analysis"], "entry": advanced["entry"],
+                "breakout": advanced["breakout"], "candlestick": advanced["candlestick"],
+                "decision": advanced["decision"],
+                "setup_evaluation": advanced["setup_evaluation"],
+                "supply_demand": advanced["supply_demand"],
+                "price_action": advanced["price_action"],
+                "intraday_recovery": advanced["intraday_recovery"],
+            }
+            candidate["advanced_decision"] = advanced["decision"]
+            candidate["advanced_analysis_seconds"] = advanced["advanced_analysis_seconds"]
+            lightweight = candidate.get("lightweight_screen", {}).get("support", {})
+            advanced_entry = advanced.get("entry", {})
+            legacy_support = {
+                "support": advanced_entry.get("support"),
+                "resistance": advanced_entry.get("resistance"),
+                "score": None,
+            }
+            current = float(candidate.get("current_price") or 0)
+            support = legacy_support["support"]
+            resistance = legacy_support["resistance"]
+            distance = self.settings.lightweight_support_distance_pct
+            if current > 0 and support is not None and resistance is not None:
+                near_support = (current - float(support)) * 100 / current <= distance
+                near_resistance = (float(resistance) - current) * 100 / current <= distance
+                legacy_support["score"] = (
+                    90 if near_support and not near_resistance else
+                    20 if near_resistance and not near_support else
+                    60 if near_support and near_resistance else 40
+                )
+            legacy_technical = (
+                round(candidate["technical_score"]
+                      - float(lightweight.get("score") or 0) * .20
+                      + float(legacy_support.get("score") or 0) * .20)
+                if legacy_support.get("score") is not None else None
+            )
+            candidate["support_compatibility"] = {
+                "symbol": candidate["symbol"],
+                **support_compatibility_report(
+                    legacy_support, lightweight,
+                    legacy_technical_score=legacy_technical,
+                    lightweight_technical_score=candidate["technical_score"],
+                    lightweight_action=candidate["action"],
+                ),
+            }
+        history_started = perf_counter()
         historical = self._historical_context(candidate["symbol"])
+        candidate["long_history_seconds"] = round(perf_counter() - history_started, 6)
         candidate["current_month_seasonality"] = historical["current_month"]
         candidate["regime_history"] = historical["regime"]
-        candidate["options"] = self._option_trade_plan(candidate, option_month)
+        if include_options:
+            candidate = self.enrich_candidate_options(candidate, option_month)
+        else:
+            candidate["options"] = {
+                "available": False, "requested": False,
+                "reason": "Waiting for the post-advanced technical gate.",
+                "rejection": {
+                    "code": "NOT_REQUESTED_BY_POLICY", "category": "POLICY",
+                    "reason": "Candidate has not passed the post-advanced option gate.",
+                },
+                "reasons": ["Option chain not requested before the advanced technical gate."],
+            }
+            candidate["option_chain_seconds"] = 0.0
         option_confidence = candidate["options"].get("confidence", 0)
         candidate["probability"] = round(min(
             95,
@@ -570,6 +644,83 @@ class TradingPlatform:
             *candidate["options"].get("reasons", []),
         ]
         return candidate
+
+    def enrich_candidate_options(
+        self, candidate: dict[str, Any], option_month: str | None = None,
+    ) -> dict[str, Any]:
+        """Request option-chain analysis only after the advanced technical gate."""
+        candidate = deepcopy(candidate)
+        option_started = perf_counter()
+        candidate["options"] = self._option_trade_plan(candidate, option_month)
+        candidate["option_chain_seconds"] = round(perf_counter() - option_started, 6)
+        option_confidence = candidate["options"].get("confidence", 0)
+        candidate["probability"] = round(min(
+            95,
+            candidate["technical_score"] * 0.6
+            + candidate["confidence"] * 0.25
+            + option_confidence * 0.15,
+        ), 2)
+        candidate["ai_reasoning"] = [
+            candidate["reason"],
+            f"Technical score: {candidate['technical_score']}/100.",
+            f"Risk/reward: {candidate['risk_reward']}:1.",
+            f"Candlestick: {candidate['candlestick']['pattern']} "
+            f"({candidate['candlestick']['signal']}).",
+            *candidate["options"].get("reasons", []),
+        ]
+        return candidate
+
+    def _analyze_shortlisted_candidate(
+        self, symbol: str, context: StockAnalysisContext,
+    ) -> dict[str, Any]:
+        """Execute forbidden/advanced engines only after shortlist materialization."""
+        started = perf_counter()
+        report = self.engine.analyze_advanced(symbol, context.historical_data)
+        daily = context.historical_data
+        supply_demand = SupplyDemandEngine.analyze(
+            daily, current_price=report["analysis"].current_price
+        )
+        intraday = pd.DataFrame()
+        if len(daily) >= 2:
+            previous_close = float(daily.iloc[-2]["Close"])
+            daily_change = (
+                (float(daily.iloc[-1]["Close"]) - previous_close)
+                * 100 / max(previous_close, .000001)
+            )
+            atr_percent = (
+                float(report["analysis"].atr) * 100
+                / max(float(report["analysis"].current_price), .000001)
+            )
+            recovery_threshold = max(
+                self.settings.recovery_shock_floor_percent,
+                atr_percent * self.settings.recovery_shock_atr_multiple,
+            )
+            if daily_change <= -recovery_threshold:
+                get_intraday = getattr(self.provider, "get_intraday_history", None)
+                if get_intraday is not None:
+                    try:
+                        intraday = get_intraday(symbol, period="1mo", interval="15minute")
+                    except (RequestException, ValueError, KeyError, TypeError) as exc:
+                        logger.warning("Current recovery data unavailable for %s: %s",
+                                       symbol, exc.__class__.__name__)
+        intraday_recovery = IntradayRecoveryEngine.analyze(
+            daily, intraday, supply_demand,
+            shock_floor_percent=self.settings.recovery_shock_floor_percent,
+            shock_atr_multiple=self.settings.recovery_shock_atr_multiple,
+            minimum_recovery_score=self.settings.recovery_minimum_score,
+            minimum_risk_reward=self.settings.recovery_minimum_risk_reward,
+            volume_confirmation_ratio=self.settings.recovery_green_red_volume_ratio,
+        )
+        trade_plan = TradePlanEngine.generate(report["entry"])
+        context.price_action = report["price_action"]
+        context.advanced_support_resistance = report["price_action"].get("zones")
+        context.market_structure = report["price_action"].get("market_structure")
+        context.pivots = (context.market_structure or {}).get("confirmed_pivots")
+        return self._serialize({
+            **report, "supply_demand": supply_demand,
+            "intraday_recovery": intraday_recovery, "trade_plan": trade_plan,
+            "advanced_analysis_seconds": round(perf_counter() - started, 6),
+        })
 
     def suggest_stocks(self, limit: int = 5, minimum_score: int = 40,
                        enrich: bool = True) -> dict[str, Any]:
@@ -608,15 +759,30 @@ class TradingPlatform:
             raise ValidationError("minimum_score must be an integer between 0 and 100")
 
         started = perf_counter()
+        universe_started = perf_counter()
         symbols = self._universe_symbols()
-        universe_seconds = perf_counter() - started
+        universe_seconds = perf_counter() - universe_started
         if not symbols:
             raise DataUnavailableError("No stocks are available to screen")
 
         stage_counts = {"analysis_succeeded": 0, "analysis_failed": 0,
                         "live_data_failed": 0,
                         "technical_passed": 0, "liquidity_passed": 0,
-                        "trust_passed": 0}
+                        "trust_passed": 0, "lightweight_succeeded": 0,
+                        "shortlisted": 0, "advanced_succeeded": 0}
+        rejection_counts = {
+            "LOW_TECHNICAL_SCORE": 0, "ACTION_NOT_ELIGIBLE": 0,
+            "LOW_LIQUIDITY": 0, "LOW_TRUST_SCORE": 0,
+        }
+        timing_totals = {
+            "historical_data_loading_seconds": 0.0,
+            "lightweight_indicator_seconds": 0.0,
+            "lightweight_support_seconds": 0.0,
+            "setup_decision_seconds": 0.0,
+            "liquidity_trust_seconds": 0.0,
+        }
+        per_symbol_timings: dict[str, dict[str, float]] = {}
+        screening_failures: list[dict[str, str]] = []
         count_lock = Lock()
 
         def increment(key: str) -> None:
@@ -627,57 +793,82 @@ class TradingPlatform:
             has_live_candle = getattr(self.provider, "has_live_candle", None)
             if (self.settings.market_data_source == "kite"
                     and has_live_candle is not None and not has_live_candle(symbol)):
+                with count_lock:
+                    screening_failures.append({
+                        "symbol": symbol, "reason_code": "MISSING_LIVE_CANDLE",
+                        "message": "Current Kite snapshot has no valid live candle",
+                    })
                 increment("live_data_failed")
                 return None
             try:
-                report = self.analyze(symbol)
-            except (DataUnavailableError, ValueError, KeyError, TypeError):
+                if not self.settings.use_lightweight_initial_support:
+                    report = self.analyze(symbol)
+                    increment("analysis_succeeded")
+                    analysis = report["analysis"]
+                    decision = report["decision"]
+                    liquidity = self._stock_liquidity(analysis)
+                    trust = self._trust_score(analysis, liquidity, report["market_quality"])
+                    return {
+                        "symbol": symbol, "action": decision["action"],
+                        "confidence": decision["confidence"], "technical_score": analysis["score"],
+                        "recommendation": analysis["recommendation"],
+                        "current_price": analysis["current_price"], "stock_liquidity": liquidity,
+                        "trust": trust, "historical_gap_factor": round(
+                            1 + min(1, report["market_quality"].get("large_gap_days", 0) / 10), 3),
+                        "risk_reward": report["trade_plan"]["risk_reward"],
+                        "candlestick": report["candlestick"],
+                        "setup_evaluation": report["setup_evaluation"],
+                        "reason": decision["reason"], "trade_plan": report["trade_plan"],
+                        "entry_report": report["entry"], "analysis_report": report,
+                        "position_size": report["position_size"],
+                    }
+                load_started = perf_counter()
+                history = self.provider.get_data(symbol)
+                loading_seconds = perf_counter() - load_started
+                if history is None or history.empty:
+                    raise LightweightDataError(
+                        "INSUFFICIENT_HISTORY", "No historical data is available")
+                live_store = getattr(self.provider, "_live_candles", {})
+                live = live_store.get(symbol.upper().removesuffix(".NS"))
+                if live is None and self.settings.market_data_source != "kite":
+                    live = {
+                        name: history.iloc[-1][name]
+                        for name in ("Open", "High", "Low", "Close", "Volume")
+                    }
+                screened = run_lightweight_screen(symbol, history, live, self.settings)
+                with count_lock:
+                    timing_totals["historical_data_loading_seconds"] += loading_seconds
+                    for name in (
+                        "lightweight_indicator_seconds", "lightweight_support_seconds",
+                        "setup_decision_seconds", "liquidity_trust_seconds",
+                    ):
+                        timing_totals[name] += screened.timings[name]
+                    if self.settings.enable_per_symbol_timings:
+                        per_symbol_timings[symbol] = {
+                            "historical_data_loading_seconds": round(loading_seconds, 6),
+                            **screened.timings,
+                        }
+                increment("analysis_succeeded")
+                increment("lightweight_succeeded")
+                return screened.candidate
+            except LightweightDataError as exc:
+                with count_lock:
+                    screening_failures.append({
+                        "symbol": symbol, "reason_code": exc.code, "message": str(exc),
+                    })
                 increment("analysis_failed")
                 return None
-            increment("analysis_succeeded")
-            analysis = report["analysis"]
-            decision = report["decision"]
-            if analysis["score"] < minimum_score or decision["action"] not in {"BUY", "BUY ON DIP", "WATCH"}:
+            except (DataUnavailableError, ValueError, KeyError, TypeError) as exc:
+                with count_lock:
+                    screening_failures.append({
+                        "symbol": symbol,
+                        "reason_code": "ANALYSIS_FAILED",
+                        "message": f"{exc.__class__.__name__}: {exc}",
+                    })
+                increment("analysis_failed")
                 return None
-            increment("technical_passed")
-            liquidity = self._stock_liquidity(analysis)
-            # Avoid names that are hard to enter/exit even if their chart score
-            # is attractive. The threshold is deliberately modest for F&O names.
-            if liquidity["score"] < self.settings.candidate_min_liquidity_score:
-                return None
-            increment("liquidity_passed")
-            trust = self._trust_score(analysis, liquidity, report["market_quality"])
-            if trust["score"] < self.settings.candidate_min_trust_score:
-                return None
-            increment("trust_passed")
-            return {
-                "symbol": symbol,
-                "action": decision["action"],
-                "confidence": decision["confidence"],
-                "technical_score": analysis["score"],
-                "recommendation": analysis["recommendation"],
-                "current_price": analysis["current_price"],
-                "stock_liquidity": liquidity,
-                "trust": trust,
-                "historical_gap_factor": round(1 + min(1, report["market_quality"].get("large_gap_days", 0) / 10), 3),
-                "risk_reward": report["trade_plan"]["risk_reward"],
-                "candlestick": report["candlestick"],
-                "setup_evaluation": report["setup_evaluation"],
-                "reason": decision["reason"],
-                "trade_plan": report["trade_plan"],
-                "entry_report": report["entry"],
-                "analysis_report": {
-                    "analysis": report["analysis"], "entry": report["entry"],
-                    "breakout": report["breakout"], "candlestick": report["candlestick"],
-                    "setup_evaluation": report["setup_evaluation"],
-                    "supply_demand": report.get("supply_demand", {}),
-                    "price_action": report.get("price_action", {}),
-                    "intraday_recovery": report.get("intraday_recovery", {}),
-                },
-                "position_size": report["position_size"],
-            }
 
-        candidates = []
+        lightweight_results = []
         workers = 1 if self.settings.market_data_source == "kite" else min(8, len(symbols))
         scan_started = perf_counter()
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -685,11 +876,31 @@ class TradingPlatform:
             for future in as_completed(futures):
                 candidate = future.result()
                 if candidate:
-                    candidates.append(candidate)
+                    lightweight_results.append(candidate)
         scan_seconds = perf_counter() - scan_started
         logger.info("Technical scan: %.3fs for %d symbols", scan_seconds, len(symbols))
 
+        candidates = []
+        for candidate in lightweight_results:
+            if candidate["technical_score"] < minimum_score:
+                rejection_counts["LOW_TECHNICAL_SCORE"] += 1
+                continue
+            if candidate["action"] not in {"BUY", "BUY ON DIP", "WATCH"}:
+                rejection_counts["ACTION_NOT_ELIGIBLE"] += 1
+                continue
+            stage_counts["technical_passed"] += 1
+            if candidate["stock_liquidity"]["score"] < self.settings.candidate_min_liquidity_score:
+                rejection_counts["LOW_LIQUIDITY"] += 1
+                continue
+            stage_counts["liquidity_passed"] += 1
+            if candidate["trust"]["score"] < self.settings.candidate_min_trust_score:
+                rejection_counts["LOW_TRUST_SCORE"] += 1
+                continue
+            stage_counts["trust_passed"] += 1
+            candidates.append(candidate)
+
         action_rank = {"BUY": 2, "BUY ON DIP": 1, "WATCH": 0}
+        ranking_started = perf_counter()
         candidates.sort(
             key=lambda item: (
                 action_rank[item["action"]],
@@ -700,6 +911,17 @@ class TradingPlatform:
             reverse=True,
         )
         top_candidates = candidates[:limit]
+        ranking_seconds = perf_counter() - ranking_started
+        stage_counts["shortlisted"] = len(top_candidates)
+
+        # ADVANCED ANALYSIS BOUNDARY:
+        # No advanced engine may execute before the shortlist is finalized.
+        if len(top_candidates) > self.settings.advanced_analysis_max_candidates:
+            raise ValidationError(
+                "Advanced analysis stage received "
+                f"{len(top_candidates)} candidates; configured maximum is "
+                f"{self.settings.advanced_analysis_max_candidates}"
+            )
 
         enrichment_started = perf_counter()
         # Only finalists are enriched. Two workers overlap independent I/O
@@ -711,12 +933,25 @@ class TradingPlatform:
             else:
                 top_candidates = [self.enrich_candidate(candidate) for candidate in top_candidates]
         enrichment_seconds = perf_counter() - enrichment_started
+        stage_counts["advanced_succeeded"] = len(top_candidates) if enrich else 0
         logger.info("Historical/option enrichment: %.3fs for %d candidates",
                     enrichment_seconds, len(top_candidates))
         timings = {
             "universe_seconds": round(universe_seconds, 3),
             "technical_scan_seconds": round(scan_seconds, 3),
             "historical_and_options_seconds": round(enrichment_seconds, 3),
+            "universe_loading_seconds": round(universe_seconds, 3),
+            "historical_data_loading_seconds": round(
+                timing_totals["historical_data_loading_seconds"], 3),
+            "lightweight_analysis_seconds": round(scan_seconds, 3),
+            "lightweight_indicator_seconds": round(
+                timing_totals["lightweight_indicator_seconds"], 3),
+            "lightweight_support_seconds": round(
+                timing_totals["lightweight_support_seconds"], 3),
+            "setup_decision_seconds": round(timing_totals["setup_decision_seconds"], 3),
+            "liquidity_trust_seconds": round(timing_totals["liquidity_trust_seconds"], 3),
+            "ranking_seconds": round(ranking_seconds, 3),
+            "advanced_analysis_seconds": round(enrichment_seconds, 3),
             "total_seconds": round(perf_counter() - started, 3),
         }
         logger.info("Suggestion stages completed: %s", timings)
@@ -726,12 +961,104 @@ class TradingPlatform:
             "minimum_score": minimum_score,
             "suggestions": top_candidates,
             "statistics": stage_counts,
+            "rejection_counts": rejection_counts,
+            "screening_failures": screening_failures,
+            "per_symbol_timings": per_symbol_timings,
             "timings": timings,
             "message": (
                 "No stocks currently meet the selected criteria."
                 if not candidates
                 else f"Ranked candidates using {self.settings.market_data_source} daily data."
             ),
+        }
+
+    def screening_compatibility_report(
+        self, limit: int | None = None, minimum_score: int | None = None,
+    ) -> dict[str, Any]:
+        """Run the explicit legacy diagnostic and compare it with Stage 1 output.
+
+        This intentionally permits the retired full-analysis first pass only in
+        this opt-in diagnostic. Normal Daily Report execution never calls it.
+        """
+        from src.trading_engine.engine import TradingEngine
+
+        limit = limit or self.settings.ranking_shortlist_size
+        minimum_score = (
+            self.settings.minimum_technical_score
+            if minimum_score is None else minimum_score
+        )
+
+        def diagnostic_platform(use_lightweight: bool) -> "TradingPlatform":
+            clone = copy(self)
+            clone.settings = replace(
+                self.settings, use_lightweight_initial_support=use_lightweight
+            )
+            clone.engine = TradingEngine(self.provider, clone.settings)
+            clone._analysis_cache = {}
+            clone._analysis_cache_lock = RLock()
+            clone._option_cache = {}
+            clone._option_cache_lock = RLock()
+            return clone
+
+        new_started = perf_counter()
+        lightweight = diagnostic_platform(True)._suggest_stocks(
+            limit, minimum_score, enrich=False
+        )
+        new_seconds = perf_counter() - new_started
+        legacy_started = perf_counter()
+        legacy = diagnostic_platform(False)._suggest_stocks(
+            limit, minimum_score, enrich=False
+        )
+        legacy_seconds = perf_counter() - legacy_started
+        old_by_symbol = {
+            item["symbol"]: item for item in legacy.get("suggestions", [])
+        }
+        new_by_symbol = {
+            item["symbol"]: item for item in lightweight.get("suggestions", [])
+        }
+        rows = []
+        for symbol in sorted(set(old_by_symbol) | set(new_by_symbol)):
+            old = old_by_symbol.get(symbol, {})
+            new = new_by_symbol.get(symbol, {})
+            old_entry = old.get("entry_report", {})
+            new_support = new.get("lightweight_screen", {}).get("support", {})
+            rows.append({
+                "symbol": symbol,
+                "old_support": old_entry.get("support"),
+                "new_lightweight_support": new_support.get("support"),
+                "old_technical_score": old.get("technical_score"),
+                "new_technical_score": new.get("technical_score"),
+                "technical_score_difference": (
+                    new["technical_score"] - old["technical_score"]
+                    if old.get("technical_score") is not None
+                    and new.get("technical_score") is not None else None
+                ),
+                "old_action": old.get("action"),
+                "new_action": new.get("action"),
+                "action_difference": old.get("action") != new.get("action"),
+                "old_shortlisted": symbol in old_by_symbol,
+                "new_shortlisted": symbol in new_by_symbol,
+                "shortlist_difference": (
+                    (symbol in old_by_symbol) != (symbol in new_by_symbol)
+                ),
+            })
+        old_shortlist = list(old_by_symbol)
+        new_shortlist = list(new_by_symbol)
+        return {
+            "diagnostic_override": True,
+            "warning": (
+                "The legacy side intentionally runs the retired advanced first pass "
+                "for comparison and is not part of normal report execution."
+            ),
+            "legacy_shortlist": old_shortlist,
+            "lightweight_shortlist": new_shortlist,
+            "shortlist_unchanged": old_shortlist == new_shortlist,
+            "differences": rows,
+            "legacy_seconds": round(legacy_seconds, 3),
+            "lightweight_seconds": round(new_seconds, 3),
+            "legacy_advanced_call_count": legacy.get(
+                "statistics", {}).get("analysis_succeeded", 0),
+            "lightweight_pre_shortlist_advanced_call_count": 0,
         }
 
     def _option_trade_plan(self, candidate: dict[str, Any], option_month: str | None = None) -> dict[str, Any]:
@@ -1007,7 +1334,7 @@ class TradingPlatform:
     def portfolio(self) -> dict[str, Any]:
         return self._serialize(self.paper_broker.portfolio())
 
-    def daily_report(self, limit: int = 5, minimum_score: int = 40,
+    def daily_report(self, limit: int | None = None, minimum_score: int | None = None,
                      option_month: str | None = None,
                      excluded_symbols: set[str] | None = None) -> dict[str, Any]:
         """Generate the final ranked daily trade report.
@@ -1015,6 +1342,10 @@ class TradingPlatform:
         This is a research/paper-trading recommendation only.  It never sends
         live orders, even when Kite is the configured data source.
         """
+        limit = self.settings.final_report_limit if limit is None else limit
+        minimum_score = (
+            self.settings.minimum_technical_score if minimum_score is None else minimum_score
+        )
         if not isinstance(limit, int) or not 1 <= limit <= 20:
             raise ValidationError("limit must be an integer between 1 and 20")
         if not isinstance(minimum_score, int) or not 0 <= minimum_score <= 100:
@@ -1030,9 +1361,13 @@ class TradingPlatform:
         begin_live_refresh = getattr(self.provider, "begin_live_refresh", None)
         end_live_refresh = getattr(self.provider, "end_live_refresh", None)
         live_refresh_started = False
+        live_quote_fetch_seconds = 0.0
+        pipeline_started = perf_counter()
         try:
             if begin_live_refresh is not None:
+                live_started = perf_counter()
                 begin_live_refresh(self._universe_symbols())
+                live_quote_fetch_seconds = perf_counter() - live_started
                 live_refresh_started = True
             assistant = (DailyTradingAssistant(
                 self, option_month=option_month, excluded_symbols=excluded_symbols
@@ -1040,6 +1375,10 @@ class TradingPlatform:
             report = assistant.generate(
                 limit, minimum_score
             )
+            report.setdefault("timings", {})["live_quote_fetch_seconds"] = round(
+                live_quote_fetch_seconds, 3)
+            report["timings"]["total_pipeline_seconds"] = round(
+                perf_counter() - pipeline_started, 3)
             return self._serialize(report)
         finally:
             if live_refresh_started and end_live_refresh is not None:

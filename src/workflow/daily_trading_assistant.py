@@ -34,6 +34,8 @@ from src.workflow.final_decision import (
 )
 from src.workflow.stock_selection import classify_entry_timing
 from src.options.structure_validator import OptionStructureValidator
+from src.quality.engine import CandidateQualityEngine
+from src.quality.portfolio import apply_soft_sector_cap, reduce_correlated_exposure
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -52,6 +54,7 @@ class DailyTradingAssistant:
         self.option_month = option_month
         self.sectors = SectorMapper()
         self.outcomes = OutcomeRepository()
+        self.quality_engine = CandidateQualityEngine(platform.settings.quality_config)
         self.completed_outcomes = self.outcomes.learning_summary().get("completed_outcomes", 0)
         commodity_fetcher = (CommodityProvider().get_snapshot
                              if platform.settings.market_data_source == "kite" else None)
@@ -268,7 +271,7 @@ class DailyTradingAssistant:
                 "failed_checks": [item["name"] for item in failed],
                 "blocking_reasons": [item["reason"] for item in failed]}
 
-    def _ranking_key(self, item: dict[str, Any]) -> tuple:
+    def _legacy_ranking_key(self, item: dict[str, Any]) -> tuple:
         mode = self.platform.settings.candidate_ranking_mode
         values = {
             "EXPECTED_VALUE": item["expected_value"]["risk_multiple"],
@@ -278,6 +281,17 @@ class DailyTradingAssistant:
         }
         return (values[mode], item["expected_value"]["risk_multiple"],
                 item["quality_score"], item["execution_readiness_score"], item["probability"])
+
+    def _ranking_key(self, item: dict[str, Any]) -> tuple:
+        if self.platform.settings.quality_config.ranking_mode == "COMPOSITE":
+            return (
+                item.get("final_candidate_score", 0),
+                item.get("entry_readiness_score", 0),
+                item.get("quality_score", 0),
+                item.get("expected_value", {}).get("risk_multiple", 0),
+                item.get("probability", 0),
+            )
+        return self._legacy_ranking_key(item)
 
     def _execution_state(self, score: float, regime: str) -> dict[str, Any]:
         settings = self.platform.settings
@@ -578,7 +592,9 @@ class DailyTradingAssistant:
                sector_strength: dict[str, Any], news: dict[str, Any] | None = None,
                relative_strength: dict[str, Any] | None = None,
                record_recommendation: bool = True) -> dict[str, Any]:
-        analysis = self.platform.analyze(candidate["symbol"])
+        # Stage 2 already produced this report from the shared Stage 1 context.
+        # Reusing it avoids a second indicator pipeline and a duplicate advanced pass.
+        analysis = candidate.get("analysis_report") or self.platform.analyze(candidate["symbol"])
         sector = self.sectors.get_sector(candidate["symbol"])
         sector_data = sector_strength.get(sector, {"available": False, "status": "UNAVAILABLE",
                                                    "score": None, "rating": "UNAVAILABLE"})
@@ -855,6 +871,22 @@ class DailyTradingAssistant:
                 {**candidate, "sector": sector, "beta": relative_strength.get("beta")}, degraded,
                 base_readiness=execution["score"],
             ).to_dict()
+        quality_daily = candidate.get("_quality_daily_data")
+        if quality_daily is None:
+            quality_daily = self.platform.provider.get_data(candidate["symbol"])
+        weekly_data = None
+        if quality_daily is not None and not quality_daily.empty:
+            weekly_data = quality_daily.resample("W-FRI").agg({
+                "Open": "first", "High": "max", "Low": "min",
+                "Close": "last", "Volume": "sum",
+            }).dropna()
+        quality_assessment = self.quality_engine.assess(
+            symbol=candidate["symbol"], daily_data=quality_daily,
+            candidate=candidate, analysis=analysis,
+            relative_strength=relative_strength, sector=sector_data,
+            market=market, event=event_assessment, option=option,
+            setup=setup, plan=plan, weekly_data=weekly_data,
+        ).to_dict()
         execution_state = self._execution_state(event_assessment["adjusted_readiness"], normalized_regime)
         base_market_quantity = 1
         event_multiplier = event_assessment["position_size_multiplier"]
@@ -975,6 +1007,43 @@ class DailyTradingAssistant:
             "current_price": candidate["current_price"],
             "ai_score": unified_score,
             "technical_score": candidate["technical_score"],
+            "quality_assessment": quality_assessment,
+            "quality_scores": quality_assessment["scores"],
+            "final_candidate_score": quality_assessment["final_candidate_score"],
+            "stock_quality_score": (
+                quality_assessment["scores"]["stock_quality"]["score"]),
+            "setup_quality_score": (
+                quality_assessment["scores"]["setup_quality"]["score"]),
+            "entry_readiness_score": (
+                quality_assessment["scores"]["entry_readiness"]["score"]),
+            "relative_strength_score": (
+                quality_assessment["scores"]["relative_strength"]["score"]),
+            "sector_strength_score": (
+                quality_assessment["scores"]["sector_strength"]["score"]),
+            "trend_quality_score": (
+                quality_assessment["scores"]["trend_quality"]["score"]),
+            "momentum_quality_score": (
+                quality_assessment["scores"]["momentum_quality"]["score"]),
+            "volume_quality_score": (
+                quality_assessment["scores"]["volume_quality"]["score"]),
+            "risk_reward_quality_score": (
+                quality_assessment["scores"]["risk_reward_quality"]["score"]),
+            "path_quality_score": (
+                quality_assessment["scores"]["path_quality"]["score"]),
+            "event_safety_score": (
+                quality_assessment["scores"]["event_safety"]["score"]),
+            "option_sell_suitability_score": (
+                quality_assessment["option_sell_suitability_score"]),
+            "analysis_confidence_score": (
+                quality_assessment["analysis_confidence_score"]),
+            "analysis_confidence_status": (
+                quality_assessment["analysis_confidence_status"]),
+            "composite_recommendation": (
+                quality_assessment["composite_recommendation"]),
+            "selection_strengths": quality_assessment["strengths"],
+            "selection_risks": quality_assessment["risks"],
+            "quality_hard_gates": quality_assessment["hard_gates"],
+            "quality_hard_gate_failures": quality_assessment["hard_gate_failures"],
             "quality_score": quality["score"],
             "quality_grade": quality["grade"],
             "quality_label": quality["label"],
@@ -1302,6 +1371,33 @@ class DailyTradingAssistant:
         trade["option_execution_valid"] = option_approved
         trade["option_context"] = {**trade["option_context"],
                                    "execution": "APPROVED" if option_approved else "REJECTED"}
+        if self.platform.settings.quality_config.ranking_mode == "COMPOSITE":
+            composite_action = quality_assessment["composite_recommendation"]
+            quality_failures = quality_assessment["hard_gate_failures"]
+            if quality_failures or composite_action in {"WAIT", "AVOID"}:
+                reason = (
+                    "Composite hard gates failed: " + ", ".join(quality_failures)
+                    if quality_failures else
+                    f"Composite recommendation is {composite_action}."
+                )
+                trade["status"] = "REJECTED"
+                trade["final_action"] = trade["action"] = trade["recommendation"] = "REJECT"
+                trade["trade_eligibility"] = {
+                    **trade["trade_eligibility"], "eligible": False, "status": "REJECTED",
+                    "blocking_reasons": [
+                        *trade["trade_eligibility"].get("blocking_reasons", []), reason],
+                }
+                trade["risk"] = {
+                    **trade["risk"], "quantity": 0, "capital_used": 0,
+                    "risk_amount": 0, "actual_risk": 0,
+                }
+                trade["selection_status"], trade["selection_reason"] = "AVOID", reason
+            elif composite_action == "WATCH":
+                trade["status"] = "WATCHLIST"
+                trade["final_action"] = trade["action"] = trade["recommendation"] = "WATCHLIST"
+                trade["trade_eligibility"] = {
+                    **trade["trade_eligibility"], "eligible": False, "status": "WATCHLIST",
+                }
         try:
             FinalConsistencyValidator.validate(trade)
             trade["consistency_validation"] = {"passed": True, "errors": []}
@@ -1342,14 +1438,15 @@ class DailyTradingAssistant:
     def generate(self, limit: int = 5, minimum_score: int = 40) -> dict[str, Any]:
         started = perf_counter()
         self.run_id = str(uuid4())
-        news_preload_executor = None
-        news_preload_future = None
-        if self.platform.settings.market_data_source == "kite":
-            news_preload_executor = ThreadPoolExecutor(max_workers=1)
-            news_preload_future = news_preload_executor.submit(NewsAnalysisService.preload_model)
         # Ranking and risk optimize different properties, so always send the
         # top 20 (configurable up to 30) through risk/context review.
-        enrichment_limit = min(30, max(self.platform.settings.ranking_shortlist_size, limit + 5))
+        enrichment_limit = min(
+            self.platform.settings.advanced_analysis_max_candidates,
+            max(
+                self.platform.settings.ranking_shortlist_size,
+                limit + self.platform.settings.enrichment_buffer,
+            ),
+        )
         # Technical screening is cheap after the daily candle cache is warm.
         # Expensive 10-year history and option-chain enrichment is deferred
         # until shared market context has been collected.
@@ -1386,16 +1483,60 @@ class DailyTradingAssistant:
             )
         candidates = ranked["suggestions"]
         if deferred_enrichment:
+            if len(candidates) > self.platform.settings.advanced_analysis_max_candidates:
+                raise ValueError(
+                    "Advanced analysis stage received "
+                    f"{len(candidates)} candidates; configured maximum is "
+                    f"{self.platform.settings.advanced_analysis_max_candidates}"
+                )
+            # ADVANCED ANALYSIS BOUNDARY:
+            # No advanced engine may execute before the shortlist is finalized.
             enrich_started = perf_counter()
             if len(candidates) > 1:
                 with ThreadPoolExecutor(max_workers=min(2, len(candidates))) as executor:
                     candidates = list(executor.map(
-                        lambda candidate: self.platform.enrich_candidate(candidate, self.option_month),
+                        lambda candidate: self.platform.enrich_candidate(
+                            candidate, self.option_month, include_options=False
+                        ),
                         candidates,
                     ))
             else:
-                candidates = [self.platform.enrich_candidate(candidate, self.option_month)
+                candidates = [self.platform.enrich_candidate(
+                    candidate, self.option_month, include_options=False
+                )
                               for candidate in candidates]
+            option_eligible = [
+                candidate for candidate in candidates
+                if candidate.get("advanced_decision", {}).get("action")
+                in {"BUY", "BUY ON DIP", "WATCH"}
+            ][:self.platform.settings.option_analysis_max_candidates]
+            option_symbols = {candidate["symbol"] for candidate in option_eligible}
+            if len(option_eligible) > 1:
+                with ThreadPoolExecutor(max_workers=min(2, len(option_eligible))) as executor:
+                    enriched_options = list(executor.map(
+                        lambda candidate: self.platform.enrich_candidate_options(
+                            candidate, self.option_month
+                        ),
+                        option_eligible,
+                    ))
+            else:
+                enriched_options = [
+                    self.platform.enrich_candidate_options(candidate, self.option_month)
+                    for candidate in option_eligible
+                ]
+            option_by_symbol = {
+                candidate["symbol"]: candidate for candidate in enriched_options
+            }
+            candidates = [
+                option_by_symbol.get(candidate["symbol"], candidate)
+                for candidate in candidates
+            ]
+            for candidate in candidates:
+                candidate["post_advanced_option_gate"] = {
+                    "passed": candidate["symbol"] in option_symbols,
+                    "maximum": self.platform.settings.option_analysis_max_candidates,
+                    "advanced_action": candidate.get("advanced_decision", {}).get("action"),
+                }
             ranked["suggestions"] = candidates
             logger.info("Daily stage finalist enrichment: %.3fs", perf_counter() - enrich_started)
         # Relative-strength downloads are independent and safely bounded.
@@ -1437,30 +1578,22 @@ class DailyTradingAssistant:
         logger.info("Daily stage market/relative strength: %.3fs", context_seconds)
 
         preliminary_started = perf_counter()
+        # The advanced decision is the post-shortlist quality gate for expensive
+        # news. Do not run the complete final trade review twice.
         preliminary = [
-            self._trade(index, candidate, market_context, sector_strength,
-                        news=self._news_not_requested(),
-                        relative_strength=strength_by_symbol[candidate["symbol"]],
-                        record_recommendation=False)
-            for index, candidate in enumerate(candidates, start=1)
+            {
+                "symbol": candidate["symbol"],
+                "status": (
+                    "CANDIDATE"
+                    if candidate.get("advanced_decision", {}).get("action")
+                    in {"BUY", "BUY ON DIP", "WATCH"}
+                    else "REJECTED"
+                ),
+            }
+            for candidate in candidates
         ]
-        preliminary.sort(key=self._ranking_key, reverse=True)
         preliminary_seconds = perf_counter() - preliminary_started
         logger.info("Daily stage preliminary review: %.3fs", preliminary_seconds)
-
-        preload_wait_started = perf_counter()
-        preload_result = (
-            news_preload_future.result() if news_preload_future is not None
-            else {"available": False, "model_load_seconds": 0, "wall_seconds": 0}
-        )
-        news_preload_wait_seconds = perf_counter() - preload_wait_started
-        if news_preload_executor is not None:
-            news_preload_executor.shutdown(wait=False)
-        logger.info(
-            "News model preload: load=%.3fs wall=%.3fs wait_after_screening=%.3fs",
-            preload_result.get("model_load_seconds", 0),
-            preload_result.get("wall_seconds", 0), news_preload_wait_seconds,
-        )
 
         # News is expensive, so request it only for stocks that survived all
         # technical, market, liquidity, risk, and execution gates. A three-name
@@ -1471,6 +1604,20 @@ class DailyTradingAssistant:
         ][:min(len(preliminary), limit + 3)]
                                if self.platform.settings.market_data_source == "kite"
                                else [])
+        preload_wait_started = perf_counter()
+        preload_result = (
+            NewsAnalysisService.preload_model()
+            if news_target_symbols else
+            {"available": False, "model_load_seconds": 0, "wall_seconds": 0,
+             "skipped": True, "reason": "NO_NEWS_TARGETS"}
+        )
+        news_preload_wait_seconds = perf_counter() - preload_wait_started
+        logger.info(
+            "News model preload: load=%.3fs wall=%.3fs wait=%.3fs targets=%d skipped=%s",
+            preload_result.get("model_load_seconds", 0),
+            preload_result.get("wall_seconds", 0), news_preload_wait_seconds,
+            len(news_target_symbols), preload_result.get("skipped", False),
+        )
         news_by_symbol: dict[str, dict[str, Any]] = {}
         results: list[dict[str, Any]] = []
         if self.platform.settings.market_data_source == "kite" and news_target_symbols:
@@ -1493,6 +1640,10 @@ class DailyTradingAssistant:
         )
 
         final_review_started = perf_counter()
+        candidate_histories = {
+            candidate["symbol"]: candidate.get("_quality_daily_data")
+            for candidate in candidates
+        }
         reviewed = [
             self._trade(index, candidate, market_context, sector_strength,
                         news=news_by_symbol.get(candidate["symbol"], self._news_not_requested()),
@@ -1501,9 +1652,95 @@ class DailyTradingAssistant:
             for index, candidate in enumerate(candidates, start=1)
         ]
         reviewed.sort(key=self._ranking_key, reverse=True)
+        legacy_order = sorted(reviewed, key=self._legacy_ranking_key, reverse=True)
+        composite_order = sorted(
+            reviewed,
+            key=lambda item: (
+                item.get("final_candidate_score", 0),
+                item.get("entry_readiness_score", 0),
+                item.get("quality_score", 0),
+            ),
+            reverse=True,
+        )
+        legacy_rank = {item["symbol"]: index for index, item in enumerate(legacy_order, 1)}
+        composite_rank = {
+            item["symbol"]: index for index, item in enumerate(composite_order, 1)
+        }
+        for item in reviewed:
+            item["legacy_rank"] = legacy_rank[item["symbol"]]
+            item["composite_rank"] = composite_rank[item["symbol"]]
+            item["rank_difference"] = (
+                item["legacy_rank"] - item["composite_rank"])
+            item["selected_by_legacy"] = item["legacy_rank"] <= limit
+            item["selected_by_composite"] = item["composite_rank"] <= limit
+            item["shadow_rank_reason"] = (
+                "Promoted by stronger independent quality/readiness scores."
+                if item["rank_difference"] > 0 else
+                "Demoted by weaker independent quality/readiness scores."
+                if item["rank_difference"] < 0 else "Rank unchanged."
+            )
+        legacy_top = {item["symbol"] for item in legacy_order[:limit]}
+        composite_top = {item["symbol"] for item in composite_order[:limit]}
+        shadow_comparison = {
+            "mode": self.platform.settings.quality_config.ranking_mode,
+            "shortlist_overlap_count": len(legacy_top & composite_top),
+            "top_5_overlap": len(
+                {item["symbol"] for item in legacy_order[:5]}
+                & {item["symbol"] for item in composite_order[:5]}),
+            "top_10_overlap": len(
+                {item["symbol"] for item in legacy_order[:10]}
+                & {item["symbol"] for item in composite_order[:10]}),
+            "average_rank_difference": round(
+                sum(abs(legacy_rank[symbol] - composite_rank[symbol])
+                    for symbol in legacy_rank) / len(legacy_rank), 2
+            ) if legacy_rank else 0,
+            "candidates_added_by_composite": sorted(composite_top - legacy_top),
+            "candidates_removed_by_composite": sorted(legacy_top - composite_top),
+            "candidates": [
+                {
+                    "symbol": item["symbol"],
+                    "legacy_rank": item["legacy_rank"],
+                    "composite_rank": item["composite_rank"],
+                    "rank_difference": item["rank_difference"],
+                    "legacy_action": item.get("final_action"),
+                    "composite_recommendation": item.get("composite_recommendation"),
+                    "selected_by_legacy": item["selected_by_legacy"],
+                    "selected_by_composite": item["selected_by_composite"],
+                    "reason": item["shadow_rank_reason"],
+                }
+                for item in reviewed
+            ],
+        }
         sector_deferred = self._apply_sector_limit(
             reviewed, self.platform.settings.selection_max_trades_per_sector
         )
+        soft_selected, sector_reserve = apply_soft_sector_cap(
+            reviewed,
+            self.platform.settings.quality_config.maximum_initial_candidates_per_sector,
+        )
+        diversified, correlation_reserve, correlation_conflicts = (
+            reduce_correlated_exposure(
+                soft_selected, candidate_histories,
+                self.platform.settings.quality_config.maximum_correlation,
+                self.platform.settings.quality_config.correlation_lookback,
+            )
+        )
+        if self.platform.settings.quality_config.ranking_mode == "COMPOSITE":
+            diversified_symbols = {item["symbol"] for item in diversified}
+            for item in reviewed:
+                if item["symbol"] not in diversified_symbols and item["status"] == "TRADE":
+                    reason = (
+                        item.get("portfolio_reason_codes") or
+                        ["PORTFOLIO_CONCENTRATION_LIMIT"]
+                    )[0]
+                    item["status"] = "WATCHLIST"
+                    item["final_action"] = item["action"] = item["recommendation"] = "WATCHLIST"
+                    item["trade_eligibility"] = {
+                        **item["trade_eligibility"], "eligible": False,
+                        "status": "WATCHLIST",
+                        "blocking_reasons": [
+                            *item["trade_eligibility"].get("blocking_reasons", []), reason],
+                    }
         for trade in reviewed:
             trade["recommendation_id"] = (
                 self.outcomes.record_recommendation(trade) if trade["status"] == "TRADE" else None
@@ -1607,12 +1844,72 @@ class DailyTradingAssistant:
                 + float(event_timings.get("event_candidate_scoring_seconds", 0)), 3
             ),
         }
+        screening_timings = ranked.get("timings", {})
+        timings.update({
+            "universe_loading_seconds": screening_timings.get("universe_loading_seconds", 0),
+            "live_quote_fetch_seconds": screening_timings.get("live_quote_fetch_seconds", 0),
+            "historical_data_loading_seconds": screening_timings.get(
+                "historical_data_loading_seconds", 0),
+            "lightweight_analysis_seconds": screening_timings.get(
+                "lightweight_analysis_seconds", screening_seconds),
+            "lightweight_indicator_seconds": screening_timings.get(
+                "lightweight_indicator_seconds", 0),
+            "lightweight_support_seconds": screening_timings.get(
+                "lightweight_support_seconds", 0),
+            "setup_decision_seconds": screening_timings.get("setup_decision_seconds", 0),
+            "liquidity_trust_seconds": screening_timings.get("liquidity_trust_seconds", 0),
+            "ranking_seconds": screening_timings.get("ranking_seconds", 0),
+            "advanced_analysis_seconds": round(
+                sum(float(item.get("advanced_analysis_seconds", 0)) for item in candidates), 3),
+            "option_chain_seconds": round(sum(
+                float(item.get("option_chain_seconds", 0)) for item in candidates
+            ), 3),
+            "long_history_seconds": round(sum(
+                float(item.get("long_history_seconds", 0)) for item in candidates
+            ), 3),
+            "news_event_seconds": round(news_seconds + float(
+                event_timings.get("event_context_fetch_seconds", 0)), 3),
+            "report_generation_seconds": round(final_review_seconds, 3),
+            "total_pipeline_seconds": round(perf_counter() - started, 3),
+            "universe_count": ranked.get("universe_size", 0),
+            "live_data_failed_count": stage_counts.get("live_data_failed", 0),
+            "analysis_failed_count": stage_counts.get("analysis_failed", 0),
+            "lightweight_succeeded_count": stage_counts.get("lightweight_succeeded", 0),
+            "technical_passed_count": stage_counts.get("technical_passed", 0),
+            "liquidity_passed_count": stage_counts.get("liquidity_passed", 0),
+            "trust_passed_count": stage_counts.get("trust_passed", 0),
+            "shortlisted_count": stage_counts.get("shortlisted", len(candidates)),
+            "advanced_succeeded_count": (
+                stage_counts.get("advanced_succeeded", 0) or len(candidates)),
+            "option_analysis_count": sum(
+                1 for item in candidates if item.get("options", {}).get("available")),
+            "final_trade_count": len(trades),
+        })
+        for quality_timing in (
+            "relative_strength_seconds", "sector_analysis_seconds",
+            "trend_quality_seconds", "momentum_quality_seconds",
+            "directional_volume_seconds", "support_resistance_quality_seconds",
+            "fundamental_quality_seconds", "event_safety_seconds",
+            "multi_timeframe_seconds", "option_suitability_seconds",
+            "portfolio_controls_seconds", "final_ranking_inputs_seconds",
+            "quality_assessment_seconds",
+        ):
+            timings[quality_timing] = round(sum(
+                float(item.get("quality_assessment", {}).get(
+                    "timings", {}).get(quality_timing, 0))
+                for item in reviewed
+            ), 3)
         logger.info("Daily report stages completed: %s", timings)
+        compatibility = [
+            item["support_compatibility"] for item in candidates
+            if item.get("support_compatibility")
+        ]
         return {
             "report_type": "daily_trading_assistant",
             "run_id": self.run_id,
             "date": date.today().isoformat(),
             "ranking_mode": self.platform.settings.candidate_ranking_mode,
+            "quality_ranking_mode": self.platform.settings.quality_config.ranking_mode,
             "option_month_filter": self.option_month,
             "market": {**market_context, "regime": market, "confidence": market_context["confidence"] if market_context["available"] else round(sum(item["confidence"] for item in trades) / len(trades), 2) if trades else 0},
             "trades": trades,
@@ -1621,6 +1918,16 @@ class DailyTradingAssistant:
             "filter_stages": filter_stages,
             "context_statistics": context_statistics,
             "relative_strength_distribution": relative_strength_distribution,
+            "shadow_ranking": shadow_comparison,
+            "portfolio_controls": {
+                "soft_sector_reserve": [
+                    item["symbol"] for item in sector_reserve],
+                "correlation_reserve": [
+                    item["symbol"] for item in correlation_reserve],
+                "correlation_conflicts": correlation_conflicts,
+                "applied_to_output": (
+                    self.platform.settings.quality_config.ranking_mode == "COMPOSITE"),
+            },
             "dependency_health": AISentimentAnalyzer(
                 model=self.platform.settings.news_ai_model,
                 spacy_model=self.platform.settings.news_spacy_model,
@@ -1632,6 +1939,32 @@ class DailyTradingAssistant:
                               "event_clusters_created": event_timings.get("event_clusters_created", 0),
                               "canonical_clusters": canonical_event_clusters},
             "timings": timings,
+            "screening": {
+                "rejection_counts": ranked.get("rejection_counts", {}),
+                "failures": ranked.get("screening_failures", []),
+                "per_symbol_timings": ranked.get("per_symbol_timings", {}),
+                "compatibility": compatibility,
+                "configuration": {
+                    "minimum_technical_score": minimum_score,
+                    "final_report_limit": limit,
+                    "ranking_shortlist_size": self.platform.settings.ranking_shortlist_size,
+                    "enrichment_buffer": self.platform.settings.enrichment_buffer,
+                    "advanced_analysis_max_candidates":
+                        self.platform.settings.advanced_analysis_max_candidates,
+                    "lightweight_support_lookback":
+                        self.platform.settings.lightweight_support_lookback,
+                    "lightweight_support_distance_pct":
+                        self.platform.settings.lightweight_support_distance_pct,
+                    "lightweight_breakout_lookback":
+                        self.platform.settings.lightweight_breakout_lookback,
+                    "lightweight_stop_atr_buffer":
+                        self.platform.settings.lightweight_stop_atr_buffer,
+                    "lightweight_live_max_age_seconds":
+                        self.platform.settings.lightweight_live_max_age_seconds,
+                    "use_lightweight_initial_support":
+                        self.platform.settings.use_lightweight_initial_support,
+                },
+            },
             "rejected": [
                 {"symbol": trade["symbol"], "technical_score": trade["technical_score"],
                  "status": trade["status"], "final_action": trade["final_action"],

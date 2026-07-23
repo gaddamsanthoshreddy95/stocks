@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import inspect
 import os
+from dataclasses import replace
 from pathlib import Path
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
@@ -210,17 +211,35 @@ class DailyReportJobs:
         self._lock = Lock()
 
     def submit(self, platform: TradingPlatform, database: ReportDatabase, limit: int,
-               minimum_score: int, option_month: str | None) -> str:
+               minimum_score: int, option_month: str | None,
+               screening_overrides: dict[str, Any] | None = None,
+               compatibility_audit: bool = False) -> str:
         job_id = uuid4().hex
 
         def generate_and_save() -> dict[str, Any]:
+            report_platform = platform
+            if screening_overrides:
+                runtime_settings = replace(platform.settings, **screening_overrides)
+                if runtime_settings != platform.settings:
+                    report_platform = TradingPlatform(
+                        settings=runtime_settings, paper_broker=platform.paper_broker
+                    )
             open_symbols = {trade["symbol"] for trade in database.list_actual_trades("OPEN")}
-            parameters = inspect.signature(platform.daily_report).parameters
-            report = (platform.daily_report(
+            parameters = inspect.signature(report_platform.daily_report).parameters
+            report = (report_platform.daily_report(
                 limit, minimum_score, option_month, excluded_symbols=open_symbols
             ) if "excluded_symbols" in parameters else
-                platform.daily_report(limit, minimum_score, option_month))
-            report_id = database.save_report(report, platform.settings.market_data_source)
+                report_platform.daily_report(limit, minimum_score, option_month))
+            if compatibility_audit:
+                report.setdefault("screening", {})["full_compatibility_audit"] = (
+                    report_platform.screening_compatibility_report(
+                        limit=report_platform.settings.ranking_shortlist_size,
+                        minimum_score=minimum_score,
+                    )
+                )
+            report_id = database.save_report(
+                report, report_platform.settings.market_data_source
+            )
             return {"report": report, "report_id": report_id}
 
         future = self._executor.submit(generate_and_save)
@@ -551,6 +570,22 @@ def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | Non
             "Actually traded": execution_marks.get(str(trade.get("symbol")), "NOT_TRADED"),
             "Action": trade.get("final_action"), "Quality": trade.get("quality_grade"),
             "Quality score": trade.get("quality_score"),
+            "Strategy": (trade.get("option_strategy") or {}).get(
+                "strategy", "EQUITY"),
+            "Final score": trade.get("final_candidate_score"),
+            "Legacy rank": trade.get("legacy_rank"),
+            "Composite rank": trade.get("composite_rank"),
+            "Stock quality": trade.get("stock_quality_score"),
+            "Setup quality": trade.get("setup_quality_score"),
+            "Entry readiness": trade.get("entry_readiness_score"),
+            "RS quality": trade.get("relative_strength_score"),
+            "Sector quality": trade.get("sector_strength_score"),
+            "Trend quality": trade.get("trend_quality_score"),
+            "Volume quality": trade.get("volume_quality_score"),
+            "Path quality": trade.get("path_quality_score"),
+            "Event safety": trade.get("event_safety_score"),
+            "Option-sell suitability": trade.get("option_sell_suitability_score"),
+            "Analysis confidence": trade.get("analysis_confidence_status"),
             "Stock filters": "PASS" if trade.get("stock_selection_filters", {}).get("passed") else "FAIL",
             "Failed filters": ", ".join(trade.get("stock_selection_filters", {}).get("failed_checks", [])),
             "Readiness": trade.get("execution_readiness_score"),
@@ -726,6 +761,13 @@ def candidate_table_config() -> dict[str, Any]:
     return {
         "Quality score": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f"),
         "Readiness": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f"),
+        "Final score": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f"),
+        "Entry readiness": st.column_config.ProgressColumn(
+            min_value=0, max_value=100, format="%.0f"),
+        "Stock quality": st.column_config.ProgressColumn(
+            min_value=0, max_value=100, format="%.0f"),
+        "Setup quality": st.column_config.ProgressColumn(
+            min_value=0, max_value=100, format="%.0f"),
         "R:R": st.column_config.NumberColumn(format="%.2f"),
         "Support": st.column_config.NumberColumn(format="₹%.2f"),
         "Resistance": st.column_config.NumberColumn(format="₹%.2f"),
@@ -1409,6 +1451,46 @@ def selected_stock_details(platform: TradingPlatform, report: dict[str, Any],
             columns[1].metric("Support", value(levels.get("support")))
             columns[2].metric("Resistance", value(levels.get("resistance")))
             columns[3].metric("Risk / reward", value(levels.get("risk_reward")))
+            quality = trade.get("quality_assessment") or {}
+            if quality:
+                st.markdown("**Independent candidate-quality assessment**")
+                render_metric_cards([
+                    ("Final score", trade.get("final_candidate_score")),
+                    ("Stock quality", trade.get("stock_quality_score")),
+                    ("Setup quality", trade.get("setup_quality_score")),
+                    ("Entry readiness", trade.get("entry_readiness_score")),
+                    ("Directional suitability",
+                     quality.get("directional_trade_suitability_score")),
+                    ("Option-sell suitability",
+                     quality.get("option_sell_suitability_score")),
+                    ("Confidence", quality.get("analysis_confidence_status")),
+                    ("Legacy / composite rank",
+                     f"{trade.get('legacy_rank', '—')} / {trade.get('composite_rank', '—')}"),
+                ], per_row=4)
+                strengths, risks = st.columns(2)
+                with strengths:
+                    st.success("Strengths")
+                    for item in quality.get("strengths", []):
+                        st.write(f"• {item}")
+                with risks:
+                    st.warning("Risks and missing evidence")
+                    for item in quality.get("risks", []):
+                        st.write(f"• {item}")
+                failures = quality.get("hard_gate_failures", [])
+                if failures:
+                    st.error("Hard-gate failures: " + ", ".join(failures))
+                with st.expander("All normalized quality scores"):
+                    st.dataframe(pd.DataFrame([
+                        {
+                            "Concept": name.replace("_", " ").title(),
+                            "Score": details.get("score"),
+                            "Status": details.get("status"),
+                            "Confidence": details.get("confidence"),
+                            "Reasons": ", ".join(details.get("reason_codes", [])),
+                        }
+                        for name, details in quality.get("scores", {}).items()
+                        if not name.endswith("_score")
+                    ]), width="stretch", hide_index=True)
             st.dataframe(pd.DataFrame([{
                 "Entry": levels.get("entry"), "Stop loss": levels.get("stop_loss"),
                 "Target 1": levels.get("target_1"), "Target 2": levels.get("target_2"),
@@ -1604,8 +1686,10 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
                         query.upper() in str(row["Symbol"]).upper()]
             st.dataframe(pd.DataFrame(filtered), width="stretch", hide_index=True,
                          column_config=candidate_table_config(),
-                         column_order=("Symbol", "Status", "Action", "Quality", "Quality score",
-                                       "Readiness", "R:R", "Trigger price", "Support", "Resistance",
+                         column_order=("Symbol", "Status", "Action", "Strategy", "Final score",
+                                       "Entry readiness", "R:R", "Sector quality", "RS quality",
+                                       "Event safety", "Option-sell suitability",
+                                       "Analysis confidence", "Trigger price", "Support", "Resistance",
                                        "Adverse barrier", "Adverse move before target",
                                        "Target before adverse barrier",
                                        "Option approval", "Event risk", "Selection reason"))
@@ -1686,16 +1770,102 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
         else:
             st.success("No candidates were rejected.")
     with tabs[6]:
-        st.caption("Advanced operational and raw-data views.")
-        diagnostic_tabs = st.tabs(["Health", "Complete text", "Raw JSON"])
+        st.caption("Stage-by-stage screening evidence, performance, and raw report data.")
+        diagnostic_tabs = st.tabs(
+            ["Pipeline", "Health", "Complete text", "Raw JSON"]
+        )
         with diagnostic_tabs[0]:
+            timings = report.get("timings", {})
+            render_metric_cards([
+                ("Universe", timings.get("universe_count", report.get("summary", {}).get(
+                    "stocks_scanned", 0))),
+                ("Lightweight passed", timings.get("lightweight_succeeded_count", 0)),
+                ("Shortlisted", timings.get("shortlisted_count", 0)),
+                ("Advanced passed", timings.get("advanced_succeeded_count", 0)),
+                ("Options analyzed", timings.get("option_analysis_count", 0)),
+                ("Final trades", timings.get("final_trade_count", 0)),
+            ], per_row=3)
+            stages = report.get("filter_stages", [])
+            if stages:
+                st.subheader("Selection funnel")
+                st.dataframe(pd.DataFrame(stages), width="stretch", hide_index=True)
+            timing_rows = [
+                {"Stage": name.removesuffix("_seconds").replace("_", " ").title(),
+                 "Seconds": value}
+                for name, value in timings.items()
+                if name.endswith("_seconds") and isinstance(value, (int, float))
+            ]
+            if timing_rows:
+                st.subheader("Runtime by stage")
+                st.dataframe(
+                    pd.DataFrame(timing_rows).sort_values("Seconds", ascending=False),
+                    width="stretch", hide_index=True,
+                    column_config={"Seconds": st.column_config.NumberColumn(format="%.3f")},
+                )
+            rejection_counts = report.get("screening", {}).get("rejection_counts", {})
+            if rejection_counts:
+                st.subheader("Initial-screen rejection codes")
+                st.dataframe(pd.DataFrame([
+                    {"Reason code": code, "Count": count}
+                    for code, count in rejection_counts.items()
+                ]), width="stretch", hide_index=True)
+            failures = report.get("screening", {}).get("failures", [])
+            if failures:
+                st.subheader("Data and analysis failures")
+                st.dataframe(pd.DataFrame(failures), width="stretch", hide_index=True)
+            compatibility = report.get("screening", {}).get("compatibility", [])
+            if compatibility:
+                st.subheader("Lightweight/advanced compatibility")
+                st.dataframe(pd.DataFrame(compatibility), width="stretch", hide_index=True)
+            full_audit = report.get("screening", {}).get("full_compatibility_audit")
+            if full_audit:
+                st.subheader("Full legacy/new compatibility audit")
+                st.warning(full_audit.get("warning"))
+                render_metric_cards([
+                    ("Shortlist unchanged", full_audit.get("shortlist_unchanged")),
+                    ("Legacy seconds", full_audit.get("legacy_seconds")),
+                    ("Lightweight seconds", full_audit.get("lightweight_seconds")),
+                    ("Legacy advanced calls",
+                     full_audit.get("legacy_advanced_call_count")),
+                    ("New pre-shortlist advanced calls",
+                     full_audit.get("lightweight_pre_shortlist_advanced_call_count")),
+                ], per_row=3)
+                st.dataframe(
+                    pd.DataFrame(full_audit.get("differences", [])),
+                    width="stretch", hide_index=True,
+                )
+            per_symbol = report.get("screening", {}).get("per_symbol_timings", {})
+            if per_symbol:
+                with st.expander("Per-symbol timings"):
+                    st.dataframe(pd.DataFrame([
+                        {"Symbol": symbol, **values}
+                        for symbol, values in per_symbol.items()
+                    ]), width="stretch", hide_index=True)
+            shadow = report.get("shadow_ranking") or {}
+            if shadow:
+                st.subheader("Legacy versus composite shadow ranking")
+                render_metric_cards([
+                    ("Mode", shadow.get("mode")),
+                    ("Shortlist overlap", shadow.get("shortlist_overlap_count")),
+                    ("Top-5 overlap", shadow.get("top_5_overlap")),
+                    ("Top-10 overlap", shadow.get("top_10_overlap")),
+                    ("Average rank difference",
+                     shadow.get("average_rank_difference")),
+                ], per_row=3)
+                st.dataframe(pd.DataFrame(shadow.get("candidates", [])),
+                             width="stretch", hide_index=True)
+            st.caption(
+                "Advanced price action, market structure, supply/demand, long-history, "
+                "options, news, and events run only after the shortlist boundary."
+            )
+        with diagnostic_tabs[1]:
             st.subheader("Context availability")
             st.json(report.get("context_statistics", {}), expanded=False)
             st.subheader("Dependency health")
             st.json(report.get("dependency_health", {}), expanded=False)
-        with diagnostic_tabs[1]:
-            st.code(DailyReportPresenter.render(report), language="text")
         with diagnostic_tabs[2]:
+            st.code(DailyReportPresenter.render(report), language="text")
+        with diagnostic_tabs[3]:
             st.download_button("Download report JSON", json.dumps(report, indent=2, default=str),
                                file_name=f"daily-report-{report.get('date', 'latest')}.json",
                                mime="application/json")
@@ -2247,16 +2417,121 @@ def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> No
     preferences = database.get_preferences()
     with st.form("daily-report-form"):
         left, middle, right = st.columns(3)
-        limit = left.number_input("Maximum final trades", 1, 50,
-                                  int(preferences.get("default_report_limit", 5)))
+        limit = left.number_input("Maximum final trades", 1, 20,
+                                  int(preferences.get(
+                                      "default_report_limit",
+                                      platform.settings.final_report_limit)))
         minimum_score = middle.number_input("Minimum technical score", 0, 100,
-                                            int(preferences.get("default_minimum_score", 40)),
+                                            int(preferences.get(
+                                                "default_minimum_score",
+                                                platform.settings.minimum_technical_score)),
                                             help="Initial technical screening floor; final execution gates still apply.")
         option_month = right.text_input("Option month (optional)", placeholder="YYYY-MM")
+        with st.expander("Screening pipeline settings"):
+            st.caption(
+                "These values apply to this report run only. Stage 1 screens the full "
+                "universe cheaply; advanced engines run only on the final shortlist."
+            )
+            first, second, third = st.columns(3)
+            shortlist_size = first.number_input(
+                "Ranking shortlist size", 1, 30,
+                int(platform.settings.ranking_shortlist_size)
+            )
+            enrichment_buffer = second.number_input(
+                "Final-report buffer", 0, 20, int(platform.settings.enrichment_buffer)
+            )
+            advanced_max = third.number_input(
+                "Advanced safety maximum", 1, 50,
+                int(platform.settings.advanced_analysis_max_candidates)
+            )
+            option_max = st.number_input(
+                "Option-analysis maximum", 1, 50,
+                int(platform.settings.option_analysis_max_candidates),
+                help="Only advanced-technical survivors up to this limit request option chains."
+            )
+            fourth, fifth, sixth = st.columns(3)
+            support_lookback = fourth.number_input(
+                "Support lookback candles", 2, 250,
+                int(platform.settings.lightweight_support_lookback)
+            )
+            support_distance = fifth.number_input(
+                "Near-level distance %", 0.0, 25.0,
+                float(platform.settings.lightweight_support_distance_pct), step=0.1
+            )
+            breakout_lookback = sixth.number_input(
+                "Breakout lookback candles", 2, 250,
+                int(platform.settings.lightweight_breakout_lookback)
+            )
+            seventh, eighth = st.columns(2)
+            stop_buffer = seventh.number_input(
+                "Stop ATR buffer", 0.0, 5.0,
+                float(platform.settings.lightweight_stop_atr_buffer), step=0.05
+            )
+            live_age = eighth.number_input(
+                "Maximum live quote age (seconds)", 1.0, 3600.0,
+                float(platform.settings.lightweight_live_max_age_seconds), step=10.0
+            )
+            flag_one, flag_two, flag_three = st.columns(3)
+            lightweight_enabled = flag_one.checkbox(
+                "Use lightweight initial support",
+                value=platform.settings.use_lightweight_initial_support,
+                help="Turn off only for an explicit legacy compatibility run; it is slower."
+            )
+            stage_timings = flag_two.checkbox(
+                "Collect stage timings", value=platform.settings.enable_stage_timings
+            )
+            per_symbol_timings = flag_three.checkbox(
+                "Collect per-symbol timings",
+                value=platform.settings.enable_per_symbol_timings
+            )
+            compatibility_audit = st.checkbox(
+                "Run full legacy compatibility audit",
+                value=False,
+                help=(
+                    "Runs the former advanced full-universe first pass once for comparison. "
+                    "This diagnostic can add several minutes and is never used by normal reports."
+                ),
+            )
+            ranking_mode = st.selectbox(
+                "Candidate quality ranking mode",
+                ("SHADOW", "LEGACY", "COMPOSITE"),
+                index=("SHADOW", "LEGACY", "COMPOSITE").index(
+                    platform.settings.quality_config.ranking_mode),
+                help=(
+                    "SHADOW preserves current output and records the composite comparison. "
+                    "COMPOSITE changes final ranking and enforces the new quality gates."
+                ),
+            )
         submitted = st.form_submit_button("Run report", type="primary", disabled=job_running)
     if submitted:
+        if int(advanced_max) < int(shortlist_size):
+            st.error("Advanced safety maximum must be at least the ranking shortlist size.")
+            return
+        if int(option_max) > int(advanced_max):
+            st.error("Option-analysis maximum cannot exceed the advanced safety maximum.")
+            return
+        screening_overrides = {
+            "ranking_shortlist_size": int(shortlist_size),
+            "enrichment_buffer": int(enrichment_buffer),
+            "advanced_analysis_max_candidates": int(advanced_max),
+            "option_analysis_max_candidates": int(option_max),
+            "final_report_limit": int(limit),
+            "minimum_technical_score": int(minimum_score),
+            "lightweight_support_lookback": int(support_lookback),
+            "lightweight_support_distance_pct": float(support_distance),
+            "lightweight_breakout_lookback": int(breakout_lookback),
+            "lightweight_stop_atr_buffer": float(stop_buffer),
+            "lightweight_live_max_age_seconds": float(live_age),
+            "use_lightweight_initial_support": bool(lightweight_enabled),
+            "enable_stage_timings": bool(stage_timings),
+            "enable_per_symbol_timings": bool(per_symbol_timings),
+            "quality_config": replace(
+                platform.settings.quality_config, ranking_mode=str(ranking_mode)),
+        }
         job_id = daily_report_jobs().submit(
-            platform, database, int(limit), int(minimum_score), option_month.strip() or None
+            platform, database, int(limit), int(minimum_score), option_month.strip() or None,
+            screening_overrides,
+            bool(compatibility_audit),
         )
         st.session_state["daily_report_job_id"] = job_id
         st.session_state["daily_report_synced_job_id"] = None

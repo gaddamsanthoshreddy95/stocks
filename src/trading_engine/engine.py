@@ -13,6 +13,7 @@ from src.trade_setup.entry_analyzer import EntryAnalyzer
 from src.decision.decision_engine import DecisionEngine
 from src.decision.setup_entry_evaluator import SetupEntryEvaluator
 from src.analysis.price_action_engine import PriceActionEngine
+from src.config.trading_config import PRICE_ACTION_SCORE_WEIGHT
 from src.scoring.score_engine import ScoreEngine
 
 
@@ -53,10 +54,11 @@ class TradingEngine:
 
         df = IndicatorPipeline.run(df)
 
-        # --------------------------------------------------
-        # Technical Analysis
-        # --------------------------------------------------
+        return self.analyze_advanced(symbol, df)
 
+    def analyze_advanced(self, symbol: str, prepared_df) -> dict:
+        """Run advanced analysis using a Stage 1 indicator-prepared dataframe."""
+        df = prepared_df
         analysis = StockAnalyzer.analyze(symbol, df)
 
         # --------------------------------------------------
@@ -77,7 +79,9 @@ class TradingEngine:
 
         candlestick = PatternDetector.detect(df)
 
-        price_action = PriceActionEngine().analyze(df)
+        price_action = PriceActionEngine().analyze(
+            df, calculate_aggregate_score=PRICE_ACTION_SCORE_WEIGHT > 0
+        )
         integrated_score = ScoreEngine.integrate_setup_score(analysis.score, price_action)
         analysis.score = integrated_score["score"]
         analysis.recommendation = integrated_score["recommendation"]

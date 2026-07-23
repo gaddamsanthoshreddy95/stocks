@@ -33,7 +33,8 @@ class ScoreEngine:
     @classmethod
     def integrate_setup_score(cls, base_score: float, setup: dict) -> dict:
         """Blend the new component score into the established final score."""
-        if setup.get("status") != "OK" or not setup.get("direction"):
+        if (PRICE_ACTION_SCORE_WEIGHT <= 0 or setup.get("status") != "OK"
+                or not setup.get("direction")):
             score = round(base_score)
         else:
             setup_score = float((setup.get("score") or {}).get("score", 0))

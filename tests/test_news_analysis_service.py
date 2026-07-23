@@ -9,10 +9,13 @@ from src.news.analysis_service import NewsAnalysisService
 from src.news.ai_sentiment import AISentimentAnalyzer, AISentimentError, get_finbert_pipeline
 
 
-RSS = b"""<rss><channel>
-<item><title>SBIN profit growth beats estimates</title><description>Strong expansion</description><source>Example</source><pubDate>Mon, 20 Jul 2026 10:00:00 GMT</pubDate></item>
-<item><title>SBIN wins large contract</title><description>Record order</description><source>Example</source><pubDate>Mon, 20 Jul 2026 09:00:00 GMT</pubDate></item>
-</channel></rss>"""
+def current_rss() -> bytes:
+    """Return deterministic content with timestamps that remain fresh on any run date."""
+    published = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    return f"""<rss><channel>
+<item><title>SBIN profit growth beats estimates</title><description>Strong expansion</description><source>Example</source><pubDate>{published}</pubDate></item>
+<item><title>SBIN wins large contract</title><description>Record order</description><source>Example</source><pubDate>{published}</pubDate></item>
+</channel></rss>""".encode()
 
 
 class NewsAnalysisServiceTests(unittest.TestCase):
@@ -24,7 +27,7 @@ class NewsAnalysisServiceTests(unittest.TestCase):
 
     @patch("src.news.analysis_service.requests.get")
     def test_ai_bullish_assessment_is_used_without_keyword_scoring(self, get):
-        response = Mock(content=RSS)
+        response = Mock(content=current_rss())
         response.raise_for_status.return_value = None
         get.return_value = response
 
@@ -49,7 +52,7 @@ class NewsAnalysisServiceTests(unittest.TestCase):
 
     @patch("src.news.analysis_service.requests.get")
     def test_ai_failure_is_unavailable_not_keyword_fallback(self, get):
-        response = Mock(content=RSS)
+        response = Mock(content=current_rss())
         response.raise_for_status.return_value = None
         get.return_value = response
         analyzer = Mock(model="test-model")
@@ -160,7 +163,7 @@ class NewsAnalysisServiceTests(unittest.TestCase):
 
     @patch("src.news.analysis_service.requests.get")
     def test_default_news_analysis_is_cached_across_requests(self, get):
-        response = Mock(content=RSS)
+        response = Mock(content=current_rss())
         response.raise_for_status.return_value = None
         get.return_value = response
         analyzer = Mock(model="shared-model")

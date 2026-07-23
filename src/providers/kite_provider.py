@@ -101,6 +101,7 @@ class KiteProvider(BaseProvider):
                 "Low": min(low, open_price, last_price),
                 "Close": last_price,
                 "Volume": volume,
+                "timestamp": pd.Timestamp.now(tz="UTC").isoformat(),
             }
         return candles
 

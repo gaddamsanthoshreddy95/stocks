@@ -7,7 +7,7 @@ or resistance level.
 
 import pandas as pd
 
-from src.market_structure.support_resistance import SupportResistanceEngine
+from src.screener.lightweight_screen import calculate_lightweight_support
 from src.signals.base_signal import Signal
 
 
@@ -16,13 +16,16 @@ class SupportSignal:
     @staticmethod
     def generate(df: pd.DataFrame) -> Signal:
 
-        levels = SupportResistanceEngine.calculate(df)
+        latest = df.iloc[-1]
+        levels = calculate_lightweight_support(
+            df, float(latest["Close"]), float(latest["ATR"]), 20, 2.0,
+        )
 
         support = levels["support"]
         resistance = levels["resistance"]
 
-        support_distance = levels["support_distance"]
-        resistance_distance = levels["resistance_distance"]
+        support_distance = levels["distance_from_support_pct"]
+        resistance_distance = levels["distance_to_resistance_pct"]
 
         # ------------------------------------------
         # No Levels Found

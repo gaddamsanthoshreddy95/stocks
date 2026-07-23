@@ -43,6 +43,8 @@ class KiteDataProvider:
         self._max_stale_history_days = max_stale_history_days
         self._long_history_cache_lock = RLock()
         self._history_cache_lock = RLock()
+        self._history_cache_session_date = datetime.now(
+            ZoneInfo("Asia/Kolkata")).date()
         self._nfo_instruments = None
         self._live_refresh = False
         self._live_candles: dict[str, dict] = {}
@@ -57,7 +59,10 @@ class KiteDataProvider:
         Cached history remains reusable: only today's small live quote is read.
         """
         with self._history_cache_lock:
-            self._history_cache.clear()
+            session_date = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+            if session_date != self._history_cache_session_date:
+                self._history_cache.clear()
+                self._history_cache_session_date = session_date
             self._live_refresh = True
             get_live_candles = getattr(self.provider, "get_live_candles", None)
             self._live_candles_prefetched = get_live_candles is not None and bool(symbols)
@@ -133,7 +138,11 @@ class KiteDataProvider:
         key = symbol.upper().removesuffix(".NS")
         with self._history_cache_lock:
             if key in self._history_cache:
-                return self._history_cache[key].copy()
+                history = self._history_cache[key]
+                if self._live_refresh:
+                    history = self._with_live_candle(key, history)
+                    self._history_cache[key] = history
+                return history.copy()
             path = self._history_path(key)
             cached = None
             if path.exists():

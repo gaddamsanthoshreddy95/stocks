@@ -1,7 +1,9 @@
 """Runtime settings for the public application layer."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
+
+from src.quality.config import QualityConfig
 
 
 @dataclass(frozen=True)
@@ -19,6 +21,20 @@ class PlatformSettings:
     equity_b_grade_min_risk_reward: float = 1.3
     equity_watchlist_min_risk_reward: float = 1.2
     ranking_shortlist_size: int = 20
+    final_report_limit: int = 5
+    enrichment_buffer: int = 5
+    advanced_analysis_max_candidates: int = 30
+    option_analysis_max_candidates: int = 10
+    minimum_technical_score: int = 40
+    lightweight_support_lookback: int = 20
+    lightweight_support_distance_pct: float = 2.0
+    lightweight_breakout_lookback: int = 20
+    lightweight_stop_atr_buffer: float = 0.20
+    lightweight_live_max_age_seconds: float = 120.0
+    use_lightweight_initial_support: bool = True
+    enable_stage_timings: bool = True
+    enable_per_symbol_timings: bool = False
+    quality_config: QualityConfig = field(default_factory=QualityConfig.from_env)
     candidate_ranking_mode: str = "EXPECTED_VALUE"
     quality_grade_a_plus: float = 92.0
     quality_grade_a: float = 85.0
@@ -174,6 +190,26 @@ class PlatformSettings:
             raise ValueError("Equity risk/reward thresholds must satisfy C <= B <= A")
         if not 1 <= self.ranking_shortlist_size <= 30:
             raise ValueError("RANKING_SHORTLIST_SIZE must be between 1 and 30")
+        if not 1 <= self.final_report_limit <= 20:
+            raise ValueError("FINAL_REPORT_LIMIT must be between 1 and 20")
+        if self.enrichment_buffer < 0:
+            raise ValueError("ENRICHMENT_BUFFER cannot be negative")
+        if not 1 <= self.advanced_analysis_max_candidates <= 50:
+            raise ValueError("ADVANCED_ANALYSIS_MAX_CANDIDATES must be between 1 and 50")
+        if self.ranking_shortlist_size > self.advanced_analysis_max_candidates:
+            raise ValueError(
+                "RANKING_SHORTLIST_SIZE cannot exceed ADVANCED_ANALYSIS_MAX_CANDIDATES"
+            )
+        if not 1 <= self.option_analysis_max_candidates <= 50:
+            raise ValueError("OPTION_ANALYSIS_MAX_CANDIDATES must be between 1 and 50")
+        if not 0 <= self.minimum_technical_score <= 100:
+            raise ValueError("MIN_TECHNICAL_SCORE must be between 0 and 100")
+        if self.lightweight_support_lookback < 2 or self.lightweight_breakout_lookback < 2:
+            raise ValueError("Lightweight support and breakout lookbacks must be at least two")
+        if self.lightweight_support_distance_pct < 0 or self.lightweight_stop_atr_buffer < 0:
+            raise ValueError("Lightweight support distance and stop buffer cannot be negative")
+        if self.lightweight_live_max_age_seconds <= 0:
+            raise ValueError("LIGHTWEIGHT_LIVE_MAX_AGE_SECONDS must be positive")
         if self.candidate_ranking_mode not in {"EXPECTED_VALUE", "QUALITY_SCORE", "AI_SCORE", "READINESS"}:
             raise ValueError("CANDIDATE_RANKING_MODE is invalid")
         grade_thresholds = (self.quality_grade_a_plus, self.quality_grade_a,
@@ -340,6 +376,23 @@ class PlatformSettings:
             equity_b_grade_min_risk_reward=env_float("EQUITY_B_GRADE_MIN_RISK_REWARD", 1.3),
             equity_watchlist_min_risk_reward=env_float("EQUITY_WATCHLIST_MIN_RISK_REWARD", 1.2),
             ranking_shortlist_size=env_int("RANKING_SHORTLIST_SIZE", 20),
+            final_report_limit=env_int("FINAL_REPORT_LIMIT", 5),
+            enrichment_buffer=env_int("ENRICHMENT_BUFFER", 5),
+            advanced_analysis_max_candidates=env_int(
+                "ADVANCED_ANALYSIS_MAX_CANDIDATES", 30),
+            option_analysis_max_candidates=env_int(
+                "OPTION_ANALYSIS_MAX_CANDIDATES", 10),
+            minimum_technical_score=env_int("MIN_TECHNICAL_SCORE", 40),
+            lightweight_support_lookback=env_int("LIGHTWEIGHT_SUPPORT_LOOKBACK", 20),
+            lightweight_support_distance_pct=env_float(
+                "LIGHTWEIGHT_SUPPORT_DISTANCE_PCT", 2),
+            lightweight_breakout_lookback=env_int("LIGHTWEIGHT_BREAKOUT_LOOKBACK", 20),
+            lightweight_stop_atr_buffer=env_float("LIGHTWEIGHT_STOP_ATR_BUFFER", .2),
+            lightweight_live_max_age_seconds=env_float(
+                "LIGHTWEIGHT_LIVE_MAX_AGE_SECONDS", 120),
+            use_lightweight_initial_support=env_bool("USE_LIGHTWEIGHT_INITIAL_SUPPORT", True),
+            enable_stage_timings=env_bool("ENABLE_STAGE_TIMINGS", True),
+            enable_per_symbol_timings=env_bool("ENABLE_PER_SYMBOL_TIMINGS", False),
             candidate_ranking_mode=os.getenv("CANDIDATE_RANKING_MODE", "EXPECTED_VALUE").upper(),
             quality_grade_a_plus=env_float("QUALITY_GRADE_A_PLUS", 92),
             quality_grade_a=env_float("QUALITY_GRADE_A", 85),
