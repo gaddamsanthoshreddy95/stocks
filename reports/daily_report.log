@@ -1,23 +1,23 @@
-2026-07-22 03:35:18,870 INFO src.news.ai_sentiment: FinBERT model load time: 163.190s (local cache)
-2026-07-22 03:35:39,501 INFO src.application.platform: Technical scan: 183.819s for 215 symbols
-2026-07-22 03:35:39,502 INFO src.application.platform: Historical/option enrichment: 0.000s for 0 candidates
-2026-07-22 03:35:39,503 INFO src.application.platform: Suggestion stages completed: {'universe_seconds': 0.002, 'technical_scan_seconds': 183.819, 'historical_and_options_seconds': 0.0, 'total_seconds': 183.823}
-2026-07-22 03:35:39,504 INFO src.workflow.daily_trading_assistant: Daily stage screening: 183.824s
-2026-07-22 03:35:45,470 INFO src.event_risk.service: Event context: 4 raw items, 4 clusters, fetch=0.148s
-2026-07-22 03:35:45,470 INFO src.workflow.daily_trading_assistant: Daily stage finalist enrichment: 0.000s
-2026-07-22 03:35:45,531 INFO src.workflow.daily_trading_assistant: Daily stage market/relative strength: 6.027s
-2026-07-22 03:35:45,531 INFO src.workflow.daily_trading_assistant: Daily stage preliminary review: 0.000s
-2026-07-22 03:35:45,531 INFO src.workflow.daily_trading_assistant: News model preload: load=163.190s wall=163.190s wait_after_screening=0.000s
-2026-07-22 03:35:45,531 INFO src.workflow.daily_trading_assistant: Daily stage targeted news: 0.000s for 0 stocks
-2026-07-22 03:35:45,531 INFO src.workflow.daily_trading_assistant: Daily news timings: model_load=163.190s inference=0.000s network=0.000s wall=0.000s
-2026-07-22 03:35:45,531 INFO src.workflow.daily_trading_assistant: Daily stage final review: 0.000s
-2026-07-22 03:35:45,533 INFO src.workflow.daily_trading_assistant: Daily report stages completed: {'screening_seconds': 183.824, 'market_and_relative_strength_seconds': 6.027, 'preliminary_review_seconds': 0.0, 'targeted_news_seconds': 0.0, 'news_model_load_seconds': 163.19, 'news_model_preload_wait_seconds': 0.0, 'news_inference_seconds': 0, 'news_network_seconds': 0, 'final_review_seconds': 0.0, 'total_seconds': 189.853, 'news_stocks_requested': 0, 'candidates_enriched': 0, 'event_context_fetch_seconds': 0.148, 'event_classification_seconds': 0.0, 'event_sources_requested': 4, 'events_detected': 4, 'event_clusters_created': 4, 'event_sources_available': 1, 'event_total_seconds': 0.148}
+2026-07-23 04:35:28,642 INFO src.news.ai_sentiment: FinBERT model load time: 147.000s (local cache)
+2026-07-23 04:35:52,995 INFO src.application.platform: Technical scan: 171.350s for 215 symbols
+2026-07-23 04:35:52,995 INFO src.application.platform: Historical/option enrichment: 0.000s for 0 candidates
+2026-07-23 04:35:52,995 INFO src.application.platform: Suggestion stages completed: {'universe_seconds': 0.002, 'technical_scan_seconds': 171.35, 'historical_and_options_seconds': 0.0, 'total_seconds': 171.353}
+2026-07-23 04:35:52,996 INFO src.workflow.daily_trading_assistant: Daily stage screening: 171.354s
+2026-07-23 04:35:57,736 INFO src.event_risk.service: Event context: 5 raw items, 5 clusters, fetch=0.155s
+2026-07-23 04:35:57,736 INFO src.workflow.daily_trading_assistant: Daily stage finalist enrichment: 0.000s
+2026-07-23 04:35:58,310 INFO src.workflow.daily_trading_assistant: Daily stage market/relative strength: 5.314s
+2026-07-23 04:35:58,311 INFO src.workflow.daily_trading_assistant: Daily stage preliminary review: 0.000s
+2026-07-23 04:35:58,311 INFO src.workflow.daily_trading_assistant: News model preload: load=147.000s wall=147.000s wait_after_screening=0.000s
+2026-07-23 04:35:58,312 INFO src.workflow.daily_trading_assistant: Daily stage targeted news: 0.000s for 0 stocks
+2026-07-23 04:35:58,312 INFO src.workflow.daily_trading_assistant: Daily news timings: model_load=147.000s inference=0.000s network=0.000s wall=0.000s
+2026-07-23 04:35:58,313 INFO src.workflow.daily_trading_assistant: Daily stage final review: 0.000s
+2026-07-23 04:35:58,313 INFO src.workflow.daily_trading_assistant: Daily report stages completed: {'screening_seconds': 171.354, 'market_and_relative_strength_seconds': 5.314, 'preliminary_review_seconds': 0.0, 'targeted_news_seconds': 0.0, 'news_model_load_seconds': 147.0, 'news_model_preload_wait_seconds': 0.0, 'news_inference_seconds': 0, 'news_network_seconds': 0, 'final_review_seconds': 0.0, 'total_seconds': 176.671, 'news_stocks_requested': 0, 'candidates_enriched': 0, 'event_context_fetch_seconds': 0.155, 'event_classification_seconds': 0.0, 'event_sources_requested': 4, 'events_detected': 5, 'event_clusters_created': 5, 'event_sources_available': 1, 'event_total_seconds': 0.155}
 ====================================================================
                     AI TRADING ASSISTANT
 ====================================================================
-DATE                 : 2026-07-22
+DATE                 : 2026-07-23
 MARKET               : UNCERTAIN_BEARISH
-MARKET CONFIDENCE    : 10%
+MARKET CONFIDENCE    : 30%
 RANKING MODE         : EXPECTED_VALUE
 ====================================================================
 TODAY'S MARKET SUMMARY
@@ -25,7 +25,7 @@ TODAY'S MARKET SUMMARY
 Stocks scanned       : 215
 Stocks shortlisted   : 0
 Successfully analysed: 0
-Failed analysis      : 215
+Failed analysis      : 210
 Technical candidates : 0
 Liquidity-qualified  : 0
 Trust-qualified      : 0
@@ -47,7 +47,7 @@ Overnight blocked    : 0
   Other blocks       : 0
 Event data C/P/U/F/N : 0/0/0/0/0
 Event data unavailable: 0
-Raw/candidate/background events: 4/0/1
+Raw/candidate/background events: 5/0/2
 Common event category: None
 Highest event risk   : None
 Short Put reviewed   : 0
@@ -69,30 +69,30 @@ Recommendation       : Wait for clearer market alignment.
 ====================================================================
 EXECUTION TIMINGS
 --------------------------------------------------------------------
-screening_seconds               : 183.824s
-market_and_relative_strength_seconds: 6.027s
+screening_seconds               : 171.354s
+market_and_relative_strength_seconds: 5.314s
 preliminary_review_seconds      : 0.0s
 targeted_news_seconds           : 0.0s
-news_model_load_seconds         : 163.19s
+news_model_load_seconds         : 147.0s
 news_model_preload_wait_seconds : 0.0s
 news_inference_seconds          : 0s
 news_network_seconds            : 0s
 final_review_seconds            : 0.0s
-total_seconds                   : 189.853s
+total_seconds                   : 176.671s
 news_stocks_requested           : 0 count
 candidates_enriched             : 0 count
-event_context_fetch_seconds     : 0.148s
+event_context_fetch_seconds     : 0.155s
 event_classification_seconds    : 0.0s
 event_sources_requested         : 4 count
-events_detected                 : 4 count
-event_clusters_created          : 4 count
+events_detected                 : 5 count
+event_clusters_created          : 5 count
 event_sources_available         : 1 count
-event_total_seconds             : 0.148s
+event_total_seconds             : 0.155s
 ====================================================================
 FILTER FUNNEL
 --------------------------------------------------------------------
 universe            : 215 in / 215 passed / 0 rejected
-analysis            : 215 in / 0 passed / 215 rejected
+analysis            : 215 in / 0 passed / 210 rejected
 technical           : 0 in / 0 passed / 0 rejected
 liquidity           : 0 in / 0 passed / 0 rejected
 trust               : 0 in / 0 passed / 0 rejected
