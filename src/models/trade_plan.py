@@ -35,3 +35,5 @@ class TradePlan:
     breakout_probability: float = 0.0
 
     diagnostics: list[str] = field(default_factory=list)
+
+    scenarios: dict = field(default_factory=dict)

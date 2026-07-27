@@ -348,6 +348,12 @@ def run_lightweight_screen(
         "close_location": (close - low) / candle_range,
         "extension_atr": max(0.0, (close - float(latest["EMA20"])) / max(float(latest["ATR"]), 1e-12)),
     }
+    recent_ranges = (prepared["High"] - prepared["Low"]).iloc[:-1]
+    recent_three_range = float(recent_ranges.tail(3).mean()) if len(recent_ranges) >= 3 else 0
+    prior_ten_range = float(recent_ranges.iloc[:-3].tail(10).mean()) if len(recent_ranges) >= 6 else 0
+    daily_range_contraction = (
+        recent_three_range / prior_ten_range if prior_ten_range > 0 else None
+    )
     context = StockAnalysisContext(
         symbol=symbol, timeframe="1d", historical_data=prepared,
         live_candle=live_candle, latest_completed_candle_time=prepared.index[-2],
@@ -435,7 +441,18 @@ def run_lightweight_screen(
         "atr": float(latest["ATR"]), "expected_low": close - float(latest["ATR"]),
         "expected_high": close + float(latest["ATR"]), "volume": int(latest["Volume"]),
         "average_volume": float(latest["AVG_VOLUME"]), "relative_volume": float(latest["RVOL"]),
-        "volume_signal": str(latest.get("VOLUME_SIGNAL", "")), "score": technical_score,
+        "volume_signal": str(latest.get("VOLUME_SIGNAL", "")),
+        "volume_state": str(latest.get("VOLUME_STATE", latest.get("VOLUME_SIGNAL", ""))),
+        "volume_progress": (
+            float(latest["VOLUME_PROGRESS"]) if pd.notna(latest.get("VOLUME_PROGRESS")) else None
+        ),
+        "projected_volume": (
+            float(latest["PROJECTED_VOLUME"]) if pd.notna(latest.get("PROJECTED_VOLUME")) else None
+        ),
+        "volume_confidence": (
+            float(latest["VOLUME_CONFIDENCE"]) if pd.notna(latest.get("VOLUME_CONFIDENCE")) else None
+        ),
+        "score": technical_score,
         "max_score": 100, "recommendation": recommendation,
     }
     trade_plan = {
@@ -470,6 +487,40 @@ def run_lightweight_screen(
             "supply_demand": {}, "price_action": {}, "intraday_recovery": {},
         },
         "position_size": {}, "market_quality": quality, "_analysis_context": context,
+        "data_health": {
+            "state": "LIVE" if live_candle is not None else "CACHED",
+            "live_quote_timestamp": (
+                live_candle.get("timestamp") or live_candle.get("Timestamp")
+                if live_candle else None
+            ),
+            "latest_completed_candle": str(prepared.index[-2]),
+            "live_candle_available": live_candle is not None,
+        },
+        "discovery_metrics": {
+            "daily_return_percent": candle_metrics["daily_return"],
+            "opening_gap_percent": candle_metrics["opening_gap_percent"],
+            "relative_volume": float(latest["RVOL"]),
+            "volume_state": analysis["volume_state"],
+            "volume_confidence": analysis["volume_confidence"],
+            "projected_volume": analysis["projected_volume"],
+            "breakout_confirmed": breakout["confirmed"],
+            "distance_to_resistance_percent": support.get("distance_to_resistance_pct"),
+            "close_location": round(candle_metrics["close_location"], 4),
+            "ema20_extension_atr": round(candle_metrics["extension_atr"], 4),
+            "daily_range_contraction": (
+                round(daily_range_contraction, 4)
+                if daily_range_contraction is not None else None
+            ),
+            "stabilized_discovery_score": round(max(0, min(100,
+                (25 if -.5 <= candle_metrics["daily_return"] <= 1.5 else 0)
+                + (20 if candle_metrics["extension_atr"] <= .75 else
+                   10 if candle_metrics["extension_atr"] <= 1.0 else 0)
+                + (15 if 50 <= float(latest["RSI"]) <= 68 else 5 if 45 <= float(latest["RSI"]) <= 72 else 0)
+                + (15 if float(latest["MACD"]) > float(latest["MACD_SIGNAL"]) else 0)
+                + (15 if daily_range_contraction is not None and daily_range_contraction <= .85 else 0)
+                + (10 if close > float(latest["EMA20"]) else 0)
+            )), 2),
+        },
         "lightweight_screen": {
             "components": components, "support": support, "timings": timings,
             "reason_codes": list(support["reason_codes"]),

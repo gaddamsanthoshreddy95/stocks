@@ -68,6 +68,7 @@ class PlatformSettings:
     selection_max_trades_per_sector: int = 2
     selection_stability_lookback_runs: int = 3
     selection_stability_min_appearances: int = 2
+    selection_stability_min_gap_minutes: int = 15
     entry_zone_below_atr: float = 0.25
     entry_zone_above_atr: float = 0.50
     setup_min_technical_score: float = 55.0
@@ -247,7 +248,8 @@ class PlatformSettings:
             raise ValueError("Candidate quality gates must be between 0 and 100")
         if (self.selection_max_trades_per_sector < 1
                 or self.selection_stability_lookback_runs < 1
-                or not 1 <= self.selection_stability_min_appearances <= self.selection_stability_lookback_runs):
+                or not 1 <= self.selection_stability_min_appearances <= self.selection_stability_lookback_runs
+                or self.selection_stability_min_gap_minutes < 1):
             raise ValueError("Selection sector and stability limits must be positive")
         if self.entry_zone_below_atr < 0 or self.entry_zone_above_atr < 0:
             raise ValueError("Entry-zone ATR allowances cannot be negative")
@@ -426,6 +428,8 @@ class PlatformSettings:
             selection_max_trades_per_sector=env_int("SELECTION_MAX_TRADES_PER_SECTOR", 2),
             selection_stability_lookback_runs=env_int("SELECTION_STABILITY_LOOKBACK_RUNS", 3),
             selection_stability_min_appearances=env_int("SELECTION_STABILITY_MIN_APPEARANCES", 2),
+            selection_stability_min_gap_minutes=env_int(
+                "SELECTION_STABILITY_MIN_GAP_MINUTES", 15),
             entry_zone_below_atr=env_float("ENTRY_ZONE_BELOW_ATR", .25),
             entry_zone_above_atr=env_float("ENTRY_ZONE_ABOVE_ATR", .50),
             setup_min_technical_score=env_float("SETUP_MIN_TECHNICAL_SCORE", 55),

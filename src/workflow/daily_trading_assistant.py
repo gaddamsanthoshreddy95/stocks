@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 import logging
 from time import perf_counter
 from typing import Any
@@ -33,6 +33,8 @@ from src.workflow.final_decision import (
     EntryConfirmationResult, FinalConsistencyValidator, FinalDecisionEngine,
 )
 from src.workflow.stock_selection import classify_entry_timing
+from src.workflow.continuation_assessment import assess_continuation
+from src.workflow.stabilized_setup import assess_stabilized_setup
 from src.workflow.opportunity_ranking import (
     actionability_sort_key, annotate_opportunity_rankings,
 )
@@ -658,6 +660,7 @@ class DailyTradingAssistant:
                 ],
             })
         adverse_move_risk = {"available": False, "reason": "Not applicable to bearish setup."}
+        intraday_history = None
         if direction == "BULLISH":
             target_percent = (float(plan.get("expected_reward") or 0) * 100
                               / max(float(plan.get("entry") or 0), .000001))
@@ -674,8 +677,11 @@ class DailyTradingAssistant:
                                          "reason": "15-minute history provider is unavailable.",
                                          "sample_count": 0, "daily_fallback": daily_barrier}
                 else:
+                    intraday_history = get_intraday(
+                        candidate["symbol"], period="6mo", interval="15minute"
+                    )
                     adverse_move_risk = AdverseMoveRisk.assess_intraday(
-                        get_intraday(candidate["symbol"], period="6mo", interval="15minute"),
+                        intraday_history,
                         target_percent,
                         adverse_percent=self.platform.settings.bullish_max_adverse_move_percent,
                         horizon_days=self.platform.settings.bullish_barrier_horizon_days,
@@ -1162,6 +1168,7 @@ class DailyTradingAssistant:
                 "target_basis": plan.get("target_basis", "NEAREST_RESISTANCE"),
                 "breakout_probability": plan.get("breakout_probability", 0),
                 "target_diagnostics": plan.get("diagnostics", []),
+                "scenarios": plan.get("scenarios", {}),
                 "targets": [plan["target1"], plan["target2"], plan["target3"]],
             },
             "risk": scaled_risk,
@@ -1194,6 +1201,84 @@ class DailyTradingAssistant:
             entry_zone_below_atr=self.platform.settings.entry_zone_below_atr,
             entry_zone_above_atr=self.platform.settings.entry_zone_above_atr,
         )
+        quality_daily = candidate.get("_quality_daily_data")
+        latest_bar = (
+            quality_daily.iloc[-1] if quality_daily is not None and not quality_daily.empty
+            else {}
+        )
+        live_day_open = latest_bar.get("Open")
+        live_day_high = latest_bar.get("High")
+        live_day_low = latest_bar.get("Low")
+        if intraday_history is not None and not intraday_history.empty:
+            ordered_intraday = intraday_history.sort_index()
+            latest_session_date = pd.Timestamp(ordered_intraday.index[-1]).date()
+            session_mask = [
+                pd.Timestamp(value).date() == latest_session_date
+                for value in ordered_intraday.index
+            ]
+            current_session = ordered_intraday.loc[session_mask]
+            if not current_session.empty:
+                live_day_open = current_session.iloc[0].get("Open", live_day_open)
+                live_day_high = max(
+                    float(current_session["High"].max()), float(trade["current_price"])
+                )
+                live_day_low = min(
+                    float(current_session["Low"].min()), float(trade["current_price"])
+                )
+        continuation = assess_continuation(
+            technical=analysis["analysis"], levels=trade["levels"],
+            setup_evaluation=setup_evaluation,
+            breakout_confirmed=bool(analysis["breakout"].get("confirmed")),
+            entry_confirmed=entry_confirmation.passed,
+            alignment_status=alignment.get("status", "UNAVAILABLE"),
+            sector_score=sector_data.get("score"),
+            day_open=live_day_open, day_high=live_day_high,
+            day_low=live_day_low,
+        )
+        trade["continuation_assessment"] = continuation
+        stabilized = assess_stabilized_setup(
+            technical=analysis["analysis"], levels=trade["levels"],
+            intraday=intraday_history,
+            market_alignment=alignment.get("status", "UNAVAILABLE"),
+            sector_score=sector_data.get("score"),
+        )
+        trade["stabilized_setup"] = stabilized
+        if continuation["state"] == "EXTENDED_DO_NOT_CHASE":
+            intraday_move = continuation.get("move_from_open_percent")
+            location_detail = (
+                f"Price is already {intraday_move:.2f}% from today's open and "
+                if intraday_move is not None and intraday_move > 2
+                else "Price is "
+            )
+            entry_selection = {
+                **entry_selection,
+                "status": "EXTENDED — DO NOT CHASE",
+                "trigger_price": trade["levels"].get("entry"),
+                "reason": (
+                    f"{location_detail}{continuation['extension_atr']:.2f} ATR above EMA20; "
+                    "wait for a fresh base on a later setup."
+                ),
+            }
+        elif stabilized.get("state") == "READY_NEAR_TRIGGER":
+            entry_selection = {
+                **entry_selection,
+                "status": "READY NEAR TRIGGER",
+                "trigger_price": stabilized.get("trigger_price"),
+                "reason": (
+                    f"Stabilized setup is ready near {stabilized.get('trigger_price'):.2f}; "
+                    "wait for the configured breakout confirmation before entry."
+                ),
+            }
+        elif continuation["recommended_action"] == "WAIT_FOR_RETEST":
+            entry_selection = {
+                **entry_selection, "status": "WAIT FOR RETEST",
+                "reason": "Breakout strength is visible, but a successful retest is required.",
+            }
+        elif continuation["recommended_action"] == "WAIT_FOR_PULLBACK":
+            entry_selection = {
+                **entry_selection, "status": "WAIT FOR PULLBACK",
+                "reason": "Entry location is stretched relative to the remaining reward; wait for a pullback.",
+            }
         trade["entry_selection"] = entry_selection
         trade["selection_status"] = entry_selection["status"]
         trade["selection_reason"] = entry_selection["reason"]
@@ -1203,7 +1288,9 @@ class DailyTradingAssistant:
         if active_position_block:
             trade["entry_selection"] = {**trade["entry_selection"], "status": "AVOID",
                                          "reason": "This stock already has an active tracked position."}
-        elif stability_pending:
+        elif (stability_pending
+              and continuation["state"] != "EXTENDED_DO_NOT_CHASE"
+              and stabilized.get("state") != "READY_NEAR_TRIGGER"):
             trade["entry_selection"] = {
                 **trade["entry_selection"], "status": "WAIT FOR CONFIRMATION",
                 "reason": "Candidate is new or not yet persistent; keep it on the watchlist until confirmed.",
@@ -1562,26 +1649,41 @@ class DailyTradingAssistant:
         strength_by_symbol = {
             candidate["symbol"]: strength for candidate, strength in zip(candidates, strengths)
         }
-        recent_runs = self.journal.recent_selected_symbols(
-            self.platform.settings.selection_stability_lookback_runs
+        stability_reference_time = datetime.now(timezone.utc)
+        recent_snapshots = self.journal.recent_selected_snapshots(
+            self.platform.settings.selection_stability_lookback_runs,
+            minimum_gap_minutes=self.platform.settings.selection_stability_min_gap_minutes,
+            reference_time=stability_reference_time,
         )
+        recent_runs = [snapshot["symbols"] for snapshot in recent_snapshots]
         for candidate in candidates:
             symbol = str(candidate["symbol"]).upper().removesuffix(".NS")
-            appearances = sum(symbol in symbols for symbols in recent_runs)
-            required = min(
-                self.platform.settings.selection_stability_min_appearances,
-                len(recent_runs),
-            )
-            enough_history = len(recent_runs) >= self.platform.settings.selection_stability_min_appearances
+            prior_appearances = sum(symbol in symbols for symbols in recent_runs)
+            appearances = prior_appearances + 1  # The current report is one observation.
+            required = self.platform.settings.selection_stability_min_appearances
+            eligible = appearances >= required
             candidate["selection_stability"] = {
-                "status": ("NEW_NO_HISTORY" if not recent_runs else
-                           "STABLE" if appearances >= required else
-                           "BUILDING_HISTORY" if not enough_history else "UNSTABLE"),
-                "eligible": not enough_history or appearances >= required,
+                "status": ("STABLE" if eligible else
+                           "NEW_NO_HISTORY" if not recent_runs else "CONFIRMING"),
+                "eligible": eligible,
                 "appearances": appearances,
-                "runs_reviewed": len(recent_runs),
+                "prior_appearances": prior_appearances,
+                "runs_reviewed": len(recent_snapshots),
+                "independent_observations": len(recent_snapshots) + 1,
                 "required_appearances": required,
-                "score": round(100 * (appearances + 1) / (len(recent_runs) + 1), 2),
+                "minimum_gap_minutes":
+                    self.platform.settings.selection_stability_min_gap_minutes,
+                "next_confirmation_after": (
+                    None if eligible else
+                    (stability_reference_time.replace(microsecond=0)
+                     + timedelta(
+                         minutes=self.platform.settings.selection_stability_min_gap_minutes
+                     )).isoformat()
+                ),
+                "snapshot_timestamps": [
+                    snapshot["timestamp"] for snapshot in recent_snapshots
+                ],
+                "score": round(100 * appearances / max(len(recent_snapshots) + 1, 1), 2),
             }
         context_seconds = perf_counter() - context_started
         logger.info("Daily stage market/relative strength: %.3fs", context_seconds)
@@ -1952,6 +2054,7 @@ class DailyTradingAssistant:
             "screening": {
                 "rejection_counts": ranked.get("rejection_counts", {}),
                 "failures": ranked.get("screening_failures", []),
+                "discovery": ranked.get("discovery", {}),
                 "per_symbol_timings": ranked.get("per_symbol_timings", {}),
                 "compatibility": compatibility,
                 "configuration": {
@@ -1971,6 +2074,8 @@ class DailyTradingAssistant:
                         self.platform.settings.lightweight_stop_atr_buffer,
                     "lightweight_live_max_age_seconds":
                         self.platform.settings.lightweight_live_max_age_seconds,
+                    "selection_stability_min_gap_minutes":
+                        self.platform.settings.selection_stability_min_gap_minutes,
                     "use_lightweight_initial_support":
                         self.platform.settings.use_lightweight_initial_support,
                 },

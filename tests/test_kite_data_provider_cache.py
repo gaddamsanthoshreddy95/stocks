@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 import pandas as pd
 from requests.exceptions import ConnectionError
 
@@ -16,7 +18,11 @@ class FakeKiteProvider:
         return pd.DataFrame(
             {"Open": [100.0], "High": [102.0], "Low": [99.0],
              "Close": [101.0], "Volume": [1000]},
-            index=pd.DatetimeIndex(["2026-07-17"], name="Date"),
+            index=pd.DatetimeIndex(
+                [date.today() - timedelta(days=1)],
+                dtype="datetime64[ms]",
+                name="Date",
+            ),
         )
 
     def get_live_candle(self, symbol):
@@ -139,6 +145,40 @@ def test_live_refresh_overlays_quote_without_redownloading_history(tmp_path):
     assert refreshed.iloc[-1]["Close"] == 104.0
     assert data.live_refresh_active is False
     assert data.has_live_candle("RELIANCE") is False
+
+
+def test_live_refresh_preserves_timezone_naive_history_index(tmp_path):
+    provider = FakeKiteProvider()
+    data = KiteDataProvider(provider, history_cache_directory=tmp_path)
+
+    data.get_data("RELIANCE")
+    data.begin_live_refresh(["RELIANCE"])
+    refreshed = data.get_data("RELIANCE")
+    data.end_live_refresh()
+
+    assert refreshed.index.tz is None
+    assert refreshed.index.is_monotonic_increasing
+
+
+def test_live_refresh_normalizes_mixed_cached_timestamps(tmp_path):
+    provider = FakeKiteProvider()
+    data = KiteDataProvider(provider, history_cache_directory=tmp_path)
+    mixed = pd.DataFrame(
+        {"Open": [100, 101], "High": [102, 103], "Low": [99, 100],
+         "Close": [101, 102], "Volume": [1000, 1200]},
+        index=pd.Index([
+            pd.Timestamp("2026-07-20", tz="Asia/Kolkata"),
+            pd.Timestamp("2026-07-21"),
+        ], dtype=object, name="Date"),
+    )
+    data._history_cache["RELIANCE"] = mixed
+
+    data.begin_live_refresh(["RELIANCE"])
+    refreshed = data.get_data("RELIANCE")
+    data.end_live_refresh()
+
+    assert refreshed.index.tz is None
+    assert refreshed.index.is_monotonic_increasing
 
 
 def test_missing_bulk_quote_keeps_cached_history(tmp_path):

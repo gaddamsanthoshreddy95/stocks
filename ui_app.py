@@ -561,11 +561,34 @@ def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | Non
         recovery = trade.get("intraday_recovery") or {}
         rows.append({
             "Symbol": trade.get("symbol"), "Status": trade.get("status"),
+            "Discovery bucket": trade.get("primary_discovery_bucket"),
+            "Discovery score": trade.get("discovery_score"),
+            "Discovery rank": trade.get("universe_discovery_rank"),
+            "Discovery override": trade.get("discovery_override", False),
+            "Volume state": (trade.get("analysis_report", {}).get("analysis", {})
+                             or {}).get("volume_state"),
+            "Projected RVOL": (trade.get("analysis_report", {}).get("analysis", {})
+                               or {}).get("relative_volume"),
+            "Continuation state": (trade.get("continuation_assessment") or {}).get("state"),
+            "Continuation score": (trade.get("continuation_assessment") or {}).get("score"),
+            "EMA extension (ATR)": (trade.get("continuation_assessment") or {}).get(
+                "extension_atr"),
+            "Range consumed (ATR)": (trade.get("continuation_assessment") or {}).get(
+                "range_consumed_atr"),
+            "Remaining live R:R": (trade.get("continuation_assessment") or {}).get(
+                "remaining_risk_reward"),
+            "Stabilized state": (trade.get("stabilized_setup") or {}).get("state"),
+            "Stabilized score": (trade.get("stabilized_setup") or {}).get("score"),
+            "Stabilized trigger": (trade.get("stabilized_setup") or {}).get("trigger_price"),
+            "VWAP": (trade.get("stabilized_setup") or {}).get("vwap"),
             "Entry status": trade.get("selection_status", "UNAVAILABLE"),
             "Trigger price": (trade.get("entry_selection") or {}).get("trigger_price"),
             "Selection reason": trade.get("selection_reason"),
             "Selection stability": stability.get("status"),
             "Recent appearances": stability.get("appearances"),
+            "Independent observations": stability.get("independent_observations"),
+            "Minimum observation gap": stability.get("minimum_gap_minutes"),
+            "Next confirmation after": stability.get("next_confirmation_after"),
             "Executable trade": "YES" if trade.get("status") == "TRADE" else "NO",
             "Actually traded": execution_marks.get(str(trade.get("symbol")), "NOT_TRADED"),
             "Action": trade.get("final_action"), "Quality": trade.get("quality_grade"),
@@ -817,17 +840,28 @@ def decision_checks(trade: dict[str, Any]) -> list[dict[str, Any]]:
 def opportunity_groups(candidates: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """Assign every candidate to exactly one next-action group."""
     groups: dict[str, list[dict[str, Any]]] = {
-        "Buy now": [], "Wait for confirmation": [], "Watchlist": [], "No trade / blocked": [],
+        "Buy now": [], "Ready near trigger": [], "Wait for confirmation": [],
+        "Wait for pullback / retest": [],
+        "Extended — do not chase": [], "Watchlist": [], "No trade / blocked": [],
     }
     for item in candidates:
         status = str(item.get("status", "")).upper()
         action = str(item.get("final_action", "")).upper()
         selection = str(item.get("selection_status", "")).upper()
         source = str(item.get("_opportunity_source", "")).upper()
+        continuation_state = str(
+            (item.get("continuation_assessment") or {}).get("state") or ""
+        ).upper()
         if source == "REJECTED" or status == "REJECTED" or action in {"NO_TRADE", "REJECT"}:
             group = "No trade / blocked"
+        elif continuation_state == "EXTENDED_DO_NOT_CHASE":
+            group = "Extended — do not chase"
+        elif (item.get("stabilized_setup") or {}).get("state") == "READY_NEAR_TRIGGER":
+            group = "Ready near trigger"
         elif status == "TRADE" and (selection == "BUY NOW" or action in {"BUY", "TRADE"}):
             group = "Buy now"
+        elif continuation_state in {"WAIT_FOR_PULLBACK", "WAIT_FOR_RETEST"}:
+            group = "Wait for pullback / retest"
         elif "WAIT" in selection or "WAIT" in action:
             group = "Wait for confirmation"
         else:
@@ -1043,6 +1077,8 @@ def render_candidate_cards(platform: TradingPlatform, report: dict[str, Any],
                 levels = trade.get("levels") or {}
                 adverse = trade.get("adverse_move_risk") or {}
                 adverse_view = adverse_risk_view(adverse)
+                continuation = trade.get("continuation_assessment") or {}
+                stabilized = trade.get("stabilized_setup") or {}
                 status = trade.get("status", "WATCHLIST")
                 symbol = str(trade.get("symbol", "UNKNOWN"))
                 option_signal = option_confirmation(trade)
@@ -1054,6 +1090,19 @@ def render_candidate_cards(platform: TradingPlatform, report: dict[str, Any],
                 )
                 st.markdown(f'<div class="candidate-reason">{trade.get("selection_reason") or "No summary supplied."}</div>',
                             unsafe_allow_html=True)
+                if trade.get("primary_discovery_bucket"):
+                    st.caption(
+                        f"Discovered via {trade.get('primary_discovery_bucket')} · "
+                        f"score {number(trade.get('discovery_score'), 1)} · "
+                        f"universe rank {trade.get('universe_discovery_rank', '—')}"
+                    )
+                stability = trade.get("selection_stability") or {}
+                if stability and not stability.get("eligible", True):
+                    st.caption(
+                        f"Confirmation {stability.get('appearances', 1)}/"
+                        f"{stability.get('required_appearances', 2)} independent observations · "
+                        f"minimum gap {stability.get('minimum_gap_minutes', 15)} minutes"
+                    )
                 st.markdown(
                     '<div class="candidate-metrics">'
                     f'<div class="candidate-metric"><small>Entry</small><strong>{money(levels.get("entry"))}</strong></div>'
@@ -1063,6 +1112,13 @@ def render_candidate_cards(platform: TradingPlatform, report: dict[str, Any],
                     f'<div class="candidate-targets">Targets: {money(levels.get("target_1"))} · '
                     f'{money(levels.get("target_2"))}<br>Readiness: '
                     f'{number(trade.get("execution_readiness_score"), 0)}<br>'
+                    f'Continuation: {continuation.get("state", "UNAVAILABLE")} '
+                    f'({number(continuation.get("score"), 0)})<br>'
+                    f'EMA extension: {number(continuation.get("extension_atr"))} ATR · '
+                    f'Remaining R:R: {number(continuation.get("remaining_risk_reward"))}<br>'
+                    f'Stabilized setup: {stabilized.get("state", "UNAVAILABLE")} '
+                    f'({number(stabilized.get("score"), 0)}) · '
+                    f'Trigger: {money(stabilized.get("trigger_price"))}<br>'
                     f'{adverse_view["label"]}: '
                     f'{_compact_percent(adverse_view["probability"])}</div>',
                     unsafe_allow_html=True,
@@ -1504,6 +1560,55 @@ def selected_stock_details(platform: TradingPlatform, report: dict[str, Any],
                 "Target 1": levels.get("target_1"), "Target 2": levels.get("target_2"),
                 "Target 3": levels.get("target_3"),
             }]), width="stretch", hide_index=True)
+            scenarios = levels.get("scenarios") or {}
+            if scenarios:
+                st.markdown("**Resistance scenarios**")
+                st.dataframe(pd.DataFrame([
+                    {"Scenario": name.replace("_", " ").title(), **details}
+                    for name, details in scenarios.items()
+                ]), width="stretch", hide_index=True)
+            continuation = trade.get("continuation_assessment") or {}
+            if continuation:
+                st.markdown("**Live continuation and exhaustion assessment**")
+                render_metric_cards([
+                    ("State", continuation.get("state")),
+                    ("Continuation score", continuation.get("score")),
+                    ("EMA extension", f"{continuation.get('extension_atr')} ATR"),
+                    ("Range consumed", f"{continuation.get('range_consumed_atr')} ATR"),
+                    ("Remaining R:R", continuation.get("remaining_risk_reward")),
+                    ("Move from open",
+                     _compact_percent(continuation.get("move_from_open_percent"))),
+                ], per_row=3)
+                penalties = continuation.get("penalties") or []
+                if penalties:
+                    st.warning("Entry penalties: " + " · ".join(
+                        f"{item.get('code')} (−{item.get('points')})" for item in penalties
+                    ))
+                with st.expander("Continuation score components"):
+                    st.json(continuation, expanded=False)
+            stabilized = trade.get("stabilized_setup") or {}
+            if stabilized.get("available"):
+                st.markdown("**Stabilized pre-breakout setup**")
+                render_metric_cards([
+                    ("State", stabilized.get("state")),
+                    ("Readiness score", stabilized.get("score")),
+                    ("Trigger", money(stabilized.get("trigger_price"))),
+                    ("Stop", money(stabilized.get("stop_loss"))),
+                    ("Target", money(stabilized.get("target"))),
+                    ("Remaining R:R", stabilized.get("remaining_risk_reward")),
+                    ("VWAP", money(stabilized.get("vwap"))),
+                    ("VWAP extension",
+                     _compact_percent(stabilized.get("vwap_extension_percent"))),
+                    ("Range contraction", stabilized.get("range_contraction_ratio")),
+                ], per_row=3)
+                failed = [
+                    name.replace("_", " ").title()
+                    for name, passed in (stabilized.get("checks") or {}).items() if not passed
+                ]
+                if failed:
+                    st.info("Still required: " + " · ".join(failed))
+                with st.expander("Stabilization evidence"):
+                    st.json(stabilized, expanded=False)
             render_adverse_risk_panel(trade.get("adverse_move_risk"))
             st.write(f"**Option strategy:** {plan.get('strategy', option.get('strategy', 'UNAVAILABLE'))}")
             st.write(f"**Expiry:** {plan.get('expiry', option.get('expiry', 'UNAVAILABLE'))}")
@@ -1653,10 +1758,32 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
     tabs = st.tabs(["Overview", "Candidates", "Ask report", "Market", "News", "Rejections", "Diagnostics"])
     with tabs[0]:
         all_candidates = [*report.get("trades", []), *report.get("watchlist", [])]
-        top_report = {**report, "trades": report.get("trades", [])[:3],
-                      "watchlist": report.get("watchlist", [])[:max(0, 3 - len(report.get("trades", [])))]}
+        eligible_watch = [
+            item for item in report.get("watchlist", [])
+            if (item.get("continuation_assessment") or {}).get("state")
+            not in {"EXTENDED_DO_NOT_CHASE", "AVOID_EXHAUSTED"}
+        ]
+        eligible_trades = [
+            item for item in report.get("trades", [])
+            if (item.get("continuation_assessment") or {}).get("state")
+            not in {"EXTENDED_DO_NOT_CHASE", "AVOID_EXHAUSTED"}
+        ]
+        top_report = {
+            **report,
+            "trades": eligible_trades[:3],
+            "watchlist": eligible_watch[:max(0, 3 - len(eligible_trades))],
+        }
         st.subheader("Top decisions")
         render_candidate_cards(platform, top_report, database, key_prefix="report-overview")
+        extended_count = sum(
+            (item.get("continuation_assessment") or {}).get("state")
+            == "EXTENDED_DO_NOT_CHASE" for item in all_candidates
+        )
+        if extended_count:
+            st.warning(
+                f"{extended_count} strong mover(s) were excluded from Top decisions because "
+                "the live entry is overextended. See Extended — do not chase in Opportunities."
+            )
         if len(all_candidates) > 3:
             st.caption(f"Showing the top 3 of {len(all_candidates)} candidates. Use Opportunities "
                        "for the complete decision workspace.")
@@ -1695,7 +1822,12 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
             st.dataframe(pd.DataFrame(filtered), width="stretch", hide_index=True,
                          column_config=candidate_table_config(),
                          column_order=("Symbol", "Status", "Action", "Strategy", "Final score",
-                                       "Entry readiness", "R:R", "Sector quality", "RS quality",
+                                       "Continuation state", "Continuation score",
+                                       "EMA extension (ATR)", "Range consumed (ATR)",
+                                       "Remaining live R:R", "Stabilized state",
+                                       "Stabilized score", "Stabilized trigger", "VWAP",
+                                       "Entry readiness", "R:R",
+                                       "Sector quality", "RS quality",
                                        "Event safety", "Option-sell suitability",
                                        "Analysis confidence", "Trigger price", "Support", "Resistance",
                                        "Adverse barrier", "Adverse move before target",
@@ -1862,6 +1994,36 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
                 ], per_row=3)
                 st.dataframe(pd.DataFrame(shadow.get("candidates", [])),
                              width="stretch", hide_index=True)
+            discovery = report.get("screening", {}).get("discovery", {})
+            if discovery:
+                st.subheader("Diversified fast discovery")
+                selected = discovery.get("shortlist", [])
+                render_metric_cards([
+                    ("Strategy", discovery.get("strategy")),
+                    ("Candidates selected", len(selected)),
+                    ("Universe median move",
+                     _compact_percent(discovery.get("universe_return_median"))),
+                    ("Discovery overrides",
+                     sum(bool(item.get("override")) for item in selected)),
+                ], per_row=4)
+                st.caption(
+                    "Reserved buckets broaden discovery without running advanced analysis "
+                    "across the whole universe. Overrides are research/watch candidates only; "
+                    "they still face every advanced execution gate."
+                )
+                st.dataframe(
+                    pd.DataFrame(selected),
+                    width="stretch",
+                    hide_index=True,
+                    column_config={
+                        "discovery_score": st.column_config.NumberColumn(format="%.1f"),
+                        "daily_return_percent": st.column_config.NumberColumn(format="%.2f%%"),
+                        "opening_gap_percent": st.column_config.NumberColumn(format="%.2f%%"),
+                        "relative_volume": st.column_config.NumberColumn(format="%.2fx"),
+                        "sector_relative_return": st.column_config.NumberColumn(format="%.2f%%"),
+                        "market_relative_return": st.column_config.NumberColumn(format="%.2f%%"),
+                    },
+                )
             st.caption(
                 "Advanced price action, market structure, supply/demand, long-history, "
                 "options, news, and events run only after the shortlist boundary."
@@ -2460,6 +2622,14 @@ def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> No
                 int(platform.settings.option_analysis_max_candidates),
                 help="Only advanced-technical survivors up to this limit request option chains."
             )
+            stability_gap = st.number_input(
+                "Minimum stability observation gap (minutes)", 1, 240,
+                int(platform.settings.selection_stability_min_gap_minutes),
+                help=(
+                    "Immediate reruns inside this window count as the same market observation "
+                    "and cannot promote a candidate."
+                ),
+            )
             fourth, fifth, sixth = st.columns(3)
             support_lookback = fourth.number_input(
                 "Support lookback candles", 2, 250,
@@ -2526,6 +2696,7 @@ def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> No
             "enrichment_buffer": int(enrichment_buffer),
             "advanced_analysis_max_candidates": int(advanced_max),
             "option_analysis_max_candidates": int(option_max),
+            "selection_stability_min_gap_minutes": int(stability_gap),
             "final_report_limit": int(limit),
             "minimum_technical_score": int(minimum_score),
             "lightweight_support_lookback": int(support_lookback),

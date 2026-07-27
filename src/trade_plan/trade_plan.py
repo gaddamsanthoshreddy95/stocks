@@ -112,6 +112,33 @@ class TradePlanEngine:
             diagnostics.append(
                 f"Target too close; breakout probability {probability:.0f}% is below the {TradePlanEngine.BREAKOUT_THRESHOLD:.0f}% requirement."
             )
+        breakout_trigger = target1
+        breakout_stop = max(stop_loss, breakout_trigger - max(atr * .75, risk))
+        breakout_risk = max(0, breakout_trigger - breakout_stop)
+        breakout_reward = max(0, target2 - breakout_trigger)
+        breakout_rr = breakout_reward / breakout_risk if breakout_risk > 0 else 0
+        scenarios = {
+            "rejection_target": {
+                "entry": round(entry, 2),
+                "stop_loss": round(stop_loss, 2),
+                "target": round(target1, 2),
+                "risk_reward": round(nearest_reward / risk, 2) if risk > 0 else 0,
+                "status": "ACTIONABLE" if nearest_reward / risk >= EQUITY_MIN_RISK_REWARD else "POOR",
+            },
+            "confirmed_breakout": {
+                "trigger": round(breakout_trigger, 2),
+                "stop_loss": round(breakout_stop, 2),
+                "target": round(target2, 2),
+                "risk_reward": round(breakout_rr, 2),
+                "required_probability": TradePlanEngine.BREAKOUT_THRESHOLD,
+                "status": (
+                    "ACTIONABLE"
+                    if probability >= TradePlanEngine.BREAKOUT_THRESHOLD
+                    and breakout_rr >= EQUITY_MIN_RISK_REWARD
+                    else "WAIT_FOR_CONFIRMATION"
+                ),
+            },
+        }
 
         # ----------------------------------------------------
 
@@ -144,5 +171,7 @@ class TradePlanEngine:
             breakout_probability=round(probability, 2),
 
             diagnostics=diagnostics,
+
+            scenarios=scenarios,
 
         )

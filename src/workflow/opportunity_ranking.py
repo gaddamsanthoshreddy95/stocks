@@ -7,14 +7,21 @@ from typing import Any
 
 ACTIONABILITY_BUCKETS = {
     "TRADE_READY": 5,
+    "READY_NEAR_TRIGGER": 4,
     "PREPARE": 4,
     "WAIT_FOR_CONFIRMATION": 3,
     "WATCHLIST": 2,
+    "EXTENDED": 1,
     "AVOID": 1,
 }
 
 
 def actionability_bucket(candidate: dict[str, Any]) -> tuple[str, int]:
+    continuation = candidate.get("continuation_assessment") or {}
+    if continuation.get("state") in {"EXTENDED_DO_NOT_CHASE", "AVOID_EXHAUSTED"}:
+        return "EXTENDED", ACTIONABILITY_BUCKETS["EXTENDED"]
+    if (candidate.get("stabilized_setup") or {}).get("state") == "READY_NEAR_TRIGGER":
+        return "READY_NEAR_TRIGGER", ACTIONABILITY_BUCKETS["READY_NEAR_TRIGGER"]
     if candidate.get("status") == "TRADE" or candidate.get("trade_eligibility", {}).get("eligible"):
         return "TRADE_READY", ACTIONABILITY_BUCKETS["TRADE_READY"]
     action = str(candidate.get("final_action") or candidate.get("action") or "").upper()
@@ -40,6 +47,14 @@ def actionability_score(candidate: dict[str, Any]) -> float:
         + float(candidate.get("risk_reward_quality_score") or 0) * .10
         + float(candidate.get("path_quality_score") or 0) * .10
     )
+    continuation = candidate.get("continuation_assessment") or {}
+    if continuation:
+        score = score * .65 + float(continuation.get("score") or 0) * .35
+        if continuation.get("state") == "EXTENDED_DO_NOT_CHASE":
+            score = min(score, 39.99)
+    stabilized = candidate.get("stabilized_setup") or {}
+    if stabilized.get("available"):
+        score = score * .75 + float(stabilized.get("score") or 0) * .25
     return round(max(0.0, min(100.0, score)), 2)
 
 

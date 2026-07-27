@@ -86,6 +86,22 @@ class KiteDataProvider:
         key = symbol.upper().removesuffix(".NS")
         return self._live_refresh and key in self._live_candles
 
+    @staticmethod
+    def _live_session_progress(now: pd.Timestamp | None = None) -> float:
+        """Return the elapsed fraction of the regular 09:15-15:30 NSE session."""
+        india = ZoneInfo("Asia/Kolkata")
+        current = now or pd.Timestamp.now(tz=india)
+        if current.tzinfo is None:
+            current = current.tz_localize(india)
+        else:
+            current = current.tz_convert(india)
+        minutes = current.hour * 60 + current.minute + current.second / 60
+        session_start = 9 * 60 + 15
+        session_minutes = 6 * 60 + 15
+        # One minute is the minimum useful denominator for a just-opened quote.
+        return min(1.0, max(1.0 / session_minutes,
+                            (minutes - session_start) / session_minutes))
+
     def _with_live_candle(self, symbol: str, history: pd.DataFrame) -> pd.DataFrame:
         """Overlay today's quote without redownloading a year of candles."""
         if history is None or history.empty:
@@ -99,11 +115,32 @@ class KiteDataProvider:
                 return history
             candle = get_live_candle(symbol)
         live = history.copy()
-        timezone = getattr(live.index, "tz", None)
-        today = pd.Timestamp.now(tz=timezone).normalize()
+        # Old cache files can contain a mixture of timezone-aware and naive
+        # timestamps after library/provider upgrades. Normalize to the latest
+        # completed candle before appending today's row.
+        latest_timestamp = pd.Timestamp(live.index[-1])
+        timezone = latest_timestamp.tzinfo
+        normalized_index = []
+        for value in live.index:
+            timestamp = pd.Timestamp(value)
+            if timezone is None:
+                timestamp = timestamp.tz_localize(None)
+            elif timestamp.tzinfo is None:
+                timestamp = timestamp.tz_localize(timezone)
+            else:
+                timestamp = timestamp.tz_convert(timezone)
+            normalized_index.append(timestamp)
+        live.index = pd.DatetimeIndex(normalized_index, name=live.index.name)
+        today = (
+            pd.Timestamp.now(tz=timezone).normalize()
+            if timezone is not None
+            else pd.Timestamp.now().tz_localize(None).normalize()
+        )
         try:
             for column in ("Open", "High", "Low", "Close", "Volume"):
                 live.loc[today, column] = candle[column]
+            live.loc[today, "IS_LIVE_CANDLE"] = True
+            live.loc[today, "LIVE_SESSION_PROGRESS"] = self._live_session_progress()
         except (KeyError, TypeError, ValueError):
             # One malformed/suspended instrument must not abort the universe.
             return history

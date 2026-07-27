@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -51,8 +51,29 @@ class RecommendationJournal:
 
     def recent_selected_symbols(self, limit: int = 3) -> list[set[str]]:
         """Return selected symbols grouped by the most recent completed runs."""
+        return [
+            snapshot["symbols"]
+            for snapshot in self.recent_selected_snapshots(limit, minimum_gap_minutes=0)
+        ]
+
+    def recent_selected_snapshots(
+        self,
+        limit: int = 3,
+        minimum_gap_minutes: int = 15,
+        reference_time: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return independent prior observations, ignoring immediate reruns.
+
+        A run is eligible only after the minimum gap from ``reference_time``.
+        Older runs are then sampled with the same minimum separation, so
+        repeated clicks cannot manufacture persistence.
+        """
         if not self.root.exists() or limit <= 0:
             return []
+        reference = reference_time or datetime.now(timezone.utc)
+        if reference.tzinfo is None:
+            reference = reference.replace(tzinfo=timezone.utc)
+        cutoff = reference - timedelta(minutes=max(0, minimum_gap_minutes))
         records = []
         for path in sorted(self.root.glob("*/*/*.jsonl"), reverse=True):
             try:
@@ -63,14 +84,35 @@ class RecommendationJournal:
             except (OSError, json.JSONDecodeError):
                 continue
         records.sort(key=lambda row: str(row.get("timestamp", "")), reverse=True)
-        grouped: dict[str, set[str]] = {}
+        grouped: dict[str, dict[str, Any]] = {}
         for row in records:
             run_id = str(row["run_id"])
-            if run_id not in grouped and len(grouped) >= limit:
+            try:
+                timestamp = datetime.fromisoformat(str(row.get("timestamp", "")))
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
                 continue
+            if timestamp > cutoff:
+                continue
+            grouped.setdefault(run_id, {"timestamp": timestamp, "symbols": set()})
+            grouped[run_id]["timestamp"] = max(grouped[run_id]["timestamp"], timestamp)
             action = str(row.get("final_action") or "").upper()
             if action not in {"REJECT", "NO_TRADE"}:
-                grouped.setdefault(run_id, set()).add(str(row["symbol"]).upper())
-            else:
-                grouped.setdefault(run_id, set())
-        return list(grouped.values())[:limit]
+                grouped[run_id]["symbols"].add(str(row["symbol"]).upper())
+        ordered = sorted(grouped.items(), key=lambda item: item[1]["timestamp"], reverse=True)
+        selected = []
+        previous_time = reference
+        gap = timedelta(minutes=max(0, minimum_gap_minutes))
+        for run_id, snapshot in ordered:
+            if previous_time - snapshot["timestamp"] < gap:
+                continue
+            selected.append({
+                "run_id": run_id,
+                "timestamp": snapshot["timestamp"].isoformat(),
+                "symbols": snapshot["symbols"],
+            })
+            previous_time = snapshot["timestamp"]
+            if len(selected) >= limit:
+                break
+        return selected

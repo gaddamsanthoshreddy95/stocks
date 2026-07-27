@@ -69,6 +69,37 @@ class VolumeIndicator:
             / data["AVG_VOLUME"]
         )
 
+        # A live daily candle contains only volume accumulated so far. Comparing
+        # it with a complete-day average makes every morning scan look illiquid.
+        # Keep AVG_VOLUME as the full-day baseline for turnover/liquidity, but
+        # pace RVOL by the elapsed fraction of the NSE session. Historical and
+        # completed candles retain the original calculation above.
+        if (
+            not data.empty
+            and bool(data.iloc[-1].get("IS_LIVE_CANDLE", False))
+        ):
+            progress = pd.to_numeric(
+                pd.Series([data.iloc[-1].get("LIVE_SESSION_PROGRESS")]),
+                errors="coerce",
+            ).iloc[0]
+            prior_average = (
+                data["Volume"].iloc[:-1].tail(period).mean()
+                if len(data) > 1 else float("nan")
+            )
+            if pd.notna(progress) and progress > 0 and pd.notna(prior_average):
+                data.loc[data.index[-1], "AVG_VOLUME"] = prior_average
+                expected_volume_so_far = max(float(prior_average) * float(progress), 1)
+                data.loc[data.index[-1], "RVOL"] = (
+                    float(data.iloc[-1]["Volume"]) / expected_volume_so_far
+                )
+                data.loc[data.index[-1], "VOLUME_PROGRESS"] = float(progress)
+                data.loc[data.index[-1], "PROJECTED_VOLUME"] = (
+                    float(data.iloc[-1]["Volume"]) / float(progress)
+                )
+                data.loc[data.index[-1], "VOLUME_CONFIDENCE"] = min(
+                    100.0, max(10.0, float(progress) * 100)
+                )
+
         # ------------------------------------------
         # Volume Signal
         # ------------------------------------------
@@ -93,5 +124,12 @@ class VolumeIndicator:
                 signals.append("LOW")
 
         data["VOLUME_SIGNAL"] = signals
+        data["VOLUME_STATE"] = data["VOLUME_SIGNAL"]
+        if (
+            not data.empty
+            and bool(data.iloc[-1].get("IS_LIVE_CANDLE", False))
+            and float(data.iloc[-1].get("VOLUME_PROGRESS", 1.0)) < .08
+        ):
+            data.loc[data.index[-1], "VOLUME_STATE"] = "PENDING"
 
         return data

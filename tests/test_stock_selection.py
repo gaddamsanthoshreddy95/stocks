@@ -1,5 +1,7 @@
 import unittest
 import tempfile
+import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from src.learning.recommendation_journal import RecommendationJournal
@@ -57,6 +59,32 @@ class StockSelectionTests(unittest.TestCase):
             runs = journal.recent_selected_symbols(2)
             self.assertEqual(runs[0], {"RELIANCE"})
             self.assertEqual(runs[1], {"SBIN"})
+
+    def test_immediate_reruns_do_not_count_as_independent_stability_snapshots(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            journal = RecommendationJournal(root)
+            now = datetime.now(timezone.utc)
+            path = root / "2026" / "07" / "27.jsonl"
+            path.parent.mkdir(parents=True)
+            rows = [
+                {"run_id": "immediate", "timestamp": (now - timedelta(minutes=2)).isoformat(),
+                 "symbol": "LAURUSLABS", "final_action": "WATCHLIST"},
+                {"run_id": "independent", "timestamp": (now - timedelta(minutes=20)).isoformat(),
+                 "symbol": "SUPREMEIND", "final_action": "WATCHLIST"},
+                {"run_id": "older", "timestamp": (now - timedelta(minutes=40)).isoformat(),
+                 "symbol": "ABB", "final_action": "WATCHLIST"},
+            ]
+            path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+
+            snapshots = journal.recent_selected_snapshots(
+                3, minimum_gap_minutes=15, reference_time=now
+            )
+
+            self.assertEqual([item["run_id"] for item in snapshots],
+                             ["independent", "older"])
+            self.assertNotIn("LAURUSLABS", set().union(
+                *(item["symbols"] for item in snapshots)))
 
     def test_sector_limit_defers_lower_ranked_duplicate(self):
         def trade(symbol):

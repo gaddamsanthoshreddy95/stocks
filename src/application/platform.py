@@ -881,36 +881,185 @@ class TradingPlatform:
         logger.info("Technical scan: %.3fs for %d symbols", scan_seconds, len(symbols))
 
         candidates = []
+        sector_mapper = SectorMapper()
         for candidate in lightweight_results:
+            technical_eligible = (
+                candidate["technical_score"] >= minimum_score
+                and candidate["action"] in {"BUY", "BUY ON DIP", "WATCH"}
+            )
+            metrics = candidate.get("discovery_metrics", {})
+            discovery_signal = (
+                candidate["technical_score"] >= max(25, minimum_score - 15)
+                and (
+                    float(metrics.get("daily_return_percent") or 0) > 0
+                    or float(metrics.get("opening_gap_percent") or 0) > 0
+                    or bool(metrics.get("breakout_confirmed"))
+                    or float(metrics.get("stabilized_discovery_score") or 0) >= 60
+                )
+            )
             if candidate["technical_score"] < minimum_score:
                 rejection_counts["LOW_TECHNICAL_SCORE"] += 1
-                continue
-            if candidate["action"] not in {"BUY", "BUY ON DIP", "WATCH"}:
+            elif candidate["action"] not in {"BUY", "BUY ON DIP", "WATCH"}:
                 rejection_counts["ACTION_NOT_ELIGIBLE"] += 1
+            else:
+                stage_counts["technical_passed"] += 1
+            if not technical_eligible and not discovery_signal:
                 continue
-            stage_counts["technical_passed"] += 1
             if candidate["stock_liquidity"]["score"] < self.settings.candidate_min_liquidity_score:
                 rejection_counts["LOW_LIQUIDITY"] += 1
                 continue
-            stage_counts["liquidity_passed"] += 1
+            if technical_eligible:
+                stage_counts["liquidity_passed"] += 1
             if candidate["trust"]["score"] < self.settings.candidate_min_trust_score:
                 rejection_counts["LOW_TRUST_SCORE"] += 1
                 continue
-            stage_counts["trust_passed"] += 1
+            if technical_eligible:
+                stage_counts["trust_passed"] += 1
+            metrics = candidate.setdefault("discovery_metrics", {})
+            sector = sector_mapper.get_sector(candidate["symbol"])
+            metrics["sector"] = sector
             candidates.append(candidate)
 
-        action_rank = {"BUY": 2, "BUY ON DIP": 1, "WATCH": 0}
+        # Build a diversified Stage-1 shortlist. This remains a cheap operation:
+        # it uses only the already-computed daily indicators and bulk live quote.
+        # Advanced analysis still receives no more than ``limit`` candidates.
+        universe_return = float(np.median([
+            float(item.get("discovery_metrics", {}).get("daily_return_percent") or 0)
+            for item in candidates
+        ])) if candidates else 0.0
+        sector_returns: dict[str, list[float]] = {}
+        for item in candidates:
+            metrics = item["discovery_metrics"]
+            sector_returns.setdefault(metrics["sector"], []).append(
+                float(metrics.get("daily_return_percent") or 0)
+            )
+        sector_medians = {
+            sector: float(np.median(values)) for sector, values in sector_returns.items()
+        }
+        for item in candidates:
+            metrics = item["discovery_metrics"]
+            daily_return = float(metrics.get("daily_return_percent") or 0)
+            gap = float(metrics.get("opening_gap_percent") or 0)
+            rvol = float(metrics.get("relative_volume") or 0)
+            sector_relative = daily_return - sector_medians.get(metrics["sector"], 0)
+            market_relative = daily_return - universe_return
+            metrics.update({
+                "market_relative_return": round(market_relative, 4),
+                "sector_relative_return": round(sector_relative, 4),
+                "live_momentum_score": round(
+                    max(0, daily_return) * 12 + max(0, gap) * 6
+                    + max(0, float(metrics.get("close_location") or 0) - .5) * 20,
+                    2,
+                ),
+                "catalyst_proxy_score": round(abs(gap) * 10 + abs(daily_return) * 4, 2),
+            })
+            item["discovery_score"] = round(
+                float(item["technical_score"]) * .55
+                + min(100, max(0, market_relative) * 15) * .15
+                + min(100, max(0, sector_relative) * 20) * .10
+                + min(100, rvol * 60) * .10
+                + (100 if metrics.get("breakout_confirmed") else 0) * .10,
+                2,
+            )
+
+        action_rank = {"BUY": 2, "BUY ON DIP": 1, "WATCH": 0, "AVOID": -1}
         ranking_started = perf_counter()
-        candidates.sort(
-            key=lambda item: (
-                action_rank[item["action"]],
-                item["technical_score"],
-                item["stock_liquidity"]["score"],
-                item["risk_reward"],
-            ),
-            reverse=True,
-        )
-        top_candidates = candidates[:limit]
+        eligible_actions = [
+            item for item in candidates
+            if item["action"] in {"BUY", "BUY ON DIP", "WATCH"}
+            and item["technical_score"] >= minimum_score
+        ]
+        discovery_floor = max(25, minimum_score - 15)
+        discovery_pool = [
+            item for item in candidates
+            if item["technical_score"] >= discovery_floor
+            and (
+                float(item["discovery_metrics"].get("daily_return_percent") or 0) > 0
+                or bool(item["discovery_metrics"].get("breakout_confirmed"))
+                or float(item["discovery_metrics"].get("sector_relative_return") or 0) > 0
+                or float(item["discovery_metrics"].get("stabilized_discovery_score") or 0) >= 60
+            )
+        ]
+        stabilized_pool = [
+            item for item in discovery_pool
+            if (
+                float(item["discovery_metrics"].get("stabilized_discovery_score") or 0) >= 60
+                and float(item["discovery_metrics"].get("daily_return_percent") or 0) <= 1.5
+                and float(item["discovery_metrics"].get("ema20_extension_atr") or 0) <= 1.0
+            )
+        ]
+        bucket_specs = [
+            ("STABILIZED_PRE_BREAKOUT", stabilized_pool, lambda item: (
+                item["discovery_metrics"].get("stabilized_discovery_score") or 0,
+                item["discovery_score"])),
+            ("COMPOSITE", eligible_actions, lambda item: (
+                item["discovery_score"], action_rank.get(item["action"], -1))),
+            ("LIVE_MOVER", discovery_pool, lambda item: (
+                item["discovery_metrics"]["live_momentum_score"], item["discovery_score"])),
+            ("PROJECTED_VOLUME", discovery_pool, lambda item: (
+                item["discovery_metrics"].get("relative_volume") or 0, item["discovery_score"])),
+            ("SECTOR_LEADER", discovery_pool, lambda item: (
+                item["discovery_metrics"].get("sector_relative_return") or 0,
+                item["discovery_score"])),
+            ("BREAKOUT_OR_CATALYST", discovery_pool, lambda item: (
+                bool(item["discovery_metrics"].get("breakout_confirmed")),
+                item["discovery_metrics"].get("catalyst_proxy_score") or 0,
+                item["discovery_score"])),
+        ]
+        weights = (.35, .25, .10, .10, .10, .10)
+        quotas = [max(1, int(round(limit * weight))) for weight in weights]
+        while sum(quotas) > limit:
+            quotas[quotas.index(max(quotas))] -= 1
+        while sum(quotas) < limit:
+            quotas[0] += 1
+        selected: list[dict[str, Any]] = []
+        selected_symbols: set[str] = set()
+        bucket_counts: dict[str, int] = {}
+        for (bucket, pool, sort_key), quota in zip(bucket_specs, quotas):
+            added = 0
+            for item in sorted(pool, key=sort_key, reverse=True):
+                item.setdefault("discovery_buckets_considered", []).append(bucket)
+                if item["symbol"] in selected_symbols:
+                    continue
+                item["primary_discovery_bucket"] = bucket
+                item["discovery_override"] = item["action"] not in {
+                    "BUY", "BUY ON DIP", "WATCH"
+                }
+                if item["discovery_override"]:
+                    item["original_stage1_action"] = item["action"]
+                    item["action"] = "WATCH"
+                    item["reason"] = (
+                        "Fast discovery override: full analysis is required before execution."
+                    )
+                selected.append(item)
+                selected_symbols.add(item["symbol"])
+                added += 1
+                if added >= quota:
+                    break
+            bucket_counts[bucket] = added
+        if len(selected) < limit:
+            remainder = sorted(
+                candidates, key=lambda item: item["discovery_score"], reverse=True
+            )
+            for item in remainder:
+                if item["symbol"] in selected_symbols:
+                    continue
+                item["primary_discovery_bucket"] = "COMPOSITE_FILL"
+                item["discovery_override"] = item["action"] not in {
+                    "BUY", "BUY ON DIP", "WATCH"
+                }
+                if item["discovery_override"]:
+                    item["original_stage1_action"] = item["action"]
+                    item["action"] = "WATCH"
+                selected.append(item)
+                selected_symbols.add(item["symbol"])
+                if len(selected) >= limit:
+                    break
+        top_candidates = selected[:limit]
+        for rank, item in enumerate(
+            sorted(candidates, key=lambda candidate: candidate["discovery_score"], reverse=True), 1
+        ):
+            item["universe_discovery_rank"] = rank
         ranking_seconds = perf_counter() - ranking_started
         stage_counts["shortlisted"] = len(top_candidates)
 
@@ -963,6 +1112,25 @@ class TradingPlatform:
             "statistics": stage_counts,
             "rejection_counts": rejection_counts,
             "screening_failures": screening_failures,
+            "discovery": {
+                "strategy": "DIVERSIFIED_FAST_SCAN",
+                "universe_return_median": round(universe_return, 4),
+                "bucket_quotas": dict(zip((item[0] for item in bucket_specs), quotas)),
+                "bucket_selected": bucket_counts,
+                "shortlist": [
+                    {
+                        "symbol": item["symbol"],
+                        "bucket": item.get("primary_discovery_bucket"),
+                        "discovery_score": item.get("discovery_score"),
+                        "universe_rank": item.get("universe_discovery_rank"),
+                        "stage1_action": item.get("original_stage1_action", item.get("action")),
+                        "override": item.get("discovery_override", False),
+                        **item.get("discovery_metrics", {}),
+                        "data_health": item.get("data_health", {}),
+                    }
+                    for item in top_candidates
+                ],
+            },
             "per_symbol_timings": per_symbol_timings,
             "timings": timings,
             "message": (
