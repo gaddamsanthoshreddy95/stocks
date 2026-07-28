@@ -10,6 +10,8 @@ import logging
 from time import perf_counter
 from typing import Any
 
+import pandas as pd
+
 from src.sector.sector_mapper import SectorMapper
 from src.news.analysis_service import NewsAnalysisService
 from src.news.ai_sentiment import AISentimentAnalyzer

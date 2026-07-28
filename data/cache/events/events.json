@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-23T14:31:01.608597+00:00",
+  "generated_at": "2026-07-28T07:13:37.410049+00:00",
   "events": [
     {
       "event_id": "MARKET-WIDE-20260720",
@@ -17,7 +17,7 @@
       "event_end": null,
       "expected_duration": "ONE_TO_THREE_DAYS",
       "raw_score": 70.0,
-      "decayed_score": 7.25,
+      "decayed_score": 0.28,
       "confidence": 0.95,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -60,7 +60,7 @@
       "event_end": null,
       "expected_duration": "THREE_TO_SEVEN_DAYS",
       "raw_score": 50.0,
-      "decayed_score": 15.96,
+      "decayed_score": 1.82,
       "confidence": 0.9,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -109,7 +109,7 @@
       "event_end": null,
       "expected_duration": "THREE_TO_SEVEN_DAYS",
       "raw_score": 50.0,
-      "decayed_score": 25.52,
+      "decayed_score": 2.91,
       "confidence": 0.9,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -158,7 +158,7 @@
       "event_end": null,
       "expected_duration": "THREE_TO_SEVEN_DAYS",
       "raw_score": 75.0,
-      "decayed_score": 38.29,
+      "decayed_score": 4.37,
       "confidence": 0.9,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -207,7 +207,7 @@
       "event_end": null,
       "expected_duration": "ONE_TO_THREE_DAYS",
       "raw_score": 70.0,
-      "decayed_score": 35.56,
+      "decayed_score": 1.37,
       "confidence": 0.85,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -242,19 +242,19 @@
       "category": "MARKET_WIDE",
       "severity": "HIGH",
       "direction": "VOLATILITY_ONLY",
-      "status": "ACTIVE",
-      "source_type": "MARKET_DATA",
+      "status": "STALE",
+      "source_type": "CACHED_SOURCE",
       "detected_at": "2026-07-23T14:31:01.608597+00:00",
       "last_updated_at": "2026-07-23T14:31:01.608597+00:00",
-      "event_start": null,
+      "event_start": "2026-07-23T14:31:01.608597+00:00",
       "event_end": null,
       "expected_duration": "ONE_TO_THREE_DAYS",
-      "raw_score": 70,
-      "decayed_score": 70,
+      "raw_score": 70.0,
+      "decayed_score": 2.7,
       "confidence": 0.95,
-      "freshness_score": 100.0,
+      "freshness_score": 25,
       "materiality": 1.0,
-      "gap_risk": 70,
+      "gap_risk": 70.0,
       "affected_sectors": [],
       "affected_symbols": [],
       "affected_regions": [],
@@ -273,11 +273,10 @@
       "expiry_time": null,
       "canonical_event_id": "a5567137fd8d1e9e",
       "related_article_ids": [
-        "MARKET-WIDE-20260723",
         "MARKET-WIDE-20260723"
       ],
       "event_version": 1,
-      "meaningful_update_count": 1
+      "meaningful_update_count": 0
     },
     {
       "event_id": "CRUDE_PRICE-20260723",
@@ -286,17 +285,17 @@
       "category": "COMMODITY",
       "severity": "HIGH",
       "direction": "POSITIVE",
-      "status": "ACTIVE",
-      "source_type": "COMMODITY_DATA",
+      "status": "STALE",
+      "source_type": "CACHED_SOURCE",
       "detected_at": "2026-07-23T14:31:01.608597+00:00",
       "last_updated_at": "2026-07-23T14:31:01.608597+00:00",
-      "event_start": null,
+      "event_start": "2026-07-23T14:31:01.608597+00:00",
       "event_end": null,
       "expected_duration": "THREE_TO_SEVEN_DAYS",
-      "raw_score": 75,
-      "decayed_score": 75,
-      "confidence": 1,
-      "freshness_score": 100.0,
+      "raw_score": 75.0,
+      "decayed_score": 8.56,
+      "confidence": 1.0,
+      "freshness_score": 25,
       "materiality": 1.0,
       "gap_risk": 63.75,
       "affected_sectors": [
@@ -328,11 +327,10 @@
       "expiry_time": null,
       "canonical_event_id": "de997cd6693dd578",
       "related_article_ids": [
-        "CRUDE_PRICE-20260723",
         "CRUDE_PRICE-20260723"
       ],
       "event_version": 1,
-      "meaningful_update_count": 1
+      "meaningful_update_count": 0
     },
     {
       "event_id": "SILVER_PRICE-20260723",
@@ -341,17 +339,17 @@
       "category": "COMMODITY",
       "severity": "MEDIUM",
       "direction": "NEGATIVE",
-      "status": "ACTIVE",
-      "source_type": "COMMODITY_DATA",
+      "status": "STALE",
+      "source_type": "CACHED_SOURCE",
       "detected_at": "2026-07-23T14:31:01.608597+00:00",
       "last_updated_at": "2026-07-23T14:31:01.608597+00:00",
-      "event_start": null,
+      "event_start": "2026-07-23T14:31:01.608597+00:00",
       "event_end": null,
       "expected_duration": "THREE_TO_SEVEN_DAYS",
-      "raw_score": 50,
-      "decayed_score": 50,
-      "confidence": 1,
-      "freshness_score": 100.0,
+      "raw_score": 50.0,
+      "decayed_score": 5.71,
+      "confidence": 1.0,
+      "freshness_score": 25,
       "materiality": 1.0,
       "gap_risk": 42.5,
       "affected_sectors": [
@@ -378,11 +376,10 @@
       "expiry_time": null,
       "canonical_event_id": "b0e3bb48d063e3c1",
       "related_article_ids": [
-        "SILVER_PRICE-20260723",
         "SILVER_PRICE-20260723"
       ],
       "event_version": 1,
-      "meaningful_update_count": 1
+      "meaningful_update_count": 0
     }
   ]
 }
