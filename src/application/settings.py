@@ -32,6 +32,7 @@ class PlatformSettings:
     lightweight_stop_atr_buffer: float = 0.20
     lightweight_live_max_age_seconds: float = 120.0
     use_lightweight_initial_support: bool = True
+    initial_scan_workers: int = 8
     enable_stage_timings: bool = True
     enable_per_symbol_timings: bool = False
     quality_config: QualityConfig = field(default_factory=QualityConfig.from_env)
@@ -211,6 +212,8 @@ class PlatformSettings:
             raise ValueError("Lightweight support distance and stop buffer cannot be negative")
         if self.lightweight_live_max_age_seconds <= 0:
             raise ValueError("LIGHTWEIGHT_LIVE_MAX_AGE_SECONDS must be positive")
+        if not 1 <= self.initial_scan_workers <= 32:
+            raise ValueError("INITIAL_SCAN_WORKERS must be between 1 and 32")
         if self.candidate_ranking_mode not in {"EXPECTED_VALUE", "QUALITY_SCORE", "AI_SCORE", "READINESS"}:
             raise ValueError("CANDIDATE_RANKING_MODE is invalid")
         grade_thresholds = (self.quality_grade_a_plus, self.quality_grade_a,
@@ -393,6 +396,7 @@ class PlatformSettings:
             lightweight_live_max_age_seconds=env_float(
                 "LIGHTWEIGHT_LIVE_MAX_AGE_SECONDS", 120),
             use_lightweight_initial_support=env_bool("USE_LIGHTWEIGHT_INITIAL_SUPPORT", True),
+            initial_scan_workers=env_int("INITIAL_SCAN_WORKERS", 8),
             enable_stage_timings=env_bool("ENABLE_STAGE_TIMINGS", True),
             enable_per_symbol_timings=env_bool("ENABLE_PER_SYMBOL_TIMINGS", False),
             candidate_ranking_mode=os.getenv("CANDIDATE_RANKING_MODE", "EXPECTED_VALUE").upper(),

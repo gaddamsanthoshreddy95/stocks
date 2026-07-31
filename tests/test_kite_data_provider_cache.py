@@ -1,4 +1,6 @@
 from datetime import date, timedelta
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 
 import pandas as pd
 from requests.exceptions import ConnectionError
@@ -70,6 +72,26 @@ def test_daily_history_is_reused_from_disk_on_same_day(tmp_path):
 
     assert provider.calls == [("RELIANCE", "1y")]
     pd.testing.assert_frame_equal(cached, downloaded)
+
+
+def test_different_symbols_load_concurrently(tmp_path):
+    class ConcurrentProvider(FakeKiteProvider):
+        def __init__(self):
+            super().__init__()
+            self.barrier = Barrier(2, timeout=2)
+
+        def get_historical_data(self, symbol, period="1y", from_date=None):
+            self.barrier.wait()
+            return super().get_historical_data(symbol, period, from_date)
+
+    provider = ConcurrentProvider()
+    data = KiteDataProvider(provider, history_cache_directory=tmp_path)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        frames = list(executor.map(data.get_data, ["RELIANCE", "INFY"]))
+
+    assert all(not frame.empty for frame in frames)
+    assert {call[0] for call in provider.calls} == {"RELIANCE", "INFY"}
 
 
 def test_stale_daily_history_is_used_when_refresh_has_network_failure(tmp_path):

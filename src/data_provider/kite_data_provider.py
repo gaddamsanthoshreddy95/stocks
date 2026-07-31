@@ -43,6 +43,7 @@ class KiteDataProvider:
         self._max_stale_history_days = max_stale_history_days
         self._long_history_cache_lock = RLock()
         self._history_cache_lock = RLock()
+        self._history_key_locks: dict[str, RLock] = {}
         self._history_cache_session_date = datetime.now(
             ZoneInfo("Asia/Kolkata")).date()
         self._nfo_instruments = None
@@ -171,13 +172,25 @@ class KiteDataProvider:
         safe_period = period.lower().replace("/", "_").replace("\\", "_")
         return self._long_history_cache_directory / f"{symbol}_{safe_period}.parquet"
 
+    def _history_key_lock(self, key: str) -> RLock:
+        """Serialize duplicate reads for one symbol, without blocking the universe."""
+        with self._history_cache_lock:
+            return self._history_key_locks.setdefault(key, RLock())
+
     def get_data(self, symbol: str):
         key = symbol.upper().removesuffix(".NS")
-        with self._history_cache_lock:
-            if key in self._history_cache:
-                history = self._history_cache[key]
-                if self._live_refresh:
+        # Disk reads, indicator preparation, and Kite refreshes for unrelated
+        # symbols may proceed concurrently. The underlying Kite provider still
+        # rate-limits its historical requests, so this does not increase the
+        # permitted API request rate.
+        with self._history_key_lock(key):
+            with self._history_cache_lock:
+                history = self._history_cache.get(key)
+                live_refresh = self._live_refresh
+            if history is not None:
+                if live_refresh:
                     history = self._with_live_candle(key, history)
+                with self._history_cache_lock:
                     self._history_cache[key] = history
                 return history.copy()
             path = self._history_path(key)
@@ -229,9 +242,12 @@ class KiteDataProvider:
                 if history is not None and not history.empty:
                     path.parent.mkdir(parents=True, exist_ok=True)
                     history.to_parquet(path)
-            if self._live_refresh:
+            with self._history_cache_lock:
+                live_refresh = self._live_refresh
+            if live_refresh:
                 history = self._with_live_candle(key, history)
-            self._history_cache[key] = history
+            with self._history_cache_lock:
+                self._history_cache[key] = history
             return history.copy()
 
     def get_long_history(self, symbol: str, period: str = "10y"):

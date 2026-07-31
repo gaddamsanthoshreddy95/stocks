@@ -869,7 +869,10 @@ class TradingPlatform:
                 return None
 
         lightweight_results = []
-        workers = 1 if self.settings.market_data_source == "kite" else min(8, len(symbols))
+        # KiteDataProvider serializes and rate-limits only the actual historical
+        # API calls. Keep the surrounding cache reads and CPU screening bounded
+        # but concurrent across symbols.
+        workers = min(self.settings.initial_scan_workers, len(symbols))
         scan_started = perf_counter()
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(evaluate, symbol) for symbol in symbols]
