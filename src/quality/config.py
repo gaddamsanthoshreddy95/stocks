@@ -54,8 +54,8 @@ class QualityConfig:
     sector_missing_policy: str = "NEUTRAL"
     intraday_missing_policy: str = "RENORMALIZE"
     stock_quality_weights: dict[str, float] = field(default_factory=lambda: _weights(
-        data_quality=.10, liquidity=.15, price_behaviour=.15, relative_strength=.20,
-        sector_strength=.10, trend_quality=.15, fundamental_quality=.15,
+        data_quality=.10, liquidity=.15, price_behaviour=.15, relative_strength=.24,
+        sector_strength=.06, trend_quality=.15, fundamental_quality=.15,
     ))
     directional_weights: dict[str, float] = field(default_factory=lambda: _weights(
         stock_quality=.25, setup_quality=.25, entry_readiness=.20,

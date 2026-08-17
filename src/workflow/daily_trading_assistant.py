@@ -13,6 +13,7 @@ from typing import Any
 import pandas as pd
 
 from src.sector.sector_mapper import SectorMapper
+from src.sector.sector_strength import SectorStrength
 from src.news.analysis_service import NewsAnalysisService
 from src.news.ai_sentiment import AISentimentAnalyzer
 from src.workflow.context_enrichment import ContextEnrichment
@@ -253,10 +254,10 @@ class DailyTradingAssistant:
                        and float(rs_score) >= settings.bullish_min_relative_strength_score,
              "value": rs_score, "minimum_or_maximum": settings.bullish_min_relative_strength_score,
              "reason": f"Relative-strength score is {rs_score}; minimum is {settings.bullish_min_relative_strength_score}."},
-            {"name": "supportive_sector", "passed": bool(sector.get("available")) and sector_score is not None
-                                                    and float(sector_score) >= settings.entry_min_sector_score,
+            {"name": "supportive_sector", "passed": True,
              "value": sector_score, "minimum_or_maximum": settings.entry_min_sector_score,
-             "reason": f"Sector score is {sector_score}; minimum is {settings.entry_min_sector_score}."},
+             "reason": (f"Sector score is {sector_score}; used as ranking context only, "
+                        "not as a stock rejection rule.")},
             {"name": "entry_not_overextended",
              "passed": entry_quality.get("position_size_guidance") != "ZERO_UNTIL_RETEST",
              "value": entry_quality.get("extension_band"), "minimum_or_maximum": "NORMAL_OR_CAUTION",
@@ -417,8 +418,8 @@ class DailyTradingAssistant:
              "detail": f"relative volume {analysis['analysis']['relative_volume']:.2f}x (minimum {self.platform.settings.entry_min_relative_volume}x)"},
             {"name": "market_alignment", "passed": alignment["status"] != "CONFLICT",
              "detail": alignment["status"]},
-            {"name": "sector_support", "passed": not sector_data.get("available") or sector_data.get("score", 50) >= self.platform.settings.entry_min_sector_score,
-             "detail": sector_data.get("rating", "UNAVAILABLE")},
+            {"name": "sector_support", "passed": True,
+             "detail": (f"{sector_data.get('rating', 'UNAVAILABLE')} — ranking context only")},
             {"name": "risk_reward", "passed": candidate["trade_plan"]["risk_reward"] >= self.platform.settings.equity_min_risk_reward,
              "detail": f"1:{candidate['trade_plan']['risk_reward']} (minimum 1:{self.platform.settings.equity_min_risk_reward})"},
             {"name": "option_context",
@@ -465,25 +466,42 @@ class DailyTradingAssistant:
             if trade["sector"] != "UNKNOWN":
                 grouped.setdefault(trade["sector"], []).append(trade)
         rows = []
-        for sector, items in grouped.items():
+        for sector in sorted(set(grouped) | set(sector_strength)):
+            items = grouped.get(sector, [])
             context = sector_strength.get(sector, {})
-            candidate_score = sum(item["ai_score"] for item in items) / len(items)
+            candidate_score = (sum(item["ai_score"] for item in items) / len(items)
+                               if items else None)
             index_available = context.get("available", False)
             index_score = context.get("score") if index_available else None
             # Candidate quality remains useful when a Yahoo sector index is unavailable.
-            combined_score = candidate_score * .6 + float(index_score) * .4 if index_available else None
+            combined_score = (candidate_score * .6 + float(index_score) * .4
+                              if index_available and candidate_score is not None
+                              else float(index_score) if index_available else None)
             rows.append({"sector": sector,
                          "sector_market_score": index_score,
-                         "candidate_aggregate_score": round(candidate_score, 2),
+                         "candidate_aggregate_score": (round(candidate_score, 2)
+                                                       if candidate_score is not None else None),
                          "combined_context_score": round(combined_score, 2) if combined_score is not None else None,
                          "market_data_status": context.get("status", "UNAVAILABLE"),
-                         "ranking_basis": "SECTOR_MARKET_AND_CANDIDATES" if index_available else "CANDIDATE_AGGREGATE_ONLY",
+                         "ranking_basis": ("SECTOR_MARKET_AND_CANDIDATES"
+                                           if index_available and items else "SECTOR_MARKET_ONLY"
+                                           if index_available else "CANDIDATE_AGGREGATE_ONLY"),
                          "index_score": index_score, "index_available": index_available,
                          "rating": context.get("rating", "UNAVAILABLE"),
+                         "relative_to_nifty_percent": context.get("relative_to_nifty_percent"),
+                         "advance_percent": context.get("advance_percent"),
+                         "above_vwap_percent": context.get("above_vwap_percent"),
+                         "high_volume_percent": context.get("high_volume_percent"),
+                         "leadership_concentration_percent": context.get(
+                             "leadership_concentration_percent"),
+                         "concentrated_leadership": context.get("concentrated_leadership", False),
+                         "ranking_adjustment": context.get("ranking_adjustment", 0),
                          "candidate_count": len(items),
-                         "average_candidate_score": round(candidate_score, 2)})
+                         "average_candidate_score": (round(candidate_score, 2)
+                                                     if candidate_score is not None else None)})
         rows.sort(key=lambda item: (item["index_available"],
-                                    item["combined_context_score"] if item["index_available"] else item["candidate_aggregate_score"],
+                                    item["combined_context_score"] if item["index_available"] else
+                                    item["candidate_aggregate_score"] or -1,
                                     item["candidate_count"]), reverse=True)
         for rank, row in enumerate(rows, 1):
             row["rank"] = rank
@@ -898,6 +916,14 @@ class DailyTradingAssistant:
             market=market, event=event_assessment, option=option,
             setup=setup, plan=plan, weekly_data=weekly_data,
         ).to_dict()
+        base_candidate_score = float(quality_assessment["final_candidate_score"])
+        sector_adjustment = SectorStrength.ranking_adjustment(sector_data)
+        adjusted_candidate_score = round(
+            min(100, max(0, base_candidate_score + sector_adjustment)), 2
+        )
+        quality_assessment["base_candidate_score"] = base_candidate_score
+        quality_assessment["sector_ranking_adjustment"] = sector_adjustment
+        quality_assessment["final_candidate_score"] = adjusted_candidate_score
         execution_state = self._execution_state(event_assessment["adjusted_readiness"], normalized_regime)
         base_market_quantity = 1
         event_multiplier = event_assessment["position_size_multiplier"]
@@ -1020,6 +1046,8 @@ class DailyTradingAssistant:
             "technical_score": candidate["technical_score"],
             "quality_assessment": quality_assessment,
             "quality_scores": quality_assessment["scores"],
+            "base_candidate_score": quality_assessment["base_candidate_score"],
+            "sector_ranking_adjustment": quality_assessment["sector_ranking_adjustment"],
             "final_candidate_score": quality_assessment["final_candidate_score"],
             "stock_quality_score": (
                 quality_assessment["scores"]["stock_quality"]["score"]),
@@ -2095,8 +2123,10 @@ class DailyTradingAssistant:
             "summary": {
                 "market": market,
                 "best_sector": next((row["sector"] for row in sector_ranking if row["index_available"]), "UNAVAILABLE"),
-                "highest_ranked_candidate_sector": (max(sector_ranking,
-                    key=lambda row: row["candidate_aggregate_score"])["sector"] if sector_ranking else "NOT AVAILABLE"),
+                "highest_ranked_candidate_sector": (max(
+                    (row for row in sector_ranking if row["candidate_count"]),
+                    key=lambda row: row["candidate_aggregate_score"], default={}
+                ).get("sector", "NOT AVAILABLE")),
                 "best_option_strategy": option_strategies.most_common(1)[0][0] if option_strategies else "NOT AVAILABLE",
                 "stocks_scanned": ranked["universe_size"],
                 "stocks_qualified": len(ranked["suggestions"]),

@@ -140,6 +140,8 @@ class KiteDataProvider:
         try:
             for column in ("Open", "High", "Low", "Close", "Volume"):
                 live.loc[today, column] = candle[column]
+            if candle.get("VWAP") is not None:
+                live.loc[today, "VWAP"] = candle["VWAP"]
             live.loc[today, "IS_LIVE_CANDLE"] = True
             live.loc[today, "LIVE_SESSION_PROGRESS"] = self._live_session_progress()
         except (KeyError, TypeError, ValueError):

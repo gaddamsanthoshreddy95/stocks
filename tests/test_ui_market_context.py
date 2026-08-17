@@ -305,6 +305,20 @@ class UIMarketContextTests(unittest.TestCase):
         changes = {row["Symbol"]: row["Change"] for row in report_changes(current, previous)}
         self.assertEqual(changes, {"INFY": "REMOVED", "SBIN": "STATUS CHANGED", "TCS": "NEW"})
 
+    def test_report_changes_are_sorted_by_current_rank_with_removed_last(self):
+        previous = {"trades": [
+            {"symbol": "REMOVED", "rank": 1},
+            {"symbol": "SECOND", "rank": 2},
+            {"symbol": "FIRST", "rank": 3},
+        ]}
+        current = {"trades": [
+            {"symbol": "SECOND", "rank": 2, "quality_score": 70},
+            {"symbol": "FIRST", "rank": 1, "quality_score": 80},
+        ]}
+        changes = report_changes(current, previous)
+        self.assertEqual([row["Symbol"] for row in changes], ["FIRST", "SECOND", "REMOVED"])
+        self.assertEqual([row["Current rank"] for row in changes], [1, 2, None])
+
     def test_decision_timeline_and_outcome_attribution(self):
         timeline = decision_timeline({"symbol": "SBIN", "status": "TRADE", "quality_score": 80,
                                       "entry_selection": {"status": "BUY NOW"}})

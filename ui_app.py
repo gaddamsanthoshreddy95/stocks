@@ -33,6 +33,7 @@ from src.ui.database import ReportDatabase
 from src.ui.live_prices import KiteLivePriceFeed
 from src.ui.stock_explainer import explain_stock_question
 from src.workflow.context_enrichment import ContextEnrichment
+from sensibull_results_calendar import load_result_dates, result_highlight
 
 
 st.set_page_config(page_title="Alphatrace", page_icon="📈", layout="wide")
@@ -552,15 +553,24 @@ def render_adverse_risk_panel(risk: dict[str, Any] | None) -> None:
 def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | None = None) -> list[dict[str, Any]]:
     execution_marks = execution_marks or {}
     rows = []
-    for trade in [*report.get("trades", []), *report.get("watchlist", [])]:
+    try:
+        report_date = date.fromisoformat(str(report.get("date")))
+    except (TypeError, ValueError):
+        report_date = date.today()
+    result_dates = load_result_dates()
+    for rank, trade in enumerate([*report.get("trades", []), *report.get("watchlist", [])], 1):
         event = trade.get("event_risk", {})
         stability = trade.get("selection_stability") or {}
         zones = trade.get("supply_demand") or {}
         demand = zones.get("nearest_demand") or {}
         supply = zones.get("nearest_supply") or {}
         recovery = trade.get("intraday_recovery") or {}
+        result = (result_highlight(str(trade.get("symbol", "")), report_date, result_dates)
+                  if rank <= 10 else {"status": "OUTSIDE TOP 10", "date": None, "days": None})
         rows.append({
             "Symbol": trade.get("symbol"), "Status": trade.get("status"),
+            "Result status": result["status"], "Result date": result["date"],
+            "Days to result": result["days"],
             "Discovery bucket": trade.get("primary_discovery_bucket"),
             "Discovery score": trade.get("discovery_score"),
             "Discovery rank": trade.get("universe_discovery_rank"),
@@ -595,6 +605,18 @@ def candidate_rows(report: dict[str, Any], execution_marks: dict[str, str] | Non
             "Quality score": trade.get("quality_score"),
             "Strategy": (trade.get("option_strategy") or {}).get(
                 "strategy", "EQUITY"),
+            "Sector rating": (trade.get("sector_context") or {}).get("rating", "UNAVAILABLE"),
+            "Sector score": (trade.get("sector_context") or {}).get("score"),
+            "Sector vs Nifty": (trade.get("sector_context") or {}).get(
+                "relative_to_nifty_percent"),
+            "Sector breadth": (trade.get("sector_context") or {}).get("advance_percent"),
+            "Sector above VWAP": (trade.get("sector_context") or {}).get(
+                "above_vwap_percent"),
+            "Sector concentration": (trade.get("sector_context") or {}).get(
+                "leadership_concentration_percent"),
+            "Sector adjustment": trade.get("sector_ranking_adjustment", 0),
+            "Base candidate score": trade.get(
+                "base_candidate_score", trade.get("final_candidate_score")),
             "Final score": trade.get("final_candidate_score"),
             "Legacy rank": trade.get("legacy_rank"),
             "Composite rank": trade.get("composite_rank"),
@@ -793,6 +815,14 @@ def candidate_table_config() -> dict[str, Any]:
         "Quality score": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f"),
         "Readiness": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f"),
         "Final score": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f"),
+        "Base candidate score": st.column_config.ProgressColumn(
+            min_value=0, max_value=100, format="%.0f"),
+        "Sector score": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f"),
+        "Sector vs Nifty": st.column_config.NumberColumn(format="%+.2f%%"),
+        "Sector breadth": st.column_config.NumberColumn(format="%.1f%%"),
+        "Sector above VWAP": st.column_config.NumberColumn(format="%.1f%%"),
+        "Sector concentration": st.column_config.NumberColumn(format="%.1f%%"),
+        "Sector adjustment": st.column_config.NumberColumn(format="%+.1f"),
         "Entry readiness": st.column_config.ProgressColumn(
             min_value=0, max_value=100, format="%.0f"),
         "Stock quality": st.column_config.ProgressColumn(
@@ -810,7 +840,24 @@ def candidate_table_config() -> dict[str, Any]:
         "Adverse barrier": st.column_config.NumberColumn(format="%.1f%%"),
         "No overnight gap beyond barrier": st.column_config.NumberColumn(format="%.1f%%"),
         "Selection reason": st.column_config.TextColumn(width="large"),
+        "Result date": st.column_config.DateColumn(format="DD MMM YYYY"),
+        "Days to result": st.column_config.NumberColumn(format="%d"),
     }
+
+
+def style_result_rows(frame: pd.DataFrame) -> pd.io.formats.style.Styler:
+    """Color top-10 candidates by their Sensibull stock-result timing."""
+    def row_style(row: pd.Series) -> list[str]:
+        status = row.get("Result status")
+        if status == "RESULT DUE WITHIN 15 DAYS":
+            css = "background-color: #7f1d1d; color: #ffffff;"
+        elif status == "RESULT DECLARED":
+            css = "background-color: #166534; color: #ffffff;"
+        else:
+            css = ""
+        return [css] * len(row)
+
+    return frame.style.apply(row_style, axis=1)
 
 
 def decision_checks(trade: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1805,8 +1852,17 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
                 st.subheader("Changes since previous report")
                 changes = report_changes(report, previous)
                 if changes:
-                    st.dataframe(pd.DataFrame(changes), width="stretch", hide_index=True,
-                                 column_config={"Score change": st.column_config.NumberColumn(format="%+.1f")})
+                    st.dataframe(
+                        pd.DataFrame(changes), width="stretch", hide_index=True,
+                        column_order=("Current rank", "Symbol", "Change", "Previous rank",
+                                      "Previous status", "Current status", "Previous score",
+                                      "Current score", "Score change"),
+                        column_config={
+                            "Current rank": st.column_config.NumberColumn(format="%d"),
+                            "Previous rank": st.column_config.NumberColumn(format="%d"),
+                            "Score change": st.column_config.NumberColumn(format="%+.1f"),
+                        },
+                    )
                 else:
                     st.success("No candidate status or score changes since the previous report.")
     with tabs[1]:
@@ -1819,9 +1875,15 @@ def show_report(platform: TradingPlatform, report: dict[str, Any],
             query = st.text_input("Search symbol", placeholder="e.g. RELIANCE", key="candidate-search")
             filtered = [row for row in rows if row["Status"] in selected_statuses and
                         query.upper() in str(row["Symbol"]).upper()]
-            st.dataframe(pd.DataFrame(filtered), width="stretch", hide_index=True,
+            candidate_frame = pd.DataFrame(filtered)
+            st.dataframe(style_result_rows(candidate_frame), width="stretch", hide_index=True,
                          column_config=candidate_table_config(),
-                         column_order=("Symbol", "Status", "Action", "Strategy", "Final score",
+                         column_order=("Symbol", "Status", "Result status", "Result date",
+                                       "Days to result", "Action", "Strategy",
+                                       "Sector rating", "Sector score", "Sector adjustment",
+                                       "Base candidate score", "Final score",
+                                       "Sector vs Nifty", "Sector breadth", "Sector above VWAP",
+                                       "Sector concentration",
                                        "Continuation state", "Continuation score",
                                        "EMA extension (ATR)", "Range consumed (ATR)",
                                        "Remaining live R:R", "Stabilized state",
@@ -3033,7 +3095,8 @@ def report_changes(current: dict[str, Any], previous: dict[str, Any] | None) -> 
         new_score = (latest or {}).get("quality_score")
         old_action = (older or {}).get("final_action")
         new_action = (latest or {}).get("final_action")
-        old_rank, new_rank = (older or {}).get("rank"), (latest or {}).get("rank")
+        old_rank = (older or {}).get("actionability_rank", (older or {}).get("rank"))
+        new_rank = (latest or {}).get("actionability_rank", (latest or {}).get("rank"))
         old_breakout = bool(((older or {}).get("technical") or {}).get("breakout", {}).get("confirmed"))
         new_breakout = bool(((latest or {}).get("technical") or {}).get("breakout", {}).get("confirmed"))
         if latest and not older:
@@ -3060,7 +3123,11 @@ def report_changes(current: dict[str, Any], previous: dict[str, Any] | None) -> 
                      "Previous rank": old_rank, "Current rank": new_rank,
                      "Score change": (float(new_score) - float(old_score)
                                       if new_score is not None and old_score is not None else None)})
-    return rows
+    return sorted(rows, key=lambda row: (
+        row["Current rank"] is None,
+        float(row["Current rank"]) if row["Current rank"] is not None else float("inf"),
+        str(row["Symbol"]),
+    ))
 
 
 def decision_timeline(candidate: dict[str, Any]) -> list[dict[str, str]]:

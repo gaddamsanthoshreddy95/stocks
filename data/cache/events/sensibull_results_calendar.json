@@ -1,588 +1,104 @@
 {
   "source": "Sensibull Results Calendar",
   "source_url": "https://web.sensibull.com/stock-market-calendar/stock-results-calendar/",
-  "requested_date": "2026-07-23",
-  "scraped_at": "2026-07-23T14:34:47.876323+00:00",
-  "record_count": 145,
+  "requested_date": "2026-08-17",
+  "scraped_at": "2026-08-17T01:18:10.895958+00:00",
+  "record_count": 24,
   "records": [
     {
-      "raw_text": "22nd Jul, Wednesday Nestle India Ltd. (NESTLEIND) Stock Results (Q1) 1447.90 +0.0% Q1 FY 26-27",
+      "raw_text": "14th Aug, Friday Hindustan Petroleum Corp. Ltd. (HINDPETRO) Dividend 373.50 +0.0% Dividend of ₹ 19.25 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "Dr. Reddy's Laboratories Ltd. (DRREDDY) Stock Results (Q1) 1166.30 +0.0% Q1 FY 26-27",
+      "raw_text": "Alkem Laboratories Ltd. (ALKEM) Stock Results (Q1) 5368.00 +0.0% Q1 FY 26-27",
       "source": "sensibull"
     },
     {
-      "raw_text": "Nippon Life India Asset Management Ltd. (NAM-INDIA) Stock Results (Q1) 1105.80 +0.0% Q1 FY 26-27",
+      "raw_text": "Bharat Dynamics Ltd. (BDL) Stock Results (Q1) 1398.00 +0.0% Q1 FY 26-27",
       "source": "sensibull"
     },
     {
-      "raw_text": "Adani Power Ltd. (ADANIPOWER) Stock Results (Q1) 212.23 +0.0% Q1 FY 26-27",
+      "raw_text": "Tube Investments of India Ltd. (TIINDIA) Stock Results (Q1) 2733.50 +0.0% Q1 FY 26-27",
       "source": "sensibull"
     },
     {
-      "raw_text": "Adani Green Energy Ltd. (ADANIGREEN) Stock Results (Q1) 1379.90 +0.0% Q1 FY 26-27",
+      "raw_text": "Ashok Leyland Ltd. (ASHOKLEY) Stock Results (Q1) 171.64 +0.0% Q1 FY 26-27",
       "source": "sensibull"
     },
     {
-      "raw_text": "IndusInd Bank Ltd. (INDUSINDBK) Stock Results (Q1) 1005.50 +0.0% Q1 FY 26-27",
+      "raw_text": "Patanjali Foods Ltd. (PATANJALI) Stock Results (Q1) 352.00 +0.0% Q1 FY 26-27",
       "source": "sensibull"
     },
     {
-      "raw_text": "United Spirits Ltd. (UNITDSPR) Stock Results (Q1) 1418.00 +0.0% Q1 FY 26-27",
+      "raw_text": "NMDC Ltd. (NMDC) Stock Results (Q1) 84.40 +0.0% Q1 FY 26-27",
       "source": "sensibull"
     },
     {
-      "raw_text": "Hindustan Petroleum Corp. Ltd. (HINDPETRO) Stock Results (Q1) 385.15 +0.0% Q1 FY 26-27",
+      "raw_text": "Voltas Ltd. (VOLTAS) Stock Results (Q1) 1320.50 +0.0% Q1 FY 26-27",
       "source": "sensibull"
     },
     {
-      "raw_text": "Bharat Petroleum Corp. Ltd. (BPCL) Stock Results (Q1) 309.85 +0.0% Q1 FY 26-27",
+      "raw_text": "Cochin Shipyard Ltd. (COCHINSHIP) Stock Results (Q1) 1496.50 +0.0% Q1 FY 26-27",
       "source": "sensibull"
     },
     {
-      "raw_text": "Oracle Financial Services Software Ltd. (OFSS) Stock Results (Q1) 10843.00 +0.0% Q1 FY 26-27",
+      "raw_text": "Hindustan Aeronautics Ltd. (HAL) Dividend 5029.90 +0.0% Dividend of ₹ 10 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "Eternal Ltd. (ETERNAL) Stock Results (Q1) 287.10 +0.0% Q1 FY 26-27",
+      "raw_text": "RBL Bank Ltd. (RBLBANK) Dividend 385.00 +0.0% Dividend of ₹ 1 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "SRF Ltd. (SRF) Stock Results (Q1) 2622.70 +0.0% Q1 FY 26-27",
+      "raw_text": "REC Ltd. (RECLTD) Dividend 335.00 +0.0% Dividend of ₹ 1.55 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "JSW Energy Ltd. (JSWENERGY) Stock Results (Q1) 557.35 +0.0% Q1 FY 26-27",
+      "raw_text": "The Federal Bank Ltd. (FEDERALBNK) Dividend 351.30 +0.0% Dividend of ₹ 1.20 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "23rd Jul, Thursday Infosys Ltd. (INFY) Stock Results (Q1) 1047.40 +0.0% Q1 FY 26-27",
+      "raw_text": "Apollo Hospitals Ent. Ltd. (APOLLOHOSP) Dividend 8920.50 +0.0% Dividend of ₹ 10 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "Mphasis Ltd. (MPHASIS) Stock Results (Q1) 2232.40 +0.0% Q1 FY 26-27",
+      "raw_text": "Astral Ltd. (ASTRAL) Dividend 1556.30 +0.0% Dividend of ₹ 2.50 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "Cipla Ltd. (CIPLA) Stock Results (Q1) 1393.00 +0.0% Q1 FY 26-27",
+      "raw_text": "Indian Oil Corp. Ltd. (IOC) Dividend 139.40 +0.0% Dividend of ₹ 1.25 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "Pidilite Industries Ltd. (PIDILITIND) Dividend 1564.20 +0.0% Dividend of ₹ 11.50 Per Share",
+      "raw_text": "17th Aug, Monday Bandhan Bank Ltd. (BANDHANBNK) Dividend 174.55 +0.0% Dividend of ₹ 1.50 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "Sona BLW Precision Forgings Ltd. (SONACOMS) Stock Results (Q1) 719.75 +0.0% Q1 FY 26-27",
+      "raw_text": "NBCC (India) Limited (NBCC) Dividend 89.15 +0.0% Interim Dividend of ₹ 0.15 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "Indian Energy Exchange Ltd. (IEX) Stock Results (Q1) 121.94 +0.0% Q1 FY 26-27",
+      "raw_text": "Manappuram Fin. Ltd. (MANAPPURAM) Dividend 349.00 +0.0% Interim Dividend of ₹ 1 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "Motilal Oswal Fin. Services Ltd. (MOTILALOFS) Stock Results (Q1) 940.25 +0.0% Q1 FY 26-27",
+      "raw_text": "18th Aug, Tuesday Rail Vikas Nigam Ltd. (RVNL) Dividend 227.35 +0.0% Dividend of ₹ 0.71 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "Vishal Mega Mart Ltd. (VMM) Stock Results (Q1) 109.87 +0.0% Q1 FY 26-27",
+      "raw_text": "19th Aug, Wednesday Page Industries Ltd. (PAGEIND) Dividend 36750.00 +0.0% Interim Dividend of ₹ 200 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "InterGlobe Aviation Ltd. (INDIGO) Stock Results (Q1) 5023.50 +0.0% Q1 FY 26-27",
+      "raw_text": "21st Aug, Friday Hitachi Energy India Ltd. (POWERINDIA) Dividend 35700.00 +0.0% Dividend of ₹ 8 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "Oberoi Realty Ltd. (OBEROIRLTY) Dividend 1818.10 +0.0% Interim Dividend of ₹ 2 Per Share",
+      "raw_text": "GE Vernova T&D India Ltd. (GVT&D) Dividend 4350.00 +0.0% Dividend of ₹ 10 Per Share",
       "source": "sensibull"
     },
     {
-      "raw_text": "24th Jul, Friday Zydus Lifesciences Ltd. (ZYDUSLIFE) Dividend 1113.80 +0.0% Dividend of ₹ 1 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Crompton Greaves Consumer Electricals Ltd. (CROMPTON) Dividend 252.45 +0.0% Dividend of ₹ 3 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Hero MotoCorp Ltd. (HEROMOTOCO) Dividend 5173.80 +0.0% Dividend of ₹ 75 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Divi's Laboratories Ltd. (DIVISLAB) Dividend 7305.00 +0.0% Dividend of ₹ 30 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Radico Khaitan Ltd. (RADICO) Dividend 4065.30 +0.0% Dividend of ₹ 9 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Info Edge (India) Ltd. (NAUKRI) Dividend 1169.95 +0.0% Dividend of ₹ 3.60 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Kfin Technologies Ltd. (KFINTECH) Stock Results (Q1) 868.25 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Bank of Baroda (BANKBARODA) Stock Results (Q1) 243.15 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Container Corp. of India Ltd. (CONCOR) Stock Results (Q1) 480.50 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Laurus Labs Ltd. (LAURUSLABS) Stock Results (Q1) 1568.30 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Jindal Steel & Power Ltd. (JINDALSTEL) Stock Results (Q1) 1041.90 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "SBI Life Insurance Co. Ltd. (SBILIFE) Stock Results (Q1) 1853.50 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "CG Power and Industrial Solutions Ltd. (CGPOWER) Stock Results (Q1) 883.80 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Shriram Fin. Ltd. (SHRIRAMFIN) Stock Results (Q1) 1025.80 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "SBI Cards & Payment Services Ltd. (SBICARD) Stock Results (Q1) 622.05 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Dalmia Bharat Ltd. (DALBHARAT) Stock Results (Q1) 1854.70 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "NTPC Ltd. (NTPC) Stock Results (Q1) 348.60 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "TATA Consumer Products Ltd. (TATACONSUM) Stock Results (Q1) 1107.70 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Macrotech Developers Ltd. (LODHA) Stock Results (Q1) 1146.40 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Bank of India (BANKINDIA) Stock Results (Q1) 142.20 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Steel Authority of India Ltd. (SAIL) Stock Results (Q1) 160.91 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Fortis Healthcare Ltd. (FORTIS) Dividend 943.65 +0.0% Dividend of ₹ 1 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Bharti Airtel Ltd. (BHARTIARTL) Dividend 1931.00 +0.0% Dividend of ₹ 24 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Hindustan Zinc Limited (HINDZINC) Stock Results (Q1) 531.15 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "REC Ltd. (RECLTD) Stock Results (Q1) 358.45 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "25th Jul, Saturday IDFC First Bank Ltd. (IDFCFIRSTB) Stock Results (Q1) 79.90 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "AU Small Fin. Bank Ltd. (AUBANK) Stock Results (Q1) 978.70 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "27th Jul, Monday Coforge Ltd. (COFORGE) Stock Results (Q1) 1439.90 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Bharat Electronics Ltd. (BEL) Stock Results (Q1) 405.35 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Persistent Systems Ltd. (PERSISTENT) Dividend 5001.90 +0.0% Dividend of ₹ 18 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "DLF Ltd. (DLF) Dividend 642.20 +0.0% Dividend of ₹ 8 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Coal India Ltd. (COALINDIA) Stock Results (Q1) 427.05 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Indus Towers Ltd. (INDUSTOWER) Stock Results (Q1) 390.25 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Canara Bank (CANBK) Stock Results (Q1) 125.22 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Tata Power Co. Ltd. (TATAPOWER) Stock Results (Q1) 376.15 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Godfrey Phillips India Ltd. (GODFRYPHLP) Stock Results (Q1) 2046.50 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Wipro Ltd. (WIPRO) Dividend 174.82 +0.0% Interim Dividend of ₹ 2 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "28th Jul, Tuesday Godrej Properties Ltd. (GODREJPROP) Dividend 2041.00 +0.0% Dividend of ₹ 10 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Solar Industries India Ltd. (SOLARINDS) Dividend 18621.00 +0.0% Dividend of ₹ 11 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Hindustan Unilever Ltd. (HINDUNILVR) Stock Results (Q1) 2161.80 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Cholamandalam Inv. & Fin. Co. Ltd. (CHOLAFIN) Stock Results (Q1) 1717.30 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Ambuja Cements Ltd. (AMBUJACEM) Stock Results (Q1) 423.55 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Larsen & Toubro Ltd. (LT) Stock Results (Q1) 3792.40 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Radico Khaitan Ltd. (RADICO) Stock Results (Q1) 4065.30 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Supreme Industries Ltd. (SUPREMEIND) Stock Results (Q1) 3417.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Suzlon Energy Ltd. (SUZLON) Stock Results (Q1) 52.39 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "The Phoenix Mills Ltd. (PHOENIXLTD) Stock Results (Q1) 2035.60 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Varun Beverages Ltd. (VBL) Stock Results (Q1) 459.05 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "SRF Ltd. (SRF) Dividend 2622.70 +0.0% Interim Dividend of ₹ 5 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "29th Jul, Wednesday Dabur India Ltd. (DABUR) Stock Results (Q1) 423.15 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Asian Paints Ltd. (ASIANPAINT) Stock Results (Q1) 2668.80 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Adani Ports & Special Economic Zone Ltd. (ADANIPORTS) Stock Results (Q1) 1778.50 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Colgate Palmolive (India) Ltd. (COLPAL) Stock Results (Q1) 2085.80 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Adani Ent. Ltd. (ADANIENT) Stock Results (Q1) 3010.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "KPIT Technologies Ltd. (KPITTECH) Stock Results (Q1) 550.90 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Prestige Estates Projects Ltd. (PRESTIGE) Stock Results (Q1) 1624.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Eicher Motors Ltd. (EICHERMOT) Stock Results (Q1) 7721.50 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Siemens Ltd. (SIEMENS) Dividend 3686.30 +0.0% Dividend of ₹ 18 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Force Motors Ltd. (FORCEMOT) Stock Results (Q1) 17410.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "30th Jul, Thursday Exide Industries Ltd. (EXIDEIND) Stock Results (Q1) 439.75 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Mahindra & Mahindra Ltd. (M&M) Stock Results (Q1) 3229.70 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Marico Ltd. (MARICO) Dividend 853.20 +0.0% Dividend of ₹ 4 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Bajaj Fin. Ltd. (BAJFINANCE) Stock Results (Q1) 1039.80 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Mankind Pharma Ltd. (MANKIND) Stock Results (Q1) 2557.40 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Torrent Pharmaceuticals Ltd. (TORNTPHARM) Stock Results (Q1) 5065.20 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Tata Steel Ltd. (TATASTEEL) Stock Results (Q1) 184.23 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Hyundai Motor India Ltd. (HYUNDAI) Stock Results (Q1) 1954.40 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "LIC Housing Fin. Ltd. (LICHSGFIN) Stock Results (Q1) 533.70 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Swiggy Ltd. (SWIGGY) Stock Results (Q1) 261.55 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "UltraTech Cement Ltd. (ULTRACEMCO) Dividend 11908.00 +0.0% Dividend of ₹ 240 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Indian Railway Finance Corp. Ltd. (IRFC) Stock Results (Q1) 87.03 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "31st Jul, Friday Britannia Industries Ltd. (BRITANNIA) Dividend 5388.00 +0.0% Dividend of ₹ 90.50 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Shree Cement Ltd. (SHREECEM) Stock Results (Q1) 26825.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "ABB India Ltd. (ABB) Stock Results (Q1) 7528.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Power Fin. Corp. Ltd. (PFC) Dividend 410.05 +0.0% Dividend of ₹ 3.95 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Bajaj Finserv Ltd. (BAJAJFINSV) Stock Results (Q1) 1889.40 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Bajaj Holdings & Investment Ltd. (BAJAJHLDNG) Stock Results (Q1) 10636.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Sun Pharmaceutical Industries Ltd. (SUNPHARMA) Stock Results (Q1) 1954.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Aditya Birla Capital Ltd. (ABCAPITAL) Stock Results (Q1) 392.25 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Glenmark Pharmaceuticals Ltd. (GLENMARK) Stock Results (Q1) 2205.10 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Maruti Suzuki India Ltd. (MARUTI) Stock Results (Q1) 13403.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Indian Oil Corp. Ltd. (IOC) Stock Results (Q1) 139.92 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "ITC Ltd. (ITC) Stock Results (Q1) 281.30 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "GAIL (India) Ltd. (GAIL) Stock Results (Q1) 171.99 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Eicher Motors Ltd. (EICHERMOT) Dividend 7721.50 +0.0% Dividend of ₹ 82 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "National Aluminium Co. Ltd. (NATIONALUM) Stock Results (Q1) 346.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "PNB Housing Finance Limited (PNBHOUSING) Dividend 1066.80 +0.0% Dividend of ₹ 8 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "1st Aug, Saturday Central Depository Services (India) Ltd. (CDSL) Stock Results (Q1) 1323.40 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Divi's Laboratories Ltd. (DIVISLAB) Stock Results (Q1) 7305.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "2nd Aug, Sunday Persistent Systems Ltd. (PERSISTENT) Stock Results (Q1) 5001.90 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "3rd Aug, Monday Computer Age Management Services Ltd. (CAMS) Stock Results (Q1) 758.15 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "KEI Industries Ltd. (KEI) Stock Results (Q1) 4897.50 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "4th Aug, Tuesday Bosch Ltd. (BOSCHLTD) Dividend 42240.00 +0.0% Dividend of ₹ 270 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Pidilite Industries Ltd. (PIDILITIND) Stock Results (Q1) 1564.20 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Marico Ltd. (MARICO) Stock Results (Q1) 853.20 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Godrej Properties Ltd. (GODREJPROP) Stock Results (Q1) 2041.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "BSE Ltd. (BSE) Stock Results (Q1) 3579.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Kalyan Jewellers India Ltd. (KALYANKJIL) Stock Results (Q1) 585.60 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Multi Commodity Exchange of India Ltd. (MCX) Stock Results (Q1) 2752.60 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "5th Aug, Wednesday Cummins India Ltd. (CUMMINSIND) Stock Results (Q1) 5599.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "6th Aug, Thursday Blue Star Ltd. (BLUESTARCO) Stock Results (Q1) 1633.90 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Trent Ltd. (TRENT) Stock Results (Q1) 2874.80 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Crompton Greaves Consumer Electricals Ltd. (CROMPTON) Stock Results (Q1) 252.45 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Lupin Ltd. (LUPIN) Stock Results (Q1) 2396.30 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Hero MotoCorp Ltd. (HEROMOTOCO) Stock Results (Q1) 5173.80 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Samvardhana Motherson International Ltd. (MOTHERSON) Stock Results (Q1) 145.57 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "7th Aug, Friday Maruti Suzuki India Ltd. (MARUTI) Dividend 13403.00 +0.0% Dividend of ₹ 140 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Tube Investments of India Ltd. (TIINDIA) Dividend 2824.50 +0.0% Dividend of ₹ 1.50 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Hindalco Industries Ltd. (HINDALCO) Stock Results (Q1) 955.65 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Godrej Consumer Products Ltd. (GODREJCP) Stock Results (Q1) 1058.60 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Titan Co. Ltd. (TITAN) Stock Results (Q1) 4697.30 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Grasim Industries Ltd. (GRASIM) Dividend 3113.00 +0.0% Dividend of ₹ 10 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "10th Aug, Monday Bosch Ltd. (BOSCHLTD) Stock Results (Q1) 42240.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "11th Aug, Tuesday Zydus Lifesciences Ltd. (ZYDUSLIFE) Stock Results (Q1) 1113.80 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "12th Aug, Wednesday Apollo Hospitals Ent. Ltd. (APOLLOHOSP) Stock Results (Q1) 8862.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "13th Aug, Thursday Max Financial Services Ltd. (MFSL) Stock Results (Q1) 1503.90 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Page Industries Ltd. (PAGEIND) Stock Results (Q1) 40270.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Tata Motors Passenger Vehicles Ltd. (TMPV) Stock Results (Q1) 324.30 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "14th Aug, Friday Hindustan Petroleum Corp. Ltd. (HINDPETRO) Dividend 385.15 +0.0% Dividend of ₹ 19.25 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "Alkem Laboratories Ltd. (ALKEM) Stock Results (Q1) 5602.00 +0.0% Q1 FY 26-27",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "21st Aug, Friday Hitachi Energy India Ltd. (POWERINDIA) Dividend 32065.00 +0.0% Dividend of ₹ 8 Per Share",
-      "source": "sensibull"
-    },
-    {
-      "raw_text": "GE Vernova T&D India Ltd. (GVT&D) Dividend 4328.50 +0.0% Dividend of ₹ 10 Per Share",
+      "raw_text": "LIC Housing Fin. Ltd. (LICHSGFIN) Dividend 500.00 +0.0% Dividend of ₹ 10 Per Share",
       "source": "sensibull"
     }
   ]

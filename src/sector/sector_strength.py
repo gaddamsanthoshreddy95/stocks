@@ -15,6 +15,11 @@ from src.sector.sector_mapper import SectorMapper
 
 class SectorStrength(BaseMarketProvider):
 
+    RATING_ADJUSTMENTS = {
+        "STRONG": 6.0, "BULLISH": 3.0, "NEUTRAL": 0.0,
+        "WEAK": -3.0, "VERY_WEAK": -6.0, "UNAVAILABLE": 0.0,
+    }
+
     SECTOR_INDEX_SYMBOLS = {
         "BANKING": "^NSEBANK", "IT": "^CNXIT", "PHARMA": "^CNXPHARMA",
         "AUTO": "^CNXAUTO", "FMCG": "^CNXFMCG", "METAL": "^CNXMETAL",
@@ -108,6 +113,69 @@ class SectorStrength(BaseMarketProvider):
             "median_return_5d_percent": round(return_5, 2),
             "price": None, "change_percent": None,
         }
+
+    def _constituent_intraday(self, sector):
+        """Measure broad participation without restricting the stock universe."""
+        if self.historical_provider is None:
+            return {}
+        mapped_sector = self.MAPPING_ALIASES.get(sector, sector)
+        symbols = self.mapper.get_sector_stocks(mapped_sector)
+        metrics = []
+        for symbol in symbols:
+            try:
+                history = self.historical_provider.get_data(symbol)
+                closes = pd.to_numeric(history["Close"], errors="coerce").dropna()
+                volumes = pd.to_numeric(history["Volume"], errors="coerce").dropna()
+            except Exception:
+                continue
+            if len(closes) < 2 or float(closes.iloc[-2]) <= 0:
+                continue
+            current, previous = float(closes.iloc[-1]), float(closes.iloc[-2])
+            change = (current / previous - 1) * 100
+            latest = history.iloc[-1]
+            vwap = pd.to_numeric(pd.Series([latest.get("VWAP")]), errors="coerce").iloc[0]
+            average_volume = float(volumes.iloc[-21:-1].mean()) if len(volumes) >= 21 else 0.0
+            progress = float(latest.get("LIVE_SESSION_PROGRESS") or 1.0)
+            projected_volume = float(volumes.iloc[-1]) / max(progress, 1 / 375)
+            metrics.append({
+                "change": change,
+                "advancing": change > 0,
+                "above_vwap": bool(pd.notna(vwap) and float(vwap) > 0 and current >= float(vwap)),
+                "has_vwap": bool(pd.notna(vwap) and float(vwap) > 0),
+                "high_volume": average_volume > 0 and projected_volume >= average_volume * 1.2,
+            })
+        if not metrics:
+            return {}
+        positive_moves = sorted((max(0.0, item["change"]) for item in metrics), reverse=True)
+        positive_total = sum(positive_moves)
+        concentration = (100 * sum(positive_moves[:2]) / positive_total
+                         if positive_total > 0 else 0.0)
+        vwap_rows = [item for item in metrics if item["has_vwap"]]
+        return {
+            "constituent_count": len(metrics),
+            "advance_percent": round(
+                100 * sum(item["advancing"] for item in metrics) / len(metrics), 2),
+            "above_vwap_percent": (round(
+                100 * sum(item["above_vwap"] for item in vwap_rows) / len(vwap_rows), 2
+            ) if vwap_rows else None),
+            "vwap_sample_count": len(vwap_rows),
+            "high_volume_percent": round(
+                100 * sum(item["high_volume"] for item in metrics) / len(metrics), 2),
+            "leadership_concentration_percent": round(concentration, 2),
+            "concentrated_leadership": concentration >= 50 and len(metrics) >= 4,
+        }
+
+    @classmethod
+    def ranking_adjustment(cls, sector_data):
+        """Return a small, bounded context adjustment; missing data is neutral."""
+        if not sector_data.get("available"):
+            return 0.0
+        adjustment = cls.RATING_ADJUSTMENTS.get(
+            str(sector_data.get("rating", "UNAVAILABLE")).upper(), 0.0
+        )
+        if adjustment > 0 and sector_data.get("concentrated_leadership"):
+            adjustment = min(2.0, adjustment)
+        return adjustment
 
     def analyze(self):
 
@@ -207,5 +275,29 @@ class SectorStrength(BaseMarketProvider):
             score = float(row["score"])
             row["rating"] = ("STRONG" if score >= 75 else "BULLISH" if score >= 55
                              else "NEUTRAL" if score >= 40 else "WEAK")
+
+        nifty_change = (report.get("DIVERSIFIED") or {}).get("change_percent")
+        for sector, row in report.items():
+            row.update(self._constituent_intraday(sector))
+            change = row.get("change_percent")
+            relative = (float(change) - float(nifty_change)
+                        if change is not None and nifty_change is not None else None)
+            row["relative_to_nifty_percent"] = round(relative, 2) if relative is not None else None
+            components = [
+                (self._bounded_momentum_score(relative, 20), .40) if relative is not None else None,
+                (row["advance_percent"], .25) if row.get("advance_percent") is not None else None,
+                (row["above_vwap_percent"], .20) if row.get("above_vwap_percent") is not None else None,
+                (row["high_volume_percent"], .15) if row.get("high_volume_percent") is not None else None,
+            ]
+            available = [item for item in components if item is not None]
+            if row.get("available") and available:
+                weight = sum(item[1] for item in available)
+                score = sum(item[0] * item[1] for item in available) / weight
+                row["score"] = round(max(0, min(100, score)), 2)
+                row["score_model"] = "INTRADAY_RELATIVE_BREADTH_VWAP_VOLUME"
+                row["rating"] = ("STRONG" if score >= 75 else "BULLISH" if score >= 60
+                                 else "NEUTRAL" if score >= 40 else "WEAK" if score >= 25
+                                 else "VERY_WEAK")
+            row["ranking_adjustment"] = self.ranking_adjustment(row)
 
         return report

@@ -101,6 +101,10 @@ class KiteProvider(BaseProvider):
                 "Low": min(low, open_price, last_price),
                 "Close": last_price,
                 "Volume": volume,
+                # Kite's average traded price is the closest live quote-level
+                # equivalent of session VWAP and avoids an intraday-history
+                # request for every constituent in the universe.
+                "VWAP": float(quote.get("average_price") or last_price),
                 "timestamp": pd.Timestamp.now(tz="UTC").isoformat(),
             }
         return candles

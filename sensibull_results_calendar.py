@@ -21,6 +21,14 @@ SENSIBULL_RESULTS_URL = (
 OUTPUT_DIRECTORY = Path("data/cache/events")
 OUTPUT_FILE = OUTPUT_DIRECTORY / "sensibull_results_calendar.json"
 
+DATE_PATTERN = re.compile(
+    r"(?P<day>\d{1,2})(?:st|nd|rd|th)\s+"
+    r"(?P<month>Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+    r"Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)",
+    re.IGNORECASE,
+)
+SYMBOL_PATTERN = re.compile(r"\(([A-Z][A-Z0-9&-]*)\)")
+
 
 def clean_text(value: str | None) -> str:
     """Normalize whitespace in extracted browser text."""
@@ -39,6 +47,82 @@ def normalize_symbol(company_name: str) -> str:
     """
     normalized = re.sub(r"[^A-Za-z0-9]", "", company_name).upper()
     return normalized
+
+
+def _calendar_date(day: int, month_text: str, reference_date: date) -> date:
+    """Resolve Sensibull's year-less date to the date nearest the scrape date."""
+    month = datetime.strptime(month_text[:3].title(), "%b").month
+    candidates = [date(year, month, day) for year in (
+        reference_date.year - 1, reference_date.year, reference_date.year + 1
+    )]
+    return min(candidates, key=lambda value: abs((value - reference_date).days))
+
+
+def structure_calendar_rows(
+    rows: list[dict[str, Any]], reference_date: date | None = None
+) -> list[dict[str, Any]]:
+    """Add the symbol, event type, and inherited calendar date to scraped rows."""
+    reference_date = reference_date or date.today()
+    active_date: date | None = None
+    structured: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        raw_text = clean_text(str(item.get("raw_text", "")))
+        date_match = DATE_PATTERN.search(raw_text)
+        if date_match:
+            active_date = _calendar_date(
+                int(date_match.group("day")), date_match.group("month"), reference_date
+            )
+        elif item.get("event_date"):
+            try:
+                active_date = date.fromisoformat(str(item["event_date"]))
+            except ValueError:
+                pass
+        symbol_match = SYMBOL_PATTERN.search(raw_text)
+        item.update({
+            "symbol": symbol_match.group(1) if symbol_match else None,
+            "event_type": "STOCK_RESULTS" if re.search(
+                r"\bStock Results\b", raw_text, re.IGNORECASE
+            ) else "DIVIDEND" if re.search(
+                r"\bDividend\b", raw_text, re.IGNORECASE
+            ) else "OTHER",
+            "event_date": active_date.isoformat() if active_date else None,
+        })
+        structured.append(item)
+    return structured
+
+
+def load_result_dates(path: Path = OUTPUT_FILE) -> dict[str, date]:
+    """Load the most recent stock-result date for each exact NSE symbol."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    requested = date.fromisoformat(payload.get("requested_date", date.today().isoformat()))
+    records = structure_calendar_rows(payload.get("records", []), requested)
+    result: dict[str, date] = {}
+    for record in records:
+        if record.get("event_type") != "STOCK_RESULTS" or not record.get("event_date"):
+            continue
+        symbol = str(record.get("symbol") or "").upper()
+        if symbol:
+            result[symbol] = date.fromisoformat(record["event_date"])
+    return result
+
+
+def result_highlight(symbol: str, as_of: date, result_dates: dict[str, date]) -> dict[str, Any]:
+    """Classify a result as declared, due within 15 days, or outside the alert window."""
+    result_date = result_dates.get(str(symbol).upper())
+    if result_date is None:
+        return {"status": "NO RESULT DATE", "date": None, "days": None}
+    days = (result_date - as_of).days
+    if days < 0:
+        status = "RESULT DECLARED"
+    elif days <= 15:
+        status = "RESULT DUE WITHIN 15 DAYS"
+    else:
+        status = "RESULT LATER"
+    return {"status": status, "date": result_date.isoformat(), "days": days}
 
 
 def extract_calendar_rows(page: Page) -> list[dict[str, Any]]:
@@ -133,7 +217,7 @@ def scrape_sensibull_results_calendar(
                     "Network did not become idle; processing visible content."
                 )
 
-            rows = extract_calendar_rows(page)
+            rows = structure_calendar_rows(extract_calendar_rows(page), date.today())
 
             payload = {
                 "source": "Sensibull Results Calendar",

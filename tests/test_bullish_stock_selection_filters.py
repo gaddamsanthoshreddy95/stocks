@@ -37,11 +37,12 @@ class BullishStockSelectionFilterTests(unittest.TestCase):
                                    "probability_no_overnight_gap_beyond_barrier": 99})
         self.assertIn("target_before_adverse_probability", result["failed_checks"])
 
-    def test_weak_stock_or_sector_blocks_stock(self):
+    def test_weak_stock_blocks_but_weak_sector_only_affects_ranking(self):
         weak_stock = evaluate(relative_strength={"available": True, "score": 45})
         weak_sector = evaluate(sector={"available": True, "score": 35})
         self.assertIn("positive_stock_relative_strength", weak_stock["failed_checks"])
-        self.assertIn("supportive_sector", weak_sector["failed_checks"])
+        self.assertNotIn("supportive_sector", weak_sector["failed_checks"])
+        self.assertTrue(weak_sector["passed"])
 
     def test_overextended_or_illiquid_stock_blocks(self):
         extended = evaluate(entry_quality={"position_size_guidance": "ZERO_UNTIL_RETEST",
