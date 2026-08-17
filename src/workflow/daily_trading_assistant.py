@@ -56,6 +56,20 @@ class DailyTradingAssistant:
     trading, validation, and error behaviour remain consistent everywhere.
     """
 
+    @staticmethod
+    def _start_news_model_preload():
+        """Start FinBERT warm-up without leaking an executor on early exits."""
+        executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="news-model-preload"
+        )
+        try:
+            return executor.submit(NewsAnalysisService.preload_model)
+        finally:
+            # Submitted work continues, but the executor will release its worker
+            # as soon as that work completes. Keeping only the Future is enough
+            # to collect the result later in the pipeline.
+            executor.shutdown(wait=False)
+
     def __init__(self, platform, option_month: str | None = None,
                  excluded_symbols: set[str] | None = None):
         self.platform = platform
@@ -1608,6 +1622,12 @@ class DailyTradingAssistant:
                  "events_detected": 0, "event_clusters_created": 0},
             )
         candidates = ranked["suggestions"]
+        # FinBERT is process-wide and takes roughly 1-2 minutes to cold-start.
+        # Warm it while the independent advanced-analysis and market-context
+        # stages run, instead of adding that entire startup cost near the end.
+        news_preload_future = None
+        if candidates and self.platform.settings.market_data_source == "kite":
+            news_preload_future = self._start_news_model_preload()
         if deferred_enrichment:
             if len(candidates) > self.platform.settings.advanced_analysis_max_candidates:
                 raise ValueError(
@@ -1746,12 +1766,16 @@ class DailyTradingAssistant:
                                if self.platform.settings.market_data_source == "kite"
                                else [])
         preload_wait_started = perf_counter()
-        preload_result = (
-            NewsAnalysisService.preload_model()
-            if news_target_symbols else
-            {"available": False, "model_load_seconds": 0, "wall_seconds": 0,
-             "skipped": True, "reason": "NO_NEWS_TARGETS"}
-        )
+        if news_target_symbols:
+            preload_result = (
+                news_preload_future.result()
+                if news_preload_future is not None
+                else NewsAnalysisService.preload_model()
+            )
+        else:
+            preload_result = {"available": False, "model_load_seconds": 0,
+                              "wall_seconds": 0, "skipped": True,
+                              "reason": "NO_NEWS_TARGETS"}
         news_preload_wait_seconds = perf_counter() - preload_wait_started
         logger.info(
             "News model preload: load=%.3fs wall=%.3fs wait=%.3fs targets=%d skipped=%s",

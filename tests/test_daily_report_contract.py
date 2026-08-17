@@ -1,6 +1,7 @@
 """Regression tests for the public final-report workflow."""
 
 import unittest
+from threading import Event
 from unittest.mock import patch
 
 from src.application.platform import TradingPlatform
@@ -10,6 +11,24 @@ from src.workflow.daily_trading_assistant import DailyTradingAssistant
 
 
 class DailyReportContractTests(unittest.TestCase):
+    @patch("src.workflow.daily_trading_assistant.NewsAnalysisService.preload_model")
+    def test_news_model_preload_runs_in_background_and_remains_collectable(self, preload):
+        release = Event()
+        started = Event()
+
+        def slow_preload():
+            started.set()
+            release.wait(timeout=2)
+            return {"available": True, "model_load_seconds": 1, "wall_seconds": 1}
+
+        preload.side_effect = slow_preload
+        future = DailyTradingAssistant._start_news_model_preload()
+
+        self.assertTrue(started.wait(timeout=1))
+        self.assertFalse(future.done())
+        release.set()
+        self.assertTrue(future.result(timeout=1)["available"])
+
     def test_null_short_put_candidate_is_normalized(self):
         self.assertEqual(
             DailyTradingAssistant._short_put_candidate({"candidate": None}), {}

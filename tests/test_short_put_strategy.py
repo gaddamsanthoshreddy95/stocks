@@ -198,7 +198,14 @@ class ShortPutStrategyTests(unittest.TestCase):
         self.assertIsNone(plan["strike_search"]["selected_strike"])
 
     def test_monthly_expiry_is_preferred_within_same_month(self):
-        earlier, later = fixture_chain(14), fixture_chain(21)
+        # Use two explicit expiries in the same month. Relative day offsets can
+        # straddle a month boundary and make this test depend on the run date.
+        today = date.today()
+        first = today + timedelta(days=self.settings.short_put_min_dte)
+        while (first + timedelta(days=7)).month != first.month:
+            first += timedelta(days=1)
+        earlier = fixture_chain((first - today).days)
+        later = fixture_chain((first - today).days + 7)
         selected, _, _ = ShortPutStrikeSelector.select([earlier, later], 100, self.settings, 95, 5)
         self.assertEqual(selected[0].expiry, later.expiry)
 
