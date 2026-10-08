@@ -176,7 +176,7 @@ class AISentimentAnalyzer:
                 raw_results, documents = [], []
             else:
                 raw_results = self._sentiment_pipeline(
-                    texts, top_k=None, truncation=True, batch_size=min(16, len(texts))
+                    texts, top_k=None, truncation=True, batch_size=min(4, len(texts))
                 )
                 # A few lightweight test/custom pipelines only support scalar
                 # calls; retain that compatibility without penalizing the real
@@ -195,8 +195,13 @@ class AISentimentAnalyzer:
                     documents = [self._nlp(text) for text in texts]
             for (article, text), raw_result, doc in zip(usable, raw_results, documents):
                 probabilities = self._probabilities(raw_result)
-                signed_score = (probabilities["positive"] - probabilities["negative"]) * 100
-                label = self._label(signed_score)
+                # A neutral-dominant result must not become bearish merely
+                # because its small negative probability exceeds positive.
+                winner = max(probabilities, key=probabilities.get)
+                directional = winner != "neutral" and probabilities[winner] >= .60
+                signed_score = ((probabilities["positive"] - probabilities["negative"]) * 100
+                                if directional else 0.0)
+                label = self._label(signed_score) if directional else "NEUTRAL"
                 confidence = max(probabilities.values()) * 100
                 entities = [
                     {"text": entity.text, "label": entity.label_}
@@ -206,6 +211,8 @@ class AISentimentAnalyzer:
                 materiality = "HIGH" if abs(signed_score) >= 60 and confidence >= 70 else "MEDIUM" if abs(signed_score) >= 30 else "LOW"
                 assessments.append({
                     "title": str(article.get("title", "")), "sentiment": label,
+                    "published": article.get("published"), "source": article.get("source"),
+                    "url": article.get("url"),
                     "materiality": materiality,
                     "summary": f"FinBERT {label.lower()} probability assessment; {len(entities)} entities extracted.",
                     "probabilities": {key: round(value * 100, 2) for key, value in probabilities.items()},

@@ -30,6 +30,7 @@ class FundamentalSnapshot:
     roe: float | None = None
     roce: float | None = None
     debt_to_equity: float | None = None
+    total_debt: float | None = None
     interest_coverage: float | None = None
     operating_cash_flow: float | None = None
     free_cash_flow: float | None = None
@@ -50,6 +51,7 @@ class FundamentalSnapshot:
     block_deal_price_impact: bool | None = None
     source: str = "UNKNOWN"
     as_of: str | None = None
+    evidence: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 class FundamentalDataProvider(Protocol):

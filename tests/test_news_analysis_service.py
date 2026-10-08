@@ -19,6 +19,36 @@ def current_rss() -> bytes:
 
 
 class NewsAnalysisServiceTests(unittest.TestCase):
+    def test_neutral_dominance_does_not_become_bearish_from_probability_gap(self):
+        model = Mock(return_value=[{'label': 'neutral', 'score': .70},
+                                   {'label': 'negative', 'score': .25},
+                                   {'label': 'positive', 'score': .05}])
+        analyzer = AISentimentAnalyzer(sentiment_pipeline=model,
+                                      nlp=Mock(return_value=SimpleNamespace(ents=[])))
+        result = analyzer.analyze('INFY', [{'title': 'Infosys rises on supportive sector news'}])
+        self.assertEqual(result['sentiment'], 'NEUTRAL')
+        self.assertEqual(result['trade_impact'], 'NONE')
+        self.assertEqual(result['article_assessments'][0]['sentiment'], 'NEUTRAL')
+
+    @patch('src.news.analysis_service.requests.get')
+    def test_stock_analysis_discards_unrelated_quote_and_multi_company_headlines(self, get):
+        stamp = datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
+        titles = ['ITC profits increase', 'Infosys share price today live chart',
+                  'Infosys and Coforge rise', 'Infosys reports profit growth']
+        content = ('<rss><channel>' + ''.join(f'<item><title>{title}</title><pubDate>{stamp}</pubDate></item>'
+                                             for title in titles) + '</channel></rss>').encode()
+        get.return_value = Mock(content=content)
+        get.return_value.raise_for_status.return_value = None
+        analyzer = Mock(model='test-model')
+        analyzer.analyze.return_value = {'score': 50, 'confidence': 80, 'sentiment': 'BULLISH',
+            'events': [], 'materiality': 'MEDIUM', 'trade_impact': 'SUPPORTIVE',
+            'reasoning': [], 'article_assessments': []}
+        result = NewsAnalysisService.analyze('INFY', analyzer=analyzer,
+            company_aliases={'INFY': {'Infosys'}, 'COFORGE': {'Coforge'}, 'ITC': {'ITC'}})
+        self.assertEqual(result['article_count'], 1)
+        self.assertEqual(len(result['discarded_articles']), 3)
+        self.assertEqual(analyzer.analyze.call_args.args[1][0]['title'], 'Infosys reports profit growth')
+
     def test_finbert_pipeline_has_single_entry_process_cache(self):
         self.assertEqual(get_finbert_pipeline.cache_parameters()["maxsize"], 1)
 
@@ -148,8 +178,8 @@ class NewsAnalysisServiceTests(unittest.TestCase):
         )
         nlp.pipe.assert_called_once_with(["First article", "Second article"], batch_size=2)
 
-    @patch("spacy.load", side_effect=OSError("model missing"))
-    def test_missing_spacy_does_not_disable_finbert_sentiment(self, _load):
+    @patch.dict("sys.modules", {"spacy": SimpleNamespace(load=Mock(side_effect=OSError("model missing")))})
+    def test_missing_spacy_does_not_disable_finbert_sentiment(self):
         sentiment_pipeline = Mock(return_value=[
             {"label": "positive", "score": .8},
             {"label": "negative", "score": .1},

@@ -1,0 +1,491 @@
+{
+  "run_date": "2026-10-08",
+  "timezone": "Asia/Kolkata",
+  "checked_at": "2026-10-08T09:37:25.650462+00:00",
+  "available": true,
+  "sources": [
+    {
+      "publisher": "moneycontrol.com",
+      "state": "FETCHED",
+      "matching_articles": 12
+    },
+    {
+      "publisher": "economictimes.indiatimes.com",
+      "state": "FETCHED",
+      "matching_articles": 6
+    },
+    {
+      "publisher": "livemint.com",
+      "state": "FETCHED",
+      "matching_articles": 13
+    },
+    {
+      "publisher": "cnbctv18.com",
+      "state": "FETCHED",
+      "matching_articles": 11
+    }
+  ],
+  "articles": [
+    {
+      "title": "Adani Power shares crash over 6%, down for second consecutive session - What tech charts signal? Experts decode - Livemint",
+      "description": "Adani Power shares crash over 6%, down for second consecutive session - What tech charts signal? Experts decode Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T09:03:15+00:00",
+      "url": "https://news.google.com/rss/articles/CBMihwJBVV95cUxNZVdtSGo4allCdXJUWWNmQ3lEcnB2YmVxTUhXbmx4djJYTDVDeUVtZV90YzFEX1YxeGZtQ3o5NmlzaWNBdmZSTk5EMHFZQlFWRnBtUGtMT1lRdVRrUjdLOFBoUFJjZGlpZDlLSUpMTmREVnFqX1BYaVFaODhtbmI5QlE5bFg5LW1rUGhpNU1rYm9zZzE1OUNiM2h2d0hsS1A4SzFtM0NzOGtlSlV0ZWQxWDVZeWhLZnRESjhjQUlpQ3VKUlJULW8tdmJySE03NHVtcWxPbWsxTl9tMS04TU9pQUV1aU9FbGpmZkFtSTc0bVpvQXpBUkZWZUdtbUpaNWNRSkhzLUZSWdIBjAJBVV95cUxPR0wyc0V0RWRZRFFjV1N5LW42NE5ISWNGMTBYSlp0clcwcHNCZFNGV1VLLTl6X2dJaVdYNVYzM2Zfak9JWS1KeWRxSU9jN1FiS1BTN09DeFV5am1EUlZHUUZqeFA2azJtbUVabkVBZFVyMTBGdHFrbjR1UExkMGVYQjYyUTRqWmt2X19STnkzMzE1YjEzbldUeGdjeW9aWmxYNUR6UExkTGUzOGJmZHppVTlHVWVESDExeEYyTVNGbi1aQ1pwdTk2MXh0VU9xTEtlbGJqN3dXdHRnVEJNYnRaejV5d0RJTk9zVmV5cDBxZmZ6UDF4NzVSS3FTZEw1N21GSTVsRlpTTVZ1ZmFM?oc=5",
+      "matched_symbols": [
+        "ADANIPOWER"
+      ]
+    },
+    {
+      "title": "Paytm shares: One97 Communications stock sinks 5% on this UPI MDR news; buy, sell or hold? Experts' view, target price - Livemint",
+      "description": "Paytm shares: One97 Communications stock sinks 5% on this UPI MDR news; buy, sell or hold? Experts' view, target price Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T08:21:46+00:00",
+      "url": "https://news.google.com/rss/articles/CBMijgJBVV95cUxPd0pIWmpRdUowdzA4RUFXdVM1V2piek1vcEpLZ2lyZDhEWDA5Q25TSWE2eVZ4d21hbDZJNkNSZEJEeTV5RjVtWGhIQXl1eDFwODZ5OG5IZWFWc2lvajVkOVNGYUJyUXpLM3MxaWEwbzBXcy04aDJkNlNFS1BIU05VX21jU3p2T1VDUEZIZXBKaVA4VVY3V1Bxd0c1UkRmdURvdXIxeTh0aHZNUHFsM0o1WV85X2tUZ0JBemZtYVpza2w3OFp4aHp1SjRzTHlKcHFXdVMtZnlNaXVqRnF6NWFub0ltWVplVjRFTHpqQjZYeHAwOHpDRVlLcU00ZHdNSDNmZjVfTDNkVmhOYlBNaUHSAZMCQVVfeXFMUExLWWxVZDJGVGJpdmhjNVZLaWFrbTR1cmRxRmVJMGlUOG9mU3k3ZFJlbmhEcGJGOV9DXzFYUU13NW9MQ3ZjQjdXV2hqNEFfdmNPUDdhSEFwVjMwM0ZVSUpJQ0xERWlGQ2ZXaWt6c1l5NVc5d3RWRFNNS01yY1BQZGlzX2VJcEVyOGlmUHZLREFuOEEzMDV2UmpSVnBVdjJybXJSNmkzNVdzVXItUlpxdEM2WE1STFVWMXM4a2sxdUc4MllHV2hlTDhKXzJzSno3ckVWQjBaTnJ6Zm03TEU5aEJiQUZ2MWM4bmdHN044SFUyV3BueTNEc2Y2NkxfbTdnNmZHcnJ1SE93cjYwbHo1SlRRekk?oc=5",
+      "matched_symbols": [
+        "PAYTM"
+      ]
+    },
+    {
+      "title": "Vedanta Dividend: Over 25 lakh retail shareholders get their first post-demerger payout; Details here - CNBC TV18",
+      "description": "Vedanta Dividend: Over 25 lakh retail shareholders get their first post-demerger payout; Details here CNBC TV18",
+      "source": "CNBC TV18",
+      "published": "2026-10-08T08:15:08+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi9gFBVV95cUxNQy1SVjNONkNiS19OR1hWZ0I0Z0tpWHFYdTZJUVNTLWlSZTB5cTZGcVJWNFQwNWRRSlk2ZEZMaTRzZWVIdmd3YkdGcDg2a0dOTzdSdFNIYlVNWW9ZMC02SzBKYUN0Vk9ETzAtaGNXVDhVdDZKMFZrQnAyN0Z5cllsTjhpa21CZTgyaDh4YmUxMmh0MjJSNEpWQ1R5YWhDWTRhaVJLM0JSRmpXM0o2NlBDcG9qWG1YZmpTNlI4ajVnUmpOVC0zTnZsVXhxSlRrSEg4cVNjQ2hJd2Z1d3Vpc0dxYUNrWjNfTDQtM0JteUt2RVl5RFJBVHfSAfYBQVVfeXFMTUMtUlYzTjZDYktfTkdYVmdCNGdLaVhxWHU2SVFTUy1pUmUweXE2RnFSVjRUMDVkUUpZNmRGTGk0c2VlSHZnd2JHRnA4NmtHTk83UnRTSGJVTVlvWTAtNkswSmFDdFZPRE8wLWhjV1Q4VXQ2SjBWa0JwMjdGeXJZbE44aWttQmU4Mmg4eGJlMTJodDIyUjRKVkNUeWFoQ1k0YWlSSzNCUkZqVzNKNjZQQ3BvalhtWGZqUzZSOGo1Z1JqTlQtM052bFV4cUpUa0hIOHFTY0NoSXdmdXd1aXNHcWFDa1ozX0w0LTNCbXlLdkVZeURSQVR3?oc=5",
+      "matched_symbols": [
+        "VEDL"
+      ]
+    },
+    {
+      "title": "Pine Labs, MobiKwik, Paytm shares fall up to 7% amid report of UPI MDR rollout deferral - Moneycontrol.com",
+      "description": "Pine Labs, MobiKwik, Paytm shares fall up to 7% amid report of UPI MDR rollout deferral Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T08:01:58+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxOdUFpN1Zvbi13em56RjVJNjR4VFU5VEhiLV9iaFo1Sy0xOFAyVzZVeVpDM29KbjBMTXBWM3F5WmN5M1JnSmMtTTFIb2R4M1prX19zdi1tajNkcWRSNk5fZndRNzc4RXdYUm9mNEROdUlyV2pkcllmanNrVVM5R0RvdjB6UTJLVmZQZFhzRjRfYmFWUGVoNHZlSHNoaUZRLVozNF9PaC1FbjlQMG9xNjhEdHlEanBqRDFzQzhHS0FIRlNySDhsNS00V0dIQnV2dzFTRFNBbnNVYTc2N0Z2RTZJc045Z9IB6AFBVV95cUxQakpiT2kyZTJZMHdWQnVSV2ZFSHJfWVVUeW93NXRSZ3RWbFQ4SU1PajlORjlYVnBmeUFKeVVBb1lSZGp3czdFR3NOcE52YW1oNW5Iak1OVV9vOFJqeHE5cUM5d3FQTmRtc2pvS3ozQ19nd2NLLWhuazBwbGZWOFh1ZkN6YmF6SDlnVUplc1ZXVTByRHdNRjFsVEZEanlSUkdjOUlPVzdtRnRLZ2pnUHdncUc2Y3AtamJSV1lKZWN5UWJMa19acGhVdGE1Vkw5dFM2akdwci1zZ1hlcVo2M3N2THZCcVBzV2JO?oc=5",
+      "matched_symbols": [
+        "PAYTM"
+      ]
+    },
+    {
+      "title": "Motilal Oswal Alternates fully exits \u20b91,155 crore real estate fund with over 20% returns - CNBC TV18",
+      "description": "Motilal Oswal Alternates fully exits \u20b91,155 crore real estate fund with over 20% returns CNBC TV18",
+      "source": "CNBC TV18",
+      "published": "2026-10-08T07:57:03+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi4AFBVV95cUxNdmFFWnZBSFF2eWNxUVh1Z1JIUmNsLVRTYk9yRXBTeENTcHZ3UTVKeU1DSkZmWVhYdXFBNF9WY0JaWDJYY25jWEhBWXdlV3paMDdOWmVielZxSk1jYTZBUUg0azJCc2U4S1JsUFpQVm1hb3M4MEgtRkJ3UzlibEN0UTFPQWpoczBQWnNiM2F0a3pzRUxIdy1wTFZZdVdiOHkxRWpmSnIwNEFuRHNlaEdpZV9xWGVCOE82a3EwNGsxM0pZYVRwU0VhV080QnJaTE9ZaWdPVUc1RXVhUi0xUGNSNdIB5gFBVV95cUxORjg4al9KWTQzNWEwd2RPNXF0RHY5eHNNRTg4VzdqVHRkUDJWNDJ1MXYwOC1YbkljZ2t6RWs3Ry0tNXd3VlYySURoWGJlOG50SS1YdVZiSVVid0lPOW90dkYyaURZcC1WeE5WLTQwRktGSFZDenl6VmpSblkwamRON2paM0N1YVdhdkRSNW1aYUxiSUFDd1czRlNyY3pldXRaVTVNTlVFSjhUNjljOVZmaUJfNjUwX3puamlpVHF0YVpta2tZRHE4YklQZUJpZjdMMndKVWNJcXE0SmZiYnlLdWhSZUo3UQ?oc=5",
+      "matched_symbols": [
+        "MOTILALOFS"
+      ]
+    },
+    {
+      "title": "ITC share price dips 4%, will it bounce back? Experts' view, target price, stop-loss - Livemint",
+      "description": "ITC share price dips 4%, will it bounce back? Experts' view, target price, stop-loss Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T07:36:29+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi4AFBVV95cUxQOGlpcHlucEdsN1pCUGw5NzA1Ylp5Vk52UnVfV1Qyb2VMam9WOXQ4TlkwaDZnMHg2djlRVm1wWGhNU1p5MU9HdFNYWUVUYnA2REdHZ254MGx2LTJxQWg5WDZFVl8xcnd5VEZjeVdKWjJxVGlsdUY1cXBzZEMxaDlNcTF3OTkzalFPNFJiUXV2VlpzMFRGNE5xdmI5THExc3U4am9uTjVhcy12RDdhN2wyWkR3SmhTYVFmVEdWMExvOTFIbEFGcXQ1czdxSERlMWJxS1JKYzBOcFlxUjR2SHhubdIB5gFBVV95cUxORHo3aVplaEJQUWlzN25MQVcyRjNaMVNrUFc2S2xUUUhwR01ubENwalhsSnNNN3Z0aUU3OGxNX3FPek5tTXdHNjRUQ3hBb1FmbmpVc1VwZk5obkpYd1RkbXR3RWtqdWdncVhaWVltMHJlcTJFRHBZdGFPRDNvUUxGajRvaWs0aE1jVlEwNzJzRksxM0tfY0VZQXExZWFqWTVNcHd1QkxpaDRpS0N0a0FwenhpMjA0Z0ctTnpwQTZJR29rOVZyX1c5dVZCNkM4OS1LTkxWODU0RDYyWWFfOFJVTXBoWnBIUQ?oc=5",
+      "matched_symbols": [
+        "ITC"
+      ]
+    },
+    {
+      "title": "Oil-sensitive stocks tumble up to 5% as crude prices surge; HPCL, BPCL, IndiGo, Asian Paints fall - Moneycontrol.com",
+      "description": "Oil-sensitive stocks tumble up to 5% as crude prices surge; HPCL, BPCL, IndiGo, Asian Paints fall Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T07:24:00+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi8wFBVV95cUxPZlR4eWZnWjlHRHVwMjZPSHQ3aGpUVTN5ZXFWV1MwNVRWMml5b3h3RVZMd2ZlVkxpSFhZb0NLdzVZVGk5MW1OQ1UySHo1LVQ2Ym9ybGlaeDdMbnhvTG5yaWg3eURxQktaSm9ZWWtFZzNOMktULXVpdkNJbHE1eXpJSXUyYnpYRFZDTEJmeThBYjZSLXJzT0E2LTRvNDM1QkZFU3FPeUFDM0R3SDUtWjVVdHFjV0NBeUpXY3hmY3NUeW9QSzhmVjZydnBmVjRDZ1FpOXRuc0ZVQVllZlVMNUlsbmdrcGxFaWxxdkhjMWRqdnBPYWfSAfMBQVVfeXFMT2ZUeHlmZ1o5R0R1cDI2T0h0N2hqVFUzeWVxVldTMDVUVjJpeW94d0VWTHdmZVZMaUhYWW9DS3c1WVRpOTFtTkNVMkh6NS1UNmJvcmxpWng3TG54b0xucmloN3lEcUJLWkpvWVlrRWczTjJLVC11aXZDSWxxNXl6SUl1MmJ6WERWQ0xCZnk4QWI2Ui1yc09BNi00bzQzNUJGRVNxT3lBQzNEd0g1LVo1VXRxY1dDQXlKV2N4ZmNzVHlvUEs4ZlY2cnZwZlY0Q2dRaTl0bnNGVUFZZWZVTDVJbG5na3BsRWlscXZIYzFkanZwT2Fn?oc=5",
+      "matched_symbols": [
+        "ASIANPAINT",
+        "BPCL",
+        "INDIGO"
+      ]
+    },
+    {
+      "title": "Paytm shares crash 10%, wipe off Rs 10,970 crore m-cap. More pain ahead? - The Economic Times",
+      "description": "Paytm shares crash 10%, wipe off Rs 10,970 crore m-cap. More pain ahead? The Economic Times",
+      "source": "The Economic Times",
+      "published": "2026-10-08T07:13:08+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi5AFBVV95cUxOckt1N3p0bDJrazJ2WHo1U0VIMGliUFA5d3hRSDRCdmV3bmFpMHBVOU9VUWJnUm15OGp2ejh4WktsZGxzVFU0RTJLZGpGbEN1SmF5X050QXQ2MzEzRFc0N3UwWTdUSThLZF9NZGhtSDNYelpHODRGLU45SU1tMHhLT0k0cjJhclE2TC1nV2toNk9Wbm83TktjMWVmbkh4OG1nd3FBMEZSWDhBbFVscVQwaUxQeHdYX0dsbnNTcDRadksyZnVPcGZ6aVRvOFVLOWxBV0h3Rk45QWVFSUVRSlFjT3V0cHDSAd4BQVVfeXFMTU9TaFZOWDQ3Q3lLdVI2NE9KOXpvUDJIR1JQQ0prVW14dnJsRVRoVnRBbWdfdFdIRXpjd1BWODk0Uk51RHh1MGtrcFhmeVIxdjRjdWVtU2VXQUJaUnJ2V3JybWR5cURBZFlmWUJRTHNjaVM1RnRud1pnMGtVZl9Uc2FSelA3TWtMQ3g0U2YwcEVZVklSa0hNQ2dRbmtkRk8xbzNpU1BBM1ExSFpvV1Z4ZHFLVXFYUWpUeHJpQmpSNWtKWl9ZWDBYMW1BdFBaTGtSWlVtekl6SlRLZFNZNUdB?oc=5",
+      "matched_symbols": [
+        "PAYTM"
+      ]
+    },
+    {
+      "title": "TCS Q2 Results 2026 Today: 5 triggers could decide share price's next move post earnings announcement | Experts' view - Livemint",
+      "description": "TCS Q2 Results 2026 Today: 5 triggers could decide share price's next move post earnings announcement | Experts' view Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T06:51:09+00:00",
+      "url": "https://news.google.com/rss/articles/CBMijwJBVV95cUxNX2UtcURFMDB1WE5fZWFJZ2s3c2hsaUtrLWktekY1Z0RCcVFQYjdiYWk3RzFjWm5yR0xqRS16am1ZVDk2UC1uVk04MXJLRDZORDc0bTd6bjlMU1FoaEZpaTAzTkk3anFZeFIwSTcySDEyeHJxa0ZmTlFSSkdmVklTWmJZOXVPcXZHMHdBREQ2X1pWbkJGWXljdVBrcklYWFlLSlV2UWlmTmttMEJRYXZZLUVhRWtHY0U4WjN6cnBfRHVCQ2FONW9VTEplQWNCbzNCaDNpclRMc1dsSlBqbXpBSlpFYmdpRlJhS3ZQcGxnS1FGT1dIS0pNYWhCdkRkT2FmUHp4cGFoY0ZXOFFqUV9r0gGUAkFVX3lxTFByeU9BaUpON1M3T1ZqNHJaRllDYjk5VVFZMTFNZUFWYWF1R0F5b2IwbGZRcFVuRm10eUxnYTJoZzFVRHgyRUtTZHlQclNZSEpyZmRZcGdTdkxGRHdqVkxFWFlOUUpVbTA0UUVQUmdTUVZ5dzRXd3ZkeDRRYnJ0ZU5wYlAzTDl1Wjk3WEhlV1F5OFplSEFOTFlhT2draTJLaEdQckYxQkEtUWM4N2d2bzBLR2d2S3NUdnI5d3ZUVjRMd1pNM0VtR0NNWnJWcEphTGZsdDVtZGQ3RFFTZnhnUW5RMnpFQ21yZ0RfNG9acTlGQ2E4RTdxQTNBUWFIR1RYd0FKb2k1NjhGYU5GSUtNNlZ3cHZlQw?oc=5",
+      "matched_symbols": [
+        "TCS"
+      ]
+    },
+    {
+      "title": "HDFC Bank shares fall nearly 1.5% after FIIs sell 2.4% stake in September quarter - Moneycontrol.com",
+      "description": "HDFC Bank shares fall nearly 1.5% after FIIs sell 2.4% stake in September quarter Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T06:19:37+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi3AFBVV95cUxOMUQtVHhGd25QdjRLTUE1RUM3NGJxem1xdjg4dXI2UHVIVnFJSGEtUllJV2Rlb1pkNFlLTEVOOU1xREJuMzRpT1NiX0FfQk5GdGNsc3hrSHdXcWlWUXVtamZNaG9ydlB0Q2VjamwwNXRpZ1hkQjhuQXFUSnIzM3Z5bUdwUXdJVmw0TS12LXZPMjRkbU41OW4tLXdDak91SEE3ZXBZOG5paE85dEhXVkF1MnpaeXJTaWs1dEJfTFpzXzBESVlIdWNINHBXbjY5blZZMFgxczhEUDg4UVlq0gHiAUFVX3lxTE1Ya2NhVnBJem5qMzVtUng5SHBSWmJVR1gwemhuUjV3c1pacHJfMzAyQUFtaWFQb2l3MEhULXN0UGJpSjBxUEpBN0ZUSGQtamJad005NjBPSnFTZDlfUkcwTklTWEtWWlBVUE03dTdCa2tYU25JVkozUWJvOHFVR2RfcU1TM0h3bHVLb2hvV3o5elNMLWFZYTI5NFZzR1lhdm80N25LNEVRUklja0ZFbWRzdmR0MmRUS0VkU051bXhBUE1CUHpyNjNvQWtUSExGcndwdkhXUTM5QU9XREVXYWkyMkE?oc=5",
+      "matched_symbols": [
+        "HDFCBANK"
+      ]
+    },
+    {
+      "title": "TCS Q2 Results 2026, Dividend Amount Announcement Today: 5 numbers shareholders, investors, stock traders must watch - Livemint",
+      "description": "TCS Q2 Results 2026, Dividend Amount Announcement Today: 5 numbers shareholders, investors, stock traders must watch Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T06:16:44+00:00",
+      "url": "https://news.google.com/rss/articles/CBMijwJBVV95cUxOQzZiVlIzOWNsMWRETWpWZWdSVnc0T3NvVmhUY1JydXM5R3BYRTB0bWFtT0R1X0xoTWl4UC1FR1FVWUtHVWw4ajF6ZjdkOHRTNUJQQlZjQURkMW0xVXVzM2lMeHBQVmZETXpFWEg3elY3UHpXVXdCUzZSNnJMSGNCSlJUWE9CZ0RPczRNalRnVHUtX1JrajFULWZVNGJsYmJPcTNSSlVOV00wakk0VlNzU1c2QW5Xd2RWelBxYkNROVBFR29fbGdwUTdqYlhzRklNQkZfTEFidUprWEdpeUpwd1BnWlUwNnBfY2dGaDU1YUlha1NqYklZVlBxbTR0bWdIYXp2ZzVaN1lXZ2hHYzFB0gGUAkFVX3lxTFByQmNWaF9RMlIydnNPdVVwZFlZVmRRd29JMmlCUC1rMlNFbUlhTjZLMFh1REgwUmFZVVMzazVQNlpNMUY3MW4tZENYdUE5OEJVdkZ1NEsxb3k2ZzJ3LUJHR2dMeGZGTFFhYWpPbEVValRqRlMzOFRHdk80eEtYYkM0QzhndVhMNUZkZThIX0NHTEFrQnhSQ2laMUpxQXhFaDRuM3B1eGRKTUQ5dGJVSHBVWnZtOEdFUFNLMTRQcm9Fc0VxNnk0blhRamRKMjloYXVJMGllZ1pCTjQ0cXR2TEFVcHFOVHJEal9zdDBLb2JOdFJWdC0zaUFIMENoSDl2MEJfM0kwbzVOUlcwYmJ2Tk5SdkI5UA?oc=5",
+      "matched_symbols": [
+        "TCS"
+      ]
+    },
+    {
+      "title": "TCS shares cool from day's high ahead of Q2 results; Street expects a weak quarter - CNBC TV18",
+      "description": "TCS shares cool from day's high ahead of Q2 results; Street expects a weak quarter CNBC TV18",
+      "source": "CNBC TV18",
+      "published": "2026-10-08T06:13:34+00:00",
+      "url": "https://news.google.com/rss/articles/CBMixwFBVV95cUxQODJEVHNDSlZlLVBBblhTVEtlQW0yV0NtQmxkMWFHODJYRHMyUzZPaDU2M3NVSTQ0WXZsQjNSdVhTUjM1RWJjMUFBT083WVMzaVdxNlFnNzVKZ01oM0c1UWg3Q1J1TkhVdXFXWnZKekZ3SnZfbVVONGF3U1NGaDUwNHBWQXhvM01TZXpCVzZ3bm9aRkNGbmhkU1RIVFVyaXE5ZExPYU5BZ2t2NlJWNXRhZnVFU3RaZXZ4cl9yZnZWTm5lU3BBTG9F0gHMAUFVX3lxTE1ST2I5T3JNM0JiZklRS1Q3aEd3eTZucmJ1RWpNd2RFWC1PSnZtTThUNV9Fdi1XaTBIak9MWEI1Qi1neV9GeVB0cDBKWEFvdFdyRGtjTXYwRGhOa3E3bmxVUW8zYVdJZDZLOFZiLUE2WDRFVV84U3Z2dVVsVzZYaURGalQ1Nlhnem5zZWNOSDV6LTY2S0JWa3Zyek5lWml2RTNZSmJSczhkYk5oekIzVHh4OXdBb3Z1akp4dl9pdlFUeWJJREF2SXFQaS1GTg?oc=5",
+      "matched_symbols": [
+        "TCS"
+      ]
+    },
+    {
+      "title": "F&O Radar: Hedged Call Ratio Spread strategy for Paytm - The Economic Times",
+      "description": "F&O Radar: Hedged Call Ratio Spread strategy for Paytm The Economic Times",
+      "source": "The Economic Times",
+      "published": "2026-10-08T06:10:30+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi0AFBVV95cUxQS0ktb2JZQkxIMmdTaENxaEJrb0ZZQTFQNUtpZTJSRDBTY1A5dEhhSmF2MXdaYlRwTTFNd0J1cm1zWi1XUUxMS0VxUnZMNFYwSXRBZHZMV0tNSDJONjhjcUZ2Mm05eE5BOVFxbjhKZldGMHJrMEtrek1QTkVTYXlPb2JXd052bGtiZjJFQWZqNDIwYVhvRFJHa2ZwYzFyTldpME12d2ZIYjdTNlQyM0gyNmR3bmh6dGpGc1pCQlNaLTM4TDBxRUlQV1gzejNnTnpB0gHKAUFVX3lxTE9iN3dVMEw0Z3g5d255Q2M1aXJySnNkaDlXRFdFYnFHT0UzRDZ3VlowNVdySTRNYWFsLWpkczB3SjJnZGxKa2NWeXZEY1VYMENrVFlRWV9zdTh6UlVqOHZkUEllV1liVVFFZkg5RVJnR3FmcEdfTEwyaDJUY2VxYXV5NWVIX1ZYMy00bFRNQmcyVlJCTUdxalZYOWdNZUFLcmNwQnZzQ2ZmTkIxWlpIbjZ5OUdhRUFzNFN0ZkxsVXo2UHZwbkNvLXVOcXc?oc=5",
+      "matched_symbols": [
+        "PAYTM"
+      ]
+    },
+    {
+      "title": "TCS shares pre vs post quarterly results performance data explainer: Before-after; how IT stock fared in Q2, Q3, Q4, Q1 - Livemint",
+      "description": "TCS shares pre vs post quarterly results performance data explainer: Before-after; how IT stock fared in Q2, Q3, Q4, Q1 Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T06:01:35+00:00",
+      "url": "https://news.google.com/rss/articles/CBMikgJBVV95cUxOaDdCcDdmZU9VSklfTjdaNGk4UGJUVTlHM2F1eWpiTTNacTBSb2dUT19wQXRURGhUVWIzS0VwOENMRXdIeGEwcTlaWlRyTGwyc1Zwb1BqM2Y5MzFCT3BKVy1RR2JnYVNLSHN5eW5OSnQ2djNEeEpDUFVBbXVNRExqUzV1UUNFdjhqb3EzY3BzUG1pWUFaTU5kZnEzOUVsMXRTWjVhcUJFZ0k3a0NNQmVEbFVPdGRkQUFWQ04xdnJIQkQwUWZlREJHZEMzYWNBLVU5UEVtRjFsNkVfS2otS2FyQVJUSl9FVWhrU3B2TVpFQy1YeFJYMko4WGlVMlFBQ0R0X09ZeUIwbWF6TnZ1ZXJiS3B30gGXAkFVX3lxTE9BWWtRUlJTX29iYW0wNnUxUmpnN1Y3bjFfbUwwRDZXUlFUVm5FZTNqXy1qN3Z0YVNYekt4VVg3RWVxc28wa2Z0TURZR2ItWkJSMnh6ay1kRXJKRmtXR2VLSllIeXg4Y3QwekdHNjRKYW1Vckp0MVpXSTlYd1NQcFNxLWUxYTc4UC1xX3FwZXg1RlhDQWpOcHlhckZ6dWUzc056V0FBcnktYkpQbDlMdjFsczBtQnczOUxEY0tLUnhBRWM0Sk9kQzFCbm1ZQUVmVUJ2b2trWjl4UzJKRHhzX2ZEYUlMbW5qRTVCcWJwNzBFNFdFZFlybERDRmU3YUpCQ3ZiX3NzbmpQY2h1R3Q2ZV92aW1PX0FCNA?oc=5",
+      "matched_symbols": [
+        "TCS"
+      ]
+    },
+    {
+      "title": "TCS, Infosys, HCL Tech, other IT stocks jump up to 3% despite weak market sentiment. What to expect as Q2 - The Economic Times",
+      "description": "TCS, Infosys, HCL Tech, other IT stocks jump up to 3% despite weak market sentiment. What to expect as Q2 The Economic Times",
+      "source": "The Economic Times",
+      "published": "2026-10-08T05:56:51+00:00",
+      "url": "https://news.google.com/rss/articles/CBMirwJBVV95cUxQQm9JVWozcHZJWm9rbE9CVy11Z1lmV1BfVk5TYnRVOWNBUGZzS1V4NEN0SmtVZE95SlhOOWJsc3k1cm5MdllHS1hwUGpFVFZ0Q0xYTzUyQ2hramw1d1RFTEZGcWFsRlhnOGZlV0NaR2dUZmxJcEVQUmEtbEdWQV83VlRRc0ZydHMxb3duZEhwMDE4T0dISlhBdVVveUJXNGlaMEhmSWxWSUN3MnNMdlhEWm1ZN3RURHJRVEpldjJ6M0psdDdNRVQtSlRXd0thOHhyVXF1RjVKcUFjdDFPeWotX08tWE5iX0s1cGpuQy1FbGxkQlZGOGcwbG9odEdfbFJfcjdnUTY2X2ZabDk4VXBKakthbXRaLW9MWDlLVjhVZnRNYXRrRkh6QjNRU1lCVFnSAagCQVVfeXFMUDVQLUMxSHZPTm1rYjdQOFV5WHduLXdFeHVsNnNXS3F5dU1yTUpmT0VOaV9hSlIteFdtSGdmZ3hUa3JfYXR0ejNnaHRxbEttUzZZTVp6aU9QZGRpalVnLUJmWVp4SERBbTVZMUNnS1h4SlF2al90WnF3ZDlhcDFXaVdFajlvN0JWbnUteUg1a3lWZFZCaG1mbzRzSHBhNXZmb3d4c3NkanBORnRPNUItWjBVT3BBQ1o1R2szbElHV1k1d1B6dEJCVGdxVFZ2eGJMY2xVaWRBN0Z0Q0p4S29jdmdwUHRkclYxT2V4Mi1TMFR6ZE5PZlNmUTdzam1GcnYydFU2aERBWWNaMDZoc1pVaGczWk13NWdOeXVfWk1kaWtBRjROczY0Q04?oc=5",
+      "matched_symbols": [
+        "INFY",
+        "TCS"
+      ]
+    },
+    {
+      "title": "Mankind Pharma, Zydus Lifesciences among top losers, fall up to 2.5% after Supreme Court order on pharma... - Moneycontrol.com",
+      "description": "Mankind Pharma, Zydus Lifesciences among top losers, fall up to 2.5% after Supreme Court order on pharma... Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T05:55:23+00:00",
+      "url": "https://news.google.com/rss/articles/CBMihgJBVV95cUxPX1MzbzJuTkROR0F0ODdPMnpwZmx6cUtpN1JETUs2aGVhR3p2WVpRSkt1aXp4ajkybW1DWVBGa3o5d0VNVmFVZHBJSGhSU3o4a08zam4yRlE5eEd1aXE3M2NMa0FmWlNwdG9LVUtKY2F5SkwyZVgzVHlLZDkzeVlBZjl2RUxoRVBkMzZpcTVyekFHTFY3bTN2LTF6U2pyRnlKOURyb3NnZDd5Nks5aXhfWE1KMVdSYWkzeHZ2VFpxSUE5a1gwSFZqUm5QdTRDYzlBM29xRFdJTEVacnM2UjJjX0tQeGhmTVQ3M2pOS3NKWXFTRkpvQjRTSUhUWjhxT2xGdXJ3a2Rn0gGGAkFVX3lxTE9fUzNvMm5ORE5HQXQ4N08yenBmbHpxS2k3UkRNSzZoZWFHenZZWlFKS3VpenhqOTJtbUNZUEZrejl3RU1WYVVkcElIaFJTejhrTzNqbjJGUTl4R3VpcTczY0xrQWZaU3B0b0tVS0pjYXlKTDJlWDNUeUtkOTN5WUFmOXZFTGhFUGQzNmlxNXJ6QUdMVjdtM3YtMXpTanJGeUo5RHJvc2dkN3k2SzlpeF9YTUoxV1JhaTN4dnZUWnFJQTlrWDBIVmpSblB1NENjOUEzb3FEV0lMRVpyczZSMmNfS1B4aGZNVDczak5Lc0pZcVNGSm9CNFNJSFRaOHFPbEZ1cndrZGc?oc=5",
+      "matched_symbols": [
+        "MANKIND",
+        "ZYDUSLIFE"
+      ]
+    },
+    {
+      "title": "Reliance shares may be a cheaper way to buy Jio Platforms after its listing - Livemint",
+      "description": "Reliance shares may be a cheaper way to buy Jio Platforms after its listing Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T05:07:06+00:00",
+      "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxOR3FoaS1XY2ZZQUhSSWszMDh3OVJQNmdPczFuSi1GZ3lDOFQ2WEZyaXFKZXNmU1FNVUxmM2E5M0VmM2owNEV4NnZGR1dva09taTVfQXZGdGR5MEhsb1pQdG1NbzljT2JkY0JsbFB0QVF4QkRGX2ZWV2wzYnZSY1V4NTJGcUpGeUpQZ05QZEV3cGlfRGF3Wi0xSVBMNTBmTC1uZHQyMkZzVF_SAa4BQVVfeXFMTnRiRzdkY1FadjNCOWIxU3AzTWo2cUlNdkNOWkc4dTFQVVRzZUhnclltZWo2Q2t1WnNfaDRraTBsS0Fsd1hWRTRNM2ZtWUl6bFBLa0pQTkpzdVlSQ0pXVUxBZVlOX0JNVnZ1S3lvZHNBYlFSTDhTZjFXSWc2S0oxeU5iUVZ3UXBzU0FHYk0xcDdoVmVtTEJXR0hVcGVOazBuWmZmTEdjcFJMeFJ0bGNn?oc=5",
+      "matched_symbols": [
+        "RELIANCE"
+      ]
+    },
+    {
+      "title": "Paytm shares fall but Goldman Sachs still finds risk-reward favourable, sees stock past \u20b92,000 - CNBC TV18",
+      "description": "Paytm shares fall but Goldman Sachs still finds risk-reward favourable, sees stock past \u20b92,000 CNBC TV18",
+      "source": "CNBC TV18",
+      "published": "2026-10-08T05:05:16+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi5AFBVV95cUxNQ0RSOS1VbkFVVjVwcVUwZmV1ZExKMk1sUTduLU5xU3ItY0h0X29uTUFSdVpnY3IxTi0wVDNpRThCY3ZRbmp4QU9LOUxVU3BLT3BrNWVrRUVCeGZXNnc5ekZTNHdCRGduSHgtTklmeVV6eTV0MEhUYTFpMjJDbGZxY0hrc0ZjVmdBbUV3UUlnbFpoNzJEcnp2cndzMVBjXzJkSE1zZEFXd3lJN3I3R0dKVTVGeDB2aHpFRWRkQXNDSUFISkYwVXJycXBGRkZhYXJKal8wYy03VFR5cHRVakg5U1VqdUPSAeoBQVVfeXFMT3g4QjFweXVwcHBPcDBRVHh1V0lTRlZLSm1ITnlKTWZRUERwNlBfc0dkLVFXdmNCc2NzVjJiMHExU3M3eVY3a1JobVRQRVhfVUpIM0ZHY01UaG9jdG9JUnpjWVhMcWh5Q2ZLM3Rwc1NqaTNJTnd3RXFjdHJ1UkJpVGpyNWc1TW1zcDVpTzZnTG9CaktObWxvTzB5RmR5aXhfTHRfRzdKcHJ0cHZvSjY4U2Vlbll0Rml0eWY4STh5MkdKVXRMU0doT3hjTXFQUTlwcXJfbWxmX2EycWI4dDQ2cU9EM2FOT1dkbmVn?oc=5",
+      "matched_symbols": [
+        "PAYTM"
+      ]
+    },
+    {
+      "title": "TCS Q2 dividend amount announcement today: How's dividend yield of IT bellwether? Data details, dividend history here - Livemint",
+      "description": "TCS Q2 dividend amount announcement today: How's dividend yield of IT bellwether? Data details, dividend history here Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T04:53:10+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi-AFBVV95cUxNVXd1Y1QzYWc2RnNyMWNjWG50bHdjVDNZbXdYNVdFWFNTMHo5YTJMWm1yaDAyMXBzTkZzaEpFUVBhVnNZX1dvNGc4aHZ0cUlfZWpldk90NDlYbzdfWE4yYk5WYXZIV0RHeEZqTVE3a0pmQi1KUHh1N0hlV1dhbWg4cFdZaGlheFlKc09aRFF2T0VsTUloZTRfTkZseE9fN1dCQ3ZTcnZQcm9UWTJrWUxCTkpoM1ZUWHN4YzJUNmhjX293c3J5bzEwOXRocE5XcGhOemotU1VrYnBjUmV6cTZHQVp0cmpZZFNIMElXOVpTLThMeDJnS0RXa9IB_gFBVV95cUxNbERIdXg0Y0RwaE1nOEFLcW1CSzVhaElORXVRY2M2ekNuQS15M2lNV3ZKT1NTeG9Lc0JyT2hlbzhkTFczVGdSQUVxNFFyMWo4YmNuXzFFRXQyTmdlbDU0YVdqRGpSY012TmlQYWNOekFyMDZER25lTEUxOHZVSmhwekZWODJHU1FTSGhNLVBpZ1p2aS1CejVpUVQwT2I2VDE0WmlUNHk4NkJ2Z2xRX3p2Y0hFUGNJUzY3Wk15Y3BQdDkyaVh5Vlhhd092cXRxWHR4THZyR3lSdzhGMFlNQkozb1Ftb2t2Zkhwa05lM1gwYlFtWUN3UGxCWlRrRmNXZw?oc=5",
+      "matched_symbols": [
+        "TCS"
+      ]
+    },
+    {
+      "title": "Momentum Stocks: Inox Wind, Bombay Burmah, Vishal Mega Mart, Power Grid Corp hit 52-week low - Moneycontrol.com",
+      "description": "Momentum Stocks: Inox Wind, Bombay Burmah, Vishal Mega Mart, Power Grid Corp hit 52-week low Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T04:49:34+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi6AFBVV95cUxPYm9CNzBTVHZ6cXU1QmhOcm16TjFqUHRnTmVxaWh0M1MzXzRpeUxvUmdqTkxjQXBiVWVHbGdEUFlQY2sxNktVQXY3Ty04eVFnRUNVcTZUMVdsbHhGclBOY2lBTW10QTByTWNNQTNwVTNmdEU1b3ROY3dKU1NRY3FMMTdWV3BtTV9jTFE2bGxVdmpJcy1lNm0tUGFKR1YtT0N6b1h4aDAzMjBLNXk0SWpOeW1sam15VUhwMm1aNzNjM1pJOGdqSWFIQVVaSWJ5MllOWkp6eFh4OHRVTGwzWHNtUVpqbm5tQkI20gHuAUFVX3lxTFA3VjlJSWdLS0c0eFlHWV9URlBmQVMwRm1CU0JIMi1sUmg1dnU1eW1LOWxjYjgxdzZnMFlpQmVqTGE5Q1hpRmFHb0NNZ2dKZlBobS15TWpkLXZqSDRaQXdfRkNtY285dlNqUXk1cmxOZ3lPa3o1amFtcVQ3SlJKYUttdjdrRWxlTTJxZGlSVlRtMHpRUEROak1FWDRXRkVEZ3pVTmp3TElFR1lBV1hlaFZIcnNOMkQ2LWZUTjJEczVLMTItWldpYzJRdVQyY1pLWG9FWDU1Rm1RRERWRVA3VWdRSi1ycTlZQnJyd09yZkE?oc=5",
+      "matched_symbols": [
+        "INOXWIND",
+        "VMM"
+      ]
+    },
+    {
+      "title": "TCS Q2 results 2026 today: Should you buy IT giant stock ahead of earnings, dividend announcement? Experts suggestion - Livemint",
+      "description": "TCS Q2 results 2026 today: Should you buy IT giant stock ahead of earnings, dividend announcement? Experts suggestion Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T04:44:24+00:00",
+      "url": "https://news.google.com/rss/articles/CBMikgJBVV95cUxPeHRqV0VxTUhkcUZVNmZtMDZnMHpiTmJjd2hkMjhQclBYUlhTUHI2ZWgyNUdGUzIySkV3WVQzRFFEWVR3RF9sbnE5T1ZKbzkzQ0Ytb2JBQ1lsYzVzTXFsU19UTWpCclpLQkJqSFlsejgtOEZWR1dXWDZoT2Y1dHp6UDMzd1ZPcHJKM2lUSnY1LXJJeTc1NGZhMVJTa1BkQXlCTkxyX1FVM1VNdS1ZUHJBWXdneDVyZnZxVDBobXpaU3VZbldxNUdxSVhhZ1NIR2FSdUROVG5KRF9nXzZKM2F2X1o5ZlpPN19ZUldzbWxRWkFVbkIxOUJPSWZwQ1NVNWsxcGk4TmZPRGJoeGlpYm0zZ0R30gGXAkFVX3lxTE00MjgxWVJBTEV3OEVZUVpQYUk1MHZNNExkUWZhaTNWSGxNRHU1TVpyTkdTNklzUE0xRXEyNzFYblJGbnY0QTFNU1pqRnl1d3N3cVd5b1RJRkRjNVlHNS1iVDVkWTRnLTBnY3Q0T0ZHa0ZYRllLT1lCVElEQjY4VFRXRENpSDZhaWFnZ05TeGZrVTZGSTVjLU05ZDI3ZmhtR2dpeWtMYXZGVVU4YTkzbmg1LTJlbklmUWJLeUw1ODdMZHVsQW9RVERqT1hYcFhnczFrX0ZXZmwzUzFlNEtYS1U3bGMxd0k0VFZJRTJJeEtuUDJRLS1ZclBwWGRZc2VrcmFXSk9OWGdvOFNoN3FWZE5vZ2Y2dXhrdw?oc=5",
+      "matched_symbols": [
+        "TCS"
+      ]
+    },
+    {
+      "title": "Paytm, Mobikwik, Pine Labs shares crash up to 10%. What\u2019s behind the sharp plunge? - The Economic Times",
+      "description": "Paytm, Mobikwik, Pine Labs shares crash up to 10%. What\u2019s behind the sharp plunge? The Economic Times",
+      "source": "The Economic Times",
+      "published": "2026-10-08T04:43:14+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi8AFBVV95cUxQdVpGN19LM3g5UjZBRkF3ZW9ReHpISkpLTzVScWpsV1VSWGNSclJIaG9jVVVtU0l5NzFnT2pYcGpiV1dvamYzUFJGWXpUVkV5emVxRnc3aHVWbHRuUUJfdHZlS2VFTENOd0hLWkxMZWNJZW1NV0FWZ3l0MUlHc25EeXJSNzh4WUhoMzhWVF9WajlmY1FfblhXNlRlZHFiVHNrUTN0b0dPS0ZvX2JlM1VGVlExaFJtTnluc3V5V1NVSFhWRVVtY1dWdjFjWjJmeWdYVUZXcGxLTUhzaTh2RVF3Qjhlc3VlTFk4d2ROWm9FX3bSAeoBQVVfeXFMTk40ZGR5QVotNHYxMDU2eGhuQi1oNmswV0s5eDZtamkxcEtTWVBaWk1wcWw1UjdIX2pNLXZkYmcxcGJKa1l1RlJDYllkRnpDcVNSb1MyTkFzRFRiNXlTaWhqOGZCdEgxSGFjX0xFOHFVN3RTeXNJYzlfREVkaEtrWFlKNlZDeEhzNi1KeWhUTi1fd2dLV2Y5cVN6YWlJQWEwWG5LWE1ES0dIQnFqS2ljaC1DRjNuT0FqQVMxZEhEbEFiczRTMDZ0b1dsRmVxU1poZ2FaaFBrU05RRkdsVVkxZ3owZTZRQ0Vtc1Vn?oc=5",
+      "matched_symbols": [
+        "PAYTM"
+      ]
+    },
+    {
+      "title": "Pine Labs, MobiKwik, Paytm shares fall up to 7% amid reports of UPI MDR rollout deferral - Moneycontrol.com",
+      "description": "Pine Labs, MobiKwik, Paytm shares fall up to 7% amid reports of UPI MDR rollout deferral Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T04:43:05+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi6AFBVV95cUxQakpiT2kyZTJZMHdWQnVSV2ZFSHJfWVVUeW93NXRSZ3RWbFQ4SU1PajlORjlYVnBmeUFKeVVBb1lSZGp3czdFR3NOcE52YW1oNW5Iak1OVV9vOFJqeHE5cUM5d3FQTmRtc2pvS3ozQ19nd2NLLWhuazBwbGZWOFh1ZkN6YmF6SDlnVUplc1ZXVTByRHdNRjFsVEZEanlSUkdjOUlPVzdtRnRLZ2pnUHdncUc2Y3AtamJSV1lKZWN5UWJMa19acGhVdGE1Vkw5dFM2akdwci1zZ1hlcVo2M3N2THZCcVBzV2JO0gHoAUFVX3lxTFBqSmJPaTJlMlkwd1ZCdVJXZkVIcl9ZVVR5b3c1dFJndFZsVDhJTU9qOU5GOVhWcGZ5QUp5VUFvWVJkandzN0VHc05wTnZhbWg1bkhqTU5VX284Ump4cTlxQzl3cVBOZG1zam9LejNDX2d3Y0staG5rMHBsZlY4WHVmQ3piYXpIOWdVSmVzVldVMHJEd01GMWxURkRqeVJSR2M5SU9XN21GdEtnamdQd2dxRzZjcC1qYlJXWUplY3lRYkxrX1pwaFV0YTVWTDl0UzZqR3ByLXNnWGVxWjYzc3ZMdkJxUHNXYk4?oc=5",
+      "matched_symbols": [
+        "PAYTM"
+      ]
+    },
+    {
+      "title": "ITC stock falls 3%, top Nifty loser today as Rs 9,437-crore block deal follows GQG stake sale - Moneycontrol.com",
+      "description": "ITC stock falls 3%, top Nifty loser today as Rs 9,437-crore block deal follows GQG stake sale Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T04:36:19+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi7AFBVV95cUxOOS00Zm9ESm8xVnpjU3ZQdVZjWVIxWWlhLVRZM1UyZF9EM3Y4V2owazFjQ2JxU3ZtQUQ5S280Q01veWVKbnlXanBaRndRLVpSVTZ4QnNyeDRSRks2Z2lOd1pveFhoc0JDb0N3bVZ1RFVhTGNNdTlHYlRQQnNyQk5tOUdvZ2dpNVY5YUhtX0NKdDhlUTl1a21oZVc4MGRoc0tBbzcyOTdMNk9ZOXJNNW9WU1Rsc2NMMzV0OC1Ja3JqV1h2dTQybkxQb1NieURSWEJleG44ZnE3eTVVb25HR01xLTB1MXZpSGRyX3Z6RNIB8gFBVV95cUxOeUJIcXlVWU90ME5xVVpwZ3NueHdrbWFaeWNkdXl3YnE5bjVYSVZRMFlGY1ZRTHQtUFdEM2g4ZWRnOTZCSnAtNnFnYXdhMXNRU090bXdVd3pLdnZ5ZDEzZDV3cHlFUXJSejE0anZXSHVxYllaWHU4VWVCVi00ZWM4YUNyajNtcGN6UV94Zy1nc3MwcDRUOEtpYnpRSndxR2dzeTh6ZHczczlPYVA0ZDVkeERsczllNEhmYzFuWVZPYjNmOXZiY2NsMEx0NWt1T2pFRFJKQzIyTDJPX0ZMMHpldEZrY2l6LXdMM0xOUWpLOENsdw?oc=5",
+      "matched_symbols": [
+        "ITC"
+      ]
+    },
+    {
+      "title": "Jubilant FoodWorks Q2 consolidated revenue up 11.9 pc to Rs 2,608.7 cr - ET HospitalityWorld",
+      "description": "Jubilant FoodWorks Q2 consolidated revenue up 11.9 pc to Rs 2,608.7 cr ET HospitalityWorld",
+      "source": "ET HospitalityWorld",
+      "published": "2026-10-08T04:34:06+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi3gFBVV95cUxPQ3Z5cnNsdEN3QUM5d2lEX2dpYnpJYWphNVBzV2xySk15Q0x5SnhiUTZBcExRLUNRWE9qN2ZkM0gzY0kzNmZVRmFVSzNzbjU3bXdfbW9DM1hKaFo2S2E2OXd6emRaVVhBaXFxb2JoWU1nLUw1R2J0MjU4WFpPR2ZqXzJHSjUzZ05Zc0xKUnJDX1UzUlRmQ2pwWExnNjlGOXliM1VZVXJsTUZCS05wZ3JOWFd4QUJ4ZFRxQkhFQXFRUVduY1RVUjdlNnV2dGVhQUN4Z252NXkzdy00UHVMRmfSAeIBQVVfeXFMT2J5dm5zN21MbjRiMjhnNlVJQV8tZkhQVEJNNVVXTUxKUzBfa3NlYS1ZUXBGeFlaUG5IN0lEb2RRa3A4bnBqNTBBSE9DeFEwSm5uTjJjMFlSeXFaOHFRUDA4NlEtRGdraDhuRXB6MEpOWnFjcEFpZ0JpTXIxMHF4N0R1aVlkQ202WHNlNVpfTFBYVjFHSzFFXzk2QWxkMjBEdGx1ZDdWN01jR0hzOTM4UmdkWEVSUjc2TXE2UkVNbTAxUDdKRkRtV08taTBNWVZ2YURtcXZFYlRSclNsZW9KeDU4dw?oc=5",
+      "matched_symbols": [
+        "JUBLFOOD"
+      ]
+    },
+    {
+      "title": "Nifty500: Firstsource surges 8%, Paytm plunges 10%; Check other stocks at market open - CNBC TV18",
+      "description": "Nifty500: Firstsource surges 8%, Paytm plunges 10%; Check other stocks at market open CNBC TV18",
+      "source": "CNBC TV18",
+      "published": "2026-10-08T04:30:42+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi8wFBVV95cUxNZXZxNDNDOUZhVmR1STRxOF9LXzh1NmZMTm5nMEUwUEFaVW93U3AxemZYOFlIVTVLYVhFNUVXV3Y4b3R2WjhrZUtKMlFoSXNNR0QwTmdqNkp3cU1yZ19sUUQ0YjcydU5TUG9hQUZDdjBOM2pqZ3d4c3FDN00xVXpUUzB0SWFCTlBBRjdwOF9PdnJ2YXVQaDJ4Z2x3aDYxdjlqamtqMTRZM3F6OGRLVXI4TVBPc2VWbU1SY1FSVWVyRl9IdENNdlJBME5LZXZEemdEV2MtR0hTVEtEcEplWmZsNnZEVlZZU3Vjd2FQQ29IOVFNSE3SAfgBQVVfeXFMTUVnUHNxbjYtU1ZGMEpOS2dDRXZTcE1BQThXSTJFN3VqUDBjV1VMVmVSdWtKSEVsM1d1VkxiNy1yeEZuMVlDcFFrcFpWemx4RjZNWGdNRFJaZmNvN29VdWJkdHFhUHBBWmFaUnk3THQtNDM1cDMtdzZwNkhYQVZ0LVJvMWFvOE1peWp5SUNkTVA1cTBzaC1sY0dFWHlWV3N4SWtlTnNYekl1bUZJSXM5MzRPUFMyRjVXMTZkZkF3RTlLWm14V1Bmd3NhUVlxV2RJMl9DY2h3ajdwbmFJak1oYmM3aFNmN0t3WUllQkdUMWQtNHZrbGxETnI?oc=5",
+      "matched_symbols": [
+        "PAYTM"
+      ]
+    },
+    {
+      "title": "Price Action: TCS gains 2% ahead of earnings; Allcargo Terminals shares slip 3% as total volumes down 7% - Moneycontrol.com",
+      "description": "Price Action: TCS gains 2% ahead of earnings; Allcargo Terminals shares slip 3% as total volumes down 7% Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T04:26:54+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi9wFBVV95cUxOWWY1b1VnU0xSNVF2TXJncnAyTnBidzVCbnE5TTJXaUpOZnI2YTBxZklVR2tEN29OS0tCTUY1Qk5na1drRVNtSzhxSmZTQ3ZNeWdmeHNZQUctQzdXLUo0XzY0V2tQNkF4QzdRMEZDcE1JMXV1YmEybV9wMW85ZTlxQXlKbW1rRmlwaUY0Z1RqMmZRczFJamluRzh6U2VDbzhfZy1Ldlhmb3YzSERSMDZoYjlIU0syOWw2ejRjOGJCa1lOMmV0am0wNjdyeW1DRkI2SXlScFdkZEVWaHpIaUpaWkloRG5ocHhzbElyYnVYR0VaR2lsVi1n0gH8AUFVX3lxTE0zQTNGdVdCMGQ0S09tRFk5OWVxaFhJcHRMdkhHUXBtbjNHQXppMlRMdkh2dWl3OVk0bXlJZ1Znb3RTQXRVU2JDX3hpUFp2dWZsYnNoOFh4ZWo0THVfbUJKUENyUTZWYTVYZ1QzSFRBbmk1b2FMVHFfWFFFb0VDeEpXRS1hOUIzOFJ1eVcwU3pZVm1tV24ta3VvdjI1UFMxaC1VSGU2ZWpBRUxYdDBOeVI3RGxCVE5VWm96SWdYRmFYMjZLa2NFaDB6V3lvUXZMejhQa1paWldsWFZiRENfaktkRkdGQWZpOEJFdlpremlwbl9wZGxXQkpEOEd0ZA?oc=5",
+      "matched_symbols": [
+        "TCS"
+      ]
+    },
+    {
+      "title": "Matt Orton sees India stock opportunities despite FII outflows; prefers M&M, Eicher Motors, Nykaa - CNBC TV18",
+      "description": "Matt Orton sees India stock opportunities despite FII outflows; prefers M&M, Eicher Motors, Nykaa CNBC TV18",
+      "source": "CNBC TV18",
+      "published": "2026-10-08T04:20:27+00:00",
+      "url": "https://news.google.com/rss/articles/CBMivAFBVV95cUxQcXJHMmVncmJzM2ZXZ19BaXpLMjhLOXpJRno4ZGVvbXdfWGQ3UjQ4eTVDZ1ZwUGc0WDFoQWRsSEV0aUdpZ0ZiaGJxY0xMdXhNdnBLNk04Um53N0FiTXQ3d2VteW9DNm5tekJMTEIydVJ1ZWVYV3hHeWxQNG9jRDNSbHBYTlFha3JjYndQaUtxc0w2c1NhTUMyQUhtT0h1UlYwV05MZm5RT3kxRzJ0QkhXak9PZEdwRzZsMmEtONIBwgFBVV95cUxNYjdaX0VydlljUTlVZ21QV1RnLXc2RkhpOWZHSElVU3pMMWVYWEtJY3pUdWE2cW1OZFZHOEhOS3NWdklvWHNBRVFpMloxQXNndUhPRVF6dDVQbWZzOVMtdEd0cjJLVDNnYW94LXpvc3lTYmhOWXB5dWhLa2pSa0I0eXFfVkdXejRlR05ZV3dzRnJxOWY5Z3BEalY5TU5SRkR1d3NFc09RUGJCbmdDRVVucUlTRUlMWElBUHBkdWJ4RlZTUQ?oc=5",
+      "matched_symbols": [
+        "EICHERMOT",
+        "M&M",
+        "NYKAA"
+      ]
+    },
+    {
+      "title": "TCS share price performance today: How's IT stock faring ahead of Q2 results 2026, dividend announcement? - Livemint",
+      "description": "TCS share price performance today: How's IT stock faring ahead of Q2 results 2026, dividend announcement? Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T04:07:00+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi8wFBVV95cUxOUVZMYk82STZDQ2haaFdlRTRaWUw0a3pkMWtVbWRlRmk4bHo2Z1Y0SUI3RmRkbXRDNVh5cV84NkJBcXRYTXRBbUJkXzRzSjFxWUVIYVVHekhuTVd4eU5XUTNrd3p0NWs0VmFaVGU5bGdQYzJaV2xWSmkwYzJLX0YtNUxoWnQ3QnNzV2VNRUtYZnlycVhxTkZFQWN3SVlWYUV2eWVuNjBlU2lfTUtNeFFweV9CWjlLa0hnTERCX1FCQUVSLTVVendtOVRNX2NEbjZCUWJJdERBR0hkdHVBbS1ON2JoV2ZZUWFlUmZlTnctcms4NDjSAfgBQVVfeXFMUDFNVXFZVkpKYXBQTmdpb1QyV2NndjgxZENmWjJkNVY1bTVRNWhENTJjdl92Q1hYanpvVy01LTRNRFBjcV9ILXk3Ym02N3oyWGVmVkZtVHRGejRwWkNWVm1uTUVxZ05DdnZPU0ZrdFRFZUVweld2c2RtLWswVzRVXzdnVUJoTVhnWUE0WXd4SlotaDJ6dl91WlJSWXpNOVpZdHpBTVV2ZkprYTR5OVRQdlczWnlXU1RpUGNoZHpYUksxVE1VUDd2Y1FvbkRXXzJKejc5LVNQNk5fTFJUS3pVeTZhR0JLYzJmTU1MTUhkY1ZsZll5SWRpSGk?oc=5",
+      "matched_symbols": [
+        "TCS"
+      ]
+    },
+    {
+      "title": "TCS shares gain 2.6% ahead of Q2 results; margins, AI pipeline in focus - Moneycontrol.com",
+      "description": "TCS shares gain 2.6% ahead of Q2 results; margins, AI pipeline in focus Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T04:04:18+00:00",
+      "url": "https://news.google.com/rss/articles/CBMizAFBVV95cUxPcWoxcW52UzJvRkRyenhCa0xTY3BMZTNoMjkyVnpjY3g0Rm5VdTh0SVdCYXh6TGJUT2VPZHNKRFpiM2hpYnIwMjdhUEJGYXpTcFdNX2pTMW94TEF5MXJSV25NeWx4WWozalFKWEV1eWtpaFpnS3o1a3ZRajlfOTIzUU9WZTA5WWxZeE1XT041eFVzajBCd2hTaE5pdDFVMk52TlpSTFlvbGphVHM4NDZQOWJ5TU5CZ3kxX0NOZDI1YW5SeDFEYmtJZmtRUmPSAdIBQVVfeXFMTk82b3lyMThEaThVRjEwOERVOVJzOHFLUVY2ZWVyNzFYLWsyUDJSSFcxWWNqVnhuUzhISlp4VGdVSldyY2Z4Skg2RkNScHotT3hzSm53aFFGa1F0TnZ1djU3dVd2ZC11WDFxNmVwN0dhdXk5NEJHazZvakVqUGpnQ3NPTmp3QkF1dlFYVy1mNXJ1OVlWeTZHYVd6VDVURTdpQ190aWoyRlFhVUJEUWkyOGNIMklERUFYOFFOS21uZXpwYjlRQjg4aHkyX1VBN3dVa3RB?oc=5",
+      "matched_symbols": [
+        "TCS"
+      ]
+    },
+    {
+      "title": "Explained - Why Paytm, Pine Labs, MobiKwik shares fell up to 10% on Thursday - CNBC TV18",
+      "description": "Explained - Why Paytm, Pine Labs, MobiKwik shares fell up to 10% on Thursday CNBC TV18",
+      "source": "CNBC TV18",
+      "published": "2026-10-08T03:59:46+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxObThiTW1JUnFVOUx0dDhwV0NCUDJ4WXdsc1EtMVRCVE0yNDNjMUVlT0Z2QlBscjVhdnFNc2tzVTlmWXdRb2FfcXFKRjhQNnZlZUdqZ3BxS2pDU1dEQ2R1RldNWS1tYWYyRnRUZVBselJ0eDYwSHIxaDRnbkRZWjBpSUd5dTlEdVFKanNyczd4UE8ySFRzN0NGUDhPQTdOYWltWEd0ejJFQldEVHl2YzB3Y3pXZXNOeEtqaFpKa1hDRlBJRzE4eVdBZnZrVlhQTE5CZy02SERtN09WYVnSAeABQVVfeXFMUE9CekR6cl90N2lVQ1dlLTlSdzYxQ1FHdGVXbHVHU21lZS0wS3dFY2FLSjI5YmxjMk5LOGQ2eUhGbzctencydjlKaFZaUWZpR3RUUGpoLWc3YzRzVnNGUHlSYmlxRWdmMHg1dVduRFRCR0tjbFVyR2c3UDl6Uko0czRZYjBEaHRhUHhPSVhEUDdZaGlQRk1jenp1bzN6WDIyTGN0REpBQmFlMXlnOUdJNTBLdEc3eGFTdHN2WTFIVF9MNW9LVHVyYnNYeDRFVU5QRl9EUXpMUDRlem5Peng2MEI?oc=5",
+      "matched_symbols": [
+        "PAYTM"
+      ]
+    },
+    {
+      "title": "Bharat Dynamics: Akash and Astra ramp-up to drive earnings growth - Moneycontrol.com",
+      "description": "Bharat Dynamics: Akash and Astra ramp-up to drive earnings growth Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T03:59:37+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxPVHBxUWZZM1RCMFc5Ql9EWjU2TXRYM2xiLVBoQzluSU1KbGZoZTR2T0RqUkV3cklLcEhIbThONm9CaGEwNWRBTnNKd3ExOG1zOEQtT2JHaXNOVjVfYUJ0TldtT1hyVVluLTFON19CcEFZOW5ZLWxPeDdMVzdMNEVuNWszckdoR0lXTTNtczl2N2lGT21KbWhBaDgxNVl2MFFXWlVITzJaalY2c1VtNnp4ZllXN002STZCTEpZZlZSN3BhVzFGUFpHOWczUVNadFg4NEU5WHF0VnNKUW_SAeABQVVfeXFMTkRJYkV5dy1MTUJVMEVLYXBMQk5RRUh0b2dxM2Ezakc5Yi1Helh0MmpsZkhRdlRaM01UaGV6a2RiMUxGallsdmVDX2tRajZ1eXVncEdhd1FzM1hLd3Zjc0ZnUThtZVU3cmlPc3plVzN6aXpXMm5obGZCai0ySkN0cWUwTldOMjE1Rld0MWh6dy1YMEFuYlF6RUx1TG9BWllvTVJ6TTVDb2xxYTFBRFlaNXdESjIxSDRlRUxNMmM0bXhqZTlKdTV1Nm5xNWZ5cWE5Z3dXWW43QWNGMXlscV9ZQjk?oc=5",
+      "matched_symbols": [
+        "BDL"
+      ]
+    },
+    {
+      "title": "ITC shares fall nearly 4% after equity worth \u20b99,437 crore changes hands in pre-open block window - CNBC TV18",
+      "description": "ITC shares fall nearly 4% after equity worth \u20b99,437 crore changes hands in pre-open block window CNBC TV18",
+      "source": "CNBC TV18",
+      "published": "2026-10-08T03:41:20+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi4AFBVV95cUxNYkk3QzRZa0dhc1B2YlIxak9VOHdRX1RqZjVLbk5IMWY0V1JIUXo3TF9YeVFtaG4yWXhsTEZpbEJBSWpjVWFXMF9mMC0wek9QOWdDZXJhT3JpaDR6S3praVBONGNmaW1vam1DM2p5dEhDZnpKbDVUa05UQ1BFMFhiNzIyWlhQbVhONWRfelRGcHlIWTF6VDluTDZrbjBINFRVazFQQ012V191VHVPTmhkaGd6R1U4ZTB2QkZfN0lPcURPWXpIQUhybzNJX0RlWmdsaHZSUWFheWRrZnc5UVNESdIB5gFBVV95cUxQOS10QWxHdmdnN2ZRSzFVWVEzS3RYU3M1dkdIbjVNNmI1T0VpT05Vd3c5U0Z6N1pqbmlrcTBQcTg3b3k0RllPVjJTZkIzeFZFYjVPRnpsX3JrdU84NzNMWTREWWE4WDgwSmlTTDdocUVZcmpmTUlXcFROUVdQSW9BM0xJWDB5YmlCNmpGZ19Oa0JzZ09KOTF3bjVJeDVIeUZOSkFWeG1Id1RTc3puNEJEVXZobm5BUlhDRm5Ra2tOZ0tvQ19kTHI0MmxENm1yZGV0UEc1dnAyUDdlVEx5N0VUeHFXWlpxdw?oc=5",
+      "matched_symbols": [
+        "ITC"
+      ]
+    },
+    {
+      "title": "Where could Suzlon Energy share price be in the next 5 years? - Livemint",
+      "description": "Where could Suzlon Energy share price be in the next 5 years? Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T03:30:45+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi6AFBVV95cUxPbFY2dVgzR3NYTl9oTWNOSXA1cnUyRkFFNGk2MEdxTEJCRXpLOWR1RnphQ0RMbkxtMG5JTUtWcXpIR2g3M1JlM0JkeEQ2TmRFNUMyaG1BMjZ3bWVmSi1heGxpZnA4MVlvWGthMDVFaFplS2s1X0hucWhfakcxbGFXZzh1c3JqR3V0YWh3UkhCQS1vOHlYWTJQTU9xZ1pZcmR0bTlPNktmNFRFTm1TR3ZzeDI0UGdhcjJBelhIZW1ad0Z4Y0xKMzZRQ19TbC11ekgxRktkazJqdWhRSm43WnFaSGFIS2ZXc0NB0gHUAUFVX3lxTFBkbHZpdHZUMURhU3I1Ti1BR2lmV1VFZjFfaTJucnFRbTlKYUpRRlZCNS1oaXRvQmZER1M2T095Q2VNTkpfY3RaX1Jlak1OMU9FMWFxbE5WM3ZOSlRjNHl4bjJOaXFXamxMbWsxbWhhMlBfdXpaR2ZZMVl2TkxwYThSRW1wYUg0YWpzNXhvaVo3TnRqbkltYmYxVFU3VHlKTEhfX3Z3YmYtcmg0cWtNczlyUExZWThvVTZ4N1BEYzhlU1RsRXB3OE1nVjFGX2RpWk0zXy15?oc=5",
+      "matched_symbols": [
+        "SUZLON"
+      ]
+    },
+    {
+      "title": "TCS Q2 preview: Results 2026 today after stock market closing bell; expectations, dividend announcement schedule, yield - Livemint",
+      "description": "TCS Q2 preview: Results 2026 today after stock market closing bell; expectations, dividend announcement schedule, yield Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T03:11:32+00:00",
+      "url": "https://news.google.com/rss/articles/CBMikwJBVV95cUxOS2t3dzdVLXBkX1hYVWw5YlNTZXBicEhHeVFfbTdFWGRvbmZVakE4cUw3VVZPVFZVcnJGb0RoWTlNQl83S2lfMDhQeVlJVGRfVzRNR3hnWFVLRXp3TUZwXzFhSE54ODhOUkFHOUtOOHJGXzZoSjY4RlprTFZyYWwyazZKTU54cVhRWUNoUHp4bHAzQVFwUUJHYzRndWZ1eFhUWkk3c0xHeW1GMGNXT3lWWmZMbE5jbGV2SERveVFuZUwxZWZqVGFpWWh2Yjh6QVltV29IRHdSZkhNZlJrVTdfTV8tTURMSEk3cF9GVVVVZlQ0RDA0OGNGenB1TFdqamZJeHlWOUdHN2RqcTM3S2Rka0sxUdIBmAJBVV95cUxQOEN4TEVJUF95bGNEWHU1YXRJSmU1VWwyX3QwM3VIWW5nc1o0cmFHOUdwZHFHVmRjR29RVUh6NGQyaFdtT2NFVDc4bkxNU3V5V0hzUlpubGd3UjlCQm9IbUN3bzh1Wi1hLUwtRUZMSjFGZFpXZS05TEQ0N2hmc2NKNDJ2c3JqS0hpT0FlS0c5NzRrX282TzlEWkJFWHVndE5HQk9TTlktSXFCQ1owWGx3ME4yWVAzcGkzUC13VU5UN201aUdSZjBxc3N3cWpZanAtc0tzdGFIRi1jUVBLWWJZellERU1QZXFjaXB2Z3lJdXZ1R3Z4UlVfWEdCT3dNQjdYSnpnajMzRzg4ZTM4aUFrOTB4WENPU1hO?oc=5",
+      "matched_symbols": [
+        "TCS"
+      ]
+    },
+    {
+      "title": "PB Fintech share price target gets a 31% cut from Nomura - Here's why - CNBC TV18",
+      "description": "PB Fintech share price target gets a 31% cut from Nomura - Here's why CNBC TV18",
+      "source": "CNBC TV18",
+      "published": "2026-10-08T03:07:01+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi3AFBVV95cUxOOVJsNURlNXhfNl9LNzNxSXpQTzNWOGJURFdMU0x1Z1U4ZEhVSWh1NHRvR1cwb1FTb2p2amIyanNsWTNLOXl6Rk1uWHFCT0owdXI3dHFHdUM1Z01OREpHelhsb2xHR2lJN1V0R0htN3RMWjlVRW96WWxjRTVfNFdFLUtxTm5XeE1QMWl2X2NhTDM4bXlqZlgyd2JjTkF3cjJ1TkY4anZ6TW9vSjVBTlFBdlRCQTU2d2REcTBxbGJtXzRrYm5SQWZrWHRvR2VzSjJjM3d4RWRIMEszN1pS0gHiAUFVX3lxTE94a3hZYksxYUg4Yk4tb0dmTzhRdHo0R1Q4dWU2NGE5VEhaYU1BWk5MQ0dxMER0dXM0bEpjYUhzbER4Si1VSWN5RVJ1NG5nWDVHS0VSMG1tVHVBMmF1aXRhQmRlUFlBVUhyVE9nS0RMRG9YMTdDRXRBWHB4WXZza1pZZzRLTjh2NU9tenRINkFWNGxsMHNpNE5uanFodlNVTl9HY3dWem9TTmpRaFhvLWtwcHJjaTEzVHpmTzFUclRXNzBvb3F3SGxXUjl3UmJXeEZrMmhlMk1ycjd0OHY1SWFkOVE?oc=5",
+      "matched_symbols": [
+        "POLICYBZR"
+      ]
+    },
+    {
+      "title": "Jubilant FoodWorks shares in focus after Q2 revenue rises 12%, Domino\u2019s India LFL at 4% - CNBC TV18",
+      "description": "Jubilant FoodWorks shares in focus after Q2 revenue rises 12%, Domino\u2019s India LFL at 4% CNBC TV18",
+      "source": "CNBC TV18",
+      "published": "2026-10-08T02:27:26+00:00",
+      "url": "https://news.google.com/rss/articles/CBMivwFBVV95cUxPUC1SMFdKdklPZV9JVWw2bkJueGM5V3NpNmR4eE5jVk1tN2ZvQkt3RVQ4VTJndENobU5BQTdiUmFMN1RfNFRqcFZselZiOElVQXcyd2t2YVU5c2trSHRQbGF4cllDYzlfdHdYUFJpMmc5WVJScnRrNlVUc0tLODBWNk8wVVM5VXZDdGw5QlowSUVzdVo4TzVFTWlqbXNxc1hNbW9FTEU4eU82MGJmRE9qdmZYQzBiWVJtWkFOUEw1b9IBvwFBVV95cUxPUC1SMFdKdklPZV9JVWw2bkJueGM5V3NpNmR4eE5jVk1tN2ZvQkt3RVQ4VTJndENobU5BQTdiUmFMN1RfNFRqcFZselZiOElVQXcyd2t2YVU5c2trSHRQbGF4cllDYzlfdHdYUFJpMmc5WVJScnRrNlVUc0tLODBWNk8wVVM5VXZDdGw5QlowSUVzdVo4TzVFTWlqbXNxc1hNbW9FTEU4eU82MGJmRE9qdmZYQzBiWVJtWkFOUEw1bw?oc=5",
+      "matched_symbols": [
+        "JUBLFOOD"
+      ]
+    },
+    {
+      "title": "Trade Spotlight: How should you trade PNB Housing, Adani Green Energy, Leela Palaces Hotels, MCX India,... - Moneycontrol.com",
+      "description": "Trade Spotlight: How should you trade PNB Housing, Adani Green Energy, Leela Palaces Hotels, MCX India,... Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T02:26:14+00:00",
+      "url": "https://news.google.com/rss/articles/CBMiugJBVV95cUxQRWFhN1A2R2VCSzRjQzVKaHE5UG5xQUpKdHYwaEhsTzItZzltRldlQWpYbXY2QU0zc2lxeVlwQ1JvNm9tdDBjcTliS1Ata2ZkRjc1ZlpkUUd0T2E2a0huWW9Ba3dJUXJzOGZZZDFxQWkwMVZlNExENlExMUNkOW9KZ2pVXzEzVlZtVVI5enoxNUpqczc0a3htN3JLS3VkT2FCTWtTY18xY3c0eThlUElMdXNnYV9WeXhZdU84SXd2YXAwNEZiODY0ZTg5SFVzV3FTUGlUQmRlbUVybGpmb2M2dktLTmNId0dkdmZRbGM4eE0zUF9xdkx4YnZKVTg2WjZVWWsyc0p2WGxBeHZYYUJadVM4R09XTXpsYUQ3NWtBR053LVh2Q0c0Tk9MUk5QWW1VYXB2SUNXbDhsUdIBugJBVV95cUxQRWFhN1A2R2VCSzRjQzVKaHE5UG5xQUpKdHYwaEhsTzItZzltRldlQWpYbXY2QU0zc2lxeVlwQ1JvNm9tdDBjcTliS1Ata2ZkRjc1ZlpkUUd0T2E2a0huWW9Ba3dJUXJzOGZZZDFxQWkwMVZlNExENlExMUNkOW9KZ2pVXzEzVlZtVVI5enoxNUpqczc0a3htN3JLS3VkT2FCTWtTY18xY3c0eThlUElMdXNnYV9WeXhZdU84SXd2YXAwNEZiODY0ZTg5SFVzV3FTUGlUQmRlbUVybGpmb2M2dktLTmNId0dkdmZRbGM4eE0zUF9xdkx4YnZKVTg2WjZVWWsyc0p2WGxBeHZYYUJadVM4R09XTXpsYUQ3NWtBR053LVh2Q0c0Tk9MUk5QWW1VYXB2SUNXbDhsUQ?oc=5",
+      "matched_symbols": [
+        "ADANIGREEN",
+        "MCX",
+        "PNBHOUSING"
+      ]
+    },
+    {
+      "title": "Top stocks to watch today: TCS, Tata Steel, Reliance, Sun Pharma shares in focus on Thursday, 8 October | Full list - Livemint",
+      "description": "Top stocks to watch today: TCS, Tata Steel, Reliance, Sun Pharma shares in focus on Thursday, 8 October | Full list Livemint",
+      "source": "Livemint",
+      "published": "2026-10-08T01:59:18+00:00",
+      "url": "https://news.google.com/rss/articles/CBMiigJBVV95cUxQSzI0Z3FLUjl2MFI0MFdPbzFMTkptN20zLUpUNVpBMzJ2NEF6OFZJZG01YUJ6cXdpcXVkSkhwaGNVZjlscU5nOVZzMUtiNmpyQWp0SVBqNm9LNkMyWEJCb3BPV1RlRWc5Y29sYUtPVUY2MFVlSXQxdlBtZzlNZl9hdmRtSTNfV3EzY2ktelZGU19HT0NTMTJxTzcyN01lOG9pTDNRamdjNEJ2QzRyTlJ1NEZhTnp5ZEhucUVFVk1KRS1VUmxGY19JR0ZpX3FJME1ISWNkQjk1R3FmZmx1RWJjeFdONFFQWElSbXFud090Q0VlMXVqd1h3dDBrMFhvSGFNWVF2aWkxak9lQdIBjwJBVV95cUxQMlVEZ2UxNDE1UkxPeG9EbkFKSG5kelkzM0RYUEZpRGNyeFZTZ3VPb0hrZmx4UTUtOVRyUGs2YUtTbmN0dGtUcGVVUEVEWnVxNWtFMVBEZE9oNWZXbzBuMWVEUlhpT1BpbDFUcDl0OENSYXZsZ3k0OURlc1F1ci11Z3pJZ2ExdHpMU0tzZ2FhNV84dHVTNkRDUFJnWFh5V3pULWhWQUxZV0oyMzNEQWNBNzJoVkxIZXgxdnJNZThBVkRXZFIxRzl5ZFRWdW84YzJzWEpyRVlIOHNiOFFsc2NXRGNLQnZFSVdhU2ViMS1KOUt2cktnY0t4Y05qSm16LVE5YWJ2dDVHU2VPSUNfSjJF?oc=5",
+      "matched_symbols": [
+        "RELIANCE",
+        "TATASTEEL",
+        "TCS"
+      ]
+    },
+    {
+      "title": "Stocks to Watch Today: Godrej Properties, Tata Power, RPP Infra, EverestIMS Tech, Vishal Nirmiti, ASK... - Moneycontrol.com",
+      "description": "Stocks to Watch Today: Godrej Properties, Tata Power, RPP Infra, EverestIMS Tech, Vishal Nirmiti, ASK... Moneycontrol.com",
+      "source": "Moneycontrol.com",
+      "published": "2026-10-08T00:57:52+00:00",
+      "url": "https://news.google.com/rss/articles/CBMixwJBVV95cUxOa2VjRXowWTNKSjBWbUhpSW5GWEtsd0FDOVNCdHpSTlRlUEc1NzJramFGQ21Ic09YUmVRS2h5bVRLUFBpeGl1X1l1SUVCM1RxY3hIcFcxSW1iMWJsMWduZ0hhTVVrLXpmTUdHUmR1d3pKUnJHSFJmYWxIb1dmbzk3WnFJa1ZfT3JGeHFNLXY4RXFvVldXbmxvR3RFSzZ0bEh5b1hWbHhJdXdDUThRVXhlMF9oQXhMamd5YmhSdXFhckpfVFUtaEE5bHN5cXd0VC0yV044Q0s4dXlKU0lNUGdmbjczdktVbndjUnl5c1RBNVRqUWZOVEd4SzhkZW8wWG0yUFBLZGNudDhZR0tKdjNMdkFnXzI3TUFLdm5pb21PbGs1azVwNXBnNktpOXBGWHNIdmwxdUQyN2wxUXVQekh6c2U0aU0zVlXSAcwCQVVfeXFMUDJsb3pZbVg5SGxZLWtzbG1KOThhZkl4QVVUTDkxNVVkdzFDSFNmdzNpOVktX2NFWjZQY1dZeHlKazFiVGcxZlROeWZKeDZESjBrNzJNZXNxTEU2T0U4dXhWeGx5WWVqTU5MMHRMOEJMTFdIOHQ3eFlPUmpCTjlXREVoR2Z6cm9jQW9xZjB2QjNXRnRSb1dYQ3Y0eFgtVGgtbFQzN3hFaHFJMlRIT19XbnNoUXZZeXpWaGV5TmJUdHRIODFtelM2bzNTd3NvV2RRcU5QMzRyZVh0TjAxb25CcTZmT2w3Rm1UVHBtdDNZWDF2c1l0OWNwRVFId2o2SldyUDE3a2wwMjZOWWp0MHhBTFJWdTVOZktuaHZ6ME1fbzUyNFJabkVETkZUclJnY21vVmdaMkxpMUNvMy1ZZ3FFTXdCRGEyZGZlMkNBVGs?oc=5",
+      "matched_symbols": [
+        "GODREJPROP"
+      ]
+    },
+    {
+      "title": "HDFC Bank shares are underperforming despite CEO clarity, Q2 update - IIFL's Rikin Shah explains why - CNBC TV18",
+      "description": "HDFC Bank shares are underperforming despite CEO clarity, Q2 update - IIFL's Rikin Shah explains why CNBC TV18",
+      "source": "CNBC TV18",
+      "published": "2026-10-07T23:01:35+00:00",
+      "url": "https://news.google.com/rss/articles/CBMi8gFBVV95cUxNcHdET1pneVJEYkFZOWVNcGdYdzM1Vmx5QTlLbEN5VkZia2R6bnZWWXgzY2hfdHZFYWZZMk02TTY4THhBQlNYa1l2UWtTZF9hOVBETklaQ3FiQmw5cGxjYVVEeWMyb05USkRQbHNrX0hoUGplMGE4ajZmU3hUb3g4ZWlXMjhLSmRDXzZKbXNxVHgzbDVCSl9hdndMQW5rVU5icWg3d0FtSEMzdnZFSEh2cUgxS21nbHFkMzd3NzdpbTVEanowZmVOSmQtRzZ6UEJwcXVkTjVuQjdmSkUwd1JvalpFRVkwejFxY0dDRFk3OTNyQdIB9wFBVV95cUxQMmtoVkhvZUc4RHFaWmwzSDBsbUFFdUpFcGtRZ3NfaDlwLXhudzlMbVVXWDJyMkZOWjZEYk1CUDN5Umlpa3B2TXNVeHJISmNBU1R2QjVBUGZzejhXaU4zZVQ5OHJvd3VudlFoWi16eWZCcG5fcmNLSXg2cm9rWFFaekhIa1NQU0tld3FpTmN3TzZZeXYzeUY2dG5WMHJjLXlZSy1MeUIyUC1ZdUhUZjJ1aEFGTWQxblAzZC1uVmtYVTdkeXVibWd2VFRJMzVQQWQ1UzZmV2N3OWs3dnBYN3lVSDZCdXpyeGxXQjdjUUphOFpwaFF1cjdV?oc=5",
+      "matched_symbols": [
+        "HDFCBANK"
+      ]
+    },
+    {
+      "title": "Reliance Industries shares gain 3% as JIO IPO inches closer; Jefferies increases weight in conglomerate - The Economic Times",
+      "description": "Reliance Industries shares gain 3% as JIO IPO inches closer; Jefferies increases weight in conglomerate The Economic Times",
+      "source": "The Economic Times",
+      "published": "2026-10-07T19:47:47+00:00",
+      "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE5oTXNpQzFfX3dYVHhBN3QwS2tXVWhob1d5cURHZnpOM2VnRTlQQWk3bk1La0dTZWRQbTVkbXp6TF9DX3pONEpZWWxNa3FDeXByaVB1ZnNESGtSc2Zkd0RZUFpZQzR2dUtrM1lrN0N1cjFxZw?oc=5",
+      "matched_symbols": [
+        "RELIANCE"
+      ]
+    }
+  ],
+  "symbols": [
+    "ADANIGREEN",
+    "ADANIPOWER",
+    "ASIANPAINT",
+    "BDL",
+    "BPCL",
+    "EICHERMOT",
+    "GODREJPROP",
+    "HDFCBANK",
+    "INDIGO",
+    "INFY",
+    "INOXWIND",
+    "ITC",
+    "JUBLFOOD",
+    "M&M",
+    "MANKIND",
+    "MCX",
+    "MOTILALOFS",
+    "NYKAA",
+    "PAYTM",
+    "PNBHOUSING",
+    "POLICYBZR",
+    "RELIANCE",
+    "SUZLON",
+    "TATASTEEL",
+    "TCS",
+    "VEDL",
+    "VMM",
+    "ZYDUSLIFE"
+  ]
+}

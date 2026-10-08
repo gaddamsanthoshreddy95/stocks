@@ -6,6 +6,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import logging
 from time import perf_counter
 from typing import Any
@@ -15,7 +16,9 @@ import pandas as pd
 from src.sector.sector_mapper import SectorMapper
 from src.sector.sector_strength import SectorStrength
 from src.news.analysis_service import NewsAnalysisService
+from src.news.today import TodayNewsService, stock_aliases
 from src.news.ai_sentiment import AISentimentAnalyzer
+from src.presenter.futures_report import FuturesReportPresenter
 from src.workflow.context_enrichment import ContextEnrichment
 from src.learning.outcome_repository import OutcomeRepository
 from src.position_sizing.position_size import PositionSizingEngine
@@ -43,7 +46,10 @@ from src.workflow.opportunity_ranking import (
 )
 from src.options.structure_validator import OptionStructureValidator
 from src.quality.engine import CandidateQualityEngine
-from src.quality.nse_provider import NseFundamentalProvider
+from src.quality.public_fundamentals import PublicFundamentalProvider
+from src.quality.futures_selection import (
+    active_contracts, assess_futures_selection, block_unqualified_trade, session_vwap_quality, block_trade,
+)
 from src.quality.portfolio import apply_soft_sector_cap, reduce_correlated_exposure
 from uuid import uuid4
 
@@ -79,8 +85,12 @@ class DailyTradingAssistant:
         self.outcomes = OutcomeRepository()
         self.quality_engine = CandidateQualityEngine(
             platform.settings.quality_config,
-            fundamental_provider=NseFundamentalProvider(),
+            fundamental_provider=(PublicFundamentalProvider()
+                                  if platform.settings.market_data_source == "kite" else None),
         )
+        self._futures_instruments_loaded = False
+        self._futures_instruments = None
+        self.today_news = None
         self.completed_outcomes = self.outcomes.learning_summary().get("completed_outcomes", 0)
         commodity_fetcher = (CommodityProvider().get_snapshot
                              if platform.settings.market_data_source == "kite" else None)
@@ -928,22 +938,42 @@ class DailyTradingAssistant:
                 "Close": "last", "Volume": "sum",
             }).dropna()
         sector_benchmark_data = None
+        annual_stock_data = None
+        get_annual_history = getattr(self.platform.provider, "get_annual_history", None)
+        if self.platform.settings.quality_config.strict_futures_selection and get_annual_history:
+            try:
+                annual_stock_data = get_annual_history(candidate["symbol"])
+            except Exception as exc:
+                logger.warning("Annual stock history unavailable for %s: %s", candidate["symbol"],
+                               exc.__class__.__name__)
         sector_index = SectorStrength.KITE_INDEX_SYMBOLS.get(sector)
         if (sector_index and self.platform.settings.market_data_source == "kite"):
             try:
-                sector_benchmark_data = self.platform.provider.get_data(sector_index)
+                sector_benchmark_data = (get_annual_history(sector_index) if get_annual_history
+                                         else self.platform.provider.get_data(sector_index))
             except Exception as exc:
                 logger.warning(
                     "Sector history unavailable for %s: %s",
                     sector, exc.__class__.__name__,
                 )
+        session_vwap = None
+        if self.platform.settings.quality_config.strict_futures_selection:
+            get_session = getattr(self.platform.provider, "get_session_intraday", None)
+            try:
+                session_bars = get_session(candidate["symbol"]) if get_session else None
+            except Exception as exc:
+                logger.warning("Session VWAP unavailable for %s: %s", candidate["symbol"],
+                               exc.__class__.__name__)
+                session_bars = None
+            session_vwap = session_vwap_quality(session_bars, candidate.get("current_price"))
         quality_assessment = self.quality_engine.assess(
             symbol=candidate["symbol"], daily_data=quality_daily,
             candidate=candidate, analysis=analysis,
             relative_strength=relative_strength, sector=sector_data,
             market=market, event=event_assessment, option=option,
             setup=setup, plan=plan, weekly_data=weekly_data,
-            sector_benchmark_data=sector_benchmark_data, news=news,
+            sector_benchmark_data=sector_benchmark_data, news=news, session_vwap=session_vwap,
+            annual_stock_data=annual_stock_data,
         ).to_dict()
         base_candidate_score = float(quality_assessment["final_candidate_score"])
         sector_adjustment = SectorStrength.ranking_adjustment(sector_data)
@@ -1202,6 +1232,9 @@ class DailyTradingAssistant:
             "status_reasons": status_reasons,
             "time_frame": "3-5 trading days",
             "technical": {
+                "rsi": analysis["analysis"].get("rsi"),
+                "relative_volume": analysis["analysis"].get("relative_volume"),
+                "price_range": FuturesReportPresenter.price_range(quality_daily, candidate["current_price"]),
                 "trend": analysis["analysis"]["trend"],
                 "trend_stars": self._stars(candidate["technical_score"]),
                 "momentum": setup_evaluation.get("momentum_label", analysis["analysis"]["rsi_signal"]),
@@ -1553,6 +1586,43 @@ class DailyTradingAssistant:
                 trade["trade_eligibility"] = {
                     **trade["trade_eligibility"], "eligible": False, "status": "WATCHLIST",
                 }
+        if self.platform.settings.quality_config.strict_futures_selection:
+            if not self._futures_instruments_loaded:
+                get_instruments = getattr(self.platform.provider, "get_nfo_instruments", None)
+                try:
+                    self._futures_instruments = get_instruments() if get_instruments else None
+                except Exception as exc:
+                    logger.warning("Futures instrument verification unavailable: %s",
+                                   exc.__class__.__name__)
+                self._futures_instruments_loaded = True
+            contracts = (active_contracts(
+                candidate["symbol"], self._futures_instruments,
+                datetime.now(ZoneInfo("Asia/Kolkata")).date(),
+            ) if self._futures_instruments is not None else None)
+            selection = assess_futures_selection(quality_assessment["scores"], contracts)
+            snapshot = self.quality_engine._fundamental_snapshot(candidate["symbol"])
+            selection["data_evidence"] = snapshot.evidence if snapshot else {}
+            block_unqualified_trade(trade, selection)
+            if not selection["eligible"]:
+                executable = False
+        if self.platform.settings.market_data_source == "kite":
+            metrics = candidate.get("discovery_metrics", {})
+            change = metrics.get("daily_return_percent")
+            if change is None and quality_daily is not None and len(quality_daily) >= 2:
+                previous = float(quality_daily.iloc[-2]["Close"])
+                change = ((float(candidate["current_price"]) / previous - 1) * 100
+                          if previous > 0 else None)
+            news_check = TodayNewsService.direction_check(
+                news, change, direction, discovered=bool(candidate.get("today_news_mentions")))
+            if self.today_news is not None and not self.today_news.get("available"):
+                news_check["approved"] = False
+                news_check["status"] = "UNVERIFIED"
+                news_check["reason_codes"].append("TODAY_NEWS_DISCOVERY_UNAVAILABLE")
+            trade["today_news_alignment"] = news_check
+            if not news_check["approved"]:
+                block_trade(trade, "Today's price/news checks failed: " + ", ".join(news_check["reason_codes"]),
+                            "TODAY_PRICE_NEWS_CONFLICT_OR_UNVERIFIED")
+                executable = False
         try:
             FinalConsistencyValidator.validate(trade)
             trade["consistency_validation"] = {"passed": True, "errors": []}
@@ -1593,6 +1663,8 @@ class DailyTradingAssistant:
     def generate(self, limit: int = 5, minimum_score: int = 40) -> dict[str, Any]:
         started = perf_counter()
         self.run_id = str(uuid4())
+        if self.platform.settings.market_data_source == "kite":
+            self.today_news = TodayNewsService.discover(self.platform._universe_symbols())
         # Ranking and risk optimize different properties, so always send the
         # top 20 (configurable up to 30) through risk/context review.
         enrichment_limit = min(
@@ -1606,8 +1678,9 @@ class DailyTradingAssistant:
         # Expensive 10-year history and option-chain enrichment is deferred
         # until shared market context has been collected.
         try:
+            options = {"today_news": self.today_news} if self.today_news is not None else {}
             ranked = self.platform.suggest_stocks(
-                limit=enrichment_limit, minimum_score=minimum_score, enrich=False
+                limit=enrichment_limit, minimum_score=minimum_score, enrich=False, **options
             )
             deferred_enrichment = True
         except TypeError as exc:
@@ -1637,6 +1710,9 @@ class DailyTradingAssistant:
                  "events_detected": 0, "event_clusters_created": 0},
             )
         candidates = ranked["suggestions"]
+        prefetch_company_data = getattr(self.quality_engine.fundamental_provider, "prefetch", None)
+        if prefetch_company_data and candidates:
+            prefetch_company_data([candidate["symbol"] for candidate in candidates])
         # FinBERT is process-wide and takes roughly 1-2 minutes to cold-start.
         # Warm it while the independent advanced-analysis and market-context
         # stages run, instead of adding that entire startup cost near the end.
@@ -1777,7 +1853,7 @@ class DailyTradingAssistant:
         news_started = perf_counter()
         news_target_symbols = ([
             trade["symbol"] for trade in preliminary if trade["status"] != "REJECTED"
-        ][:min(len(preliminary), limit + 3)]
+        ]
                                if self.platform.settings.market_data_source == "kite"
                                else [])
         preload_wait_started = perf_counter()
@@ -1801,8 +1877,18 @@ class DailyTradingAssistant:
         news_by_symbol: dict[str, dict[str, Any]] = {}
         results: list[dict[str, Any]] = []
         if self.platform.settings.market_data_source == "kite" and news_target_symbols:
+            candidate_by_symbol = {candidate["symbol"]: candidate for candidate in candidates}
+            aliases = stock_aliases(self.platform._universe_symbols())
+            def fresh_news(symbol):
+                mentions = candidate_by_symbol[symbol].get("today_news_mentions", [])
+                return NewsAnalysisService.analyze(
+                    symbol, force_refresh=True, limit=16,
+                    extra_articles=mentions,
+                    excluded_titles={article["title"].casefold() for article in mentions
+                                     if len(article.get("matched_symbols", [])) > 1},
+                    company_aliases=aliases)
             with ThreadPoolExecutor(max_workers=min(4, len(news_target_symbols))) as executor:
-                results = list(executor.map(NewsAnalysisService.analyze, news_target_symbols))
+                results = list(executor.map(fresh_news, news_target_symbols))
             news_by_symbol = dict(zip(news_target_symbols, results))
         news_seconds = perf_counter() - news_started
         news_component_timings = [result.get("timings", {}) for result in results]
@@ -2091,9 +2177,24 @@ class DailyTradingAssistant:
             "date": date.today().isoformat(),
             "ranking_mode": self.platform.settings.candidate_ranking_mode,
             "quality_ranking_mode": self.platform.settings.quality_config.ranking_mode,
+            "strict_futures_selection": self.platform.settings.quality_config.strict_futures_selection,
+            "today_news": self.today_news,
             "option_month_filter": self.option_month,
             "market": {**market_context, "regime": market, "confidence": market_context["confidence"] if market_context["available"] else round(sum(item["confidence"] for item in trades) / len(trades), 2) if trades else 0},
             "trades": trades,
+            "futures_review": [
+                {"symbol": item["symbol"], "current_price": item["current_price"],
+                 "technical_score": item["technical_score"],
+                 "final_action": item["final_action"],
+                 "trade_eligibility": item["trade_eligibility"],
+                 "selection_reason": item["selection_reason"],
+                 "discovery_reason": next((candidate.get("reason") for candidate in candidates if candidate["symbol"] == item["symbol"]), None),
+                 "technical": item["technical"], "news": item["news"],
+                 "today_news_alignment": item.get("today_news_alignment"),
+                 "levels": item["levels"], "quality_score": item["quality_score"],
+                 "futures_selection": item.get("futures_selection")}
+                for item in reviewed
+            ],
             "watchlist": watchlist,
             "sector_ranking": sector_ranking,
             "filter_stages": filter_stages,
@@ -2156,6 +2257,8 @@ class DailyTradingAssistant:
                  "selection_status": trade["selection_status"],
                  "selection_reason": trade["selection_reason"],
                  "entry_selection": trade["entry_selection"],
+                 "futures_selection": trade.get("futures_selection"),
+                 "today_news_alignment": trade.get("today_news_alignment"),
                  "reasons": trade["status_reasons"] or trade["validation"]["conflicts"]}
                 for trade in rejected
             ],

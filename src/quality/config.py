@@ -51,6 +51,10 @@ class QualityConfig:
     maximum_sector_pe_deviation: float = .05
     minimum_roe_percent: float = 15.0
     minimum_roce_percent: float = 15.0
+    strict_futures_selection: bool = True
+    minimum_fii_holding_percent: float = 5.0
+    minimum_dii_holding_percent: float = 5.0
+    minimum_promoter_holding_percent: float = 40.0
     block_earnings_option_selling: bool = True
     fundamental_missing_policy: str = "REJECT"
     event_missing_policy: str = "NEUTRAL"
@@ -114,6 +118,11 @@ class QualityConfig:
             raise ValueError("MAX_SECTOR_PE_DEVIATION must be between 0 and 1")
         if self.minimum_roe_percent < 0 or self.minimum_roce_percent < 0:
             raise ValueError("Minimum ROE and ROCE must not be negative")
+        if any(not 0 <= value <= 100 for value in (
+            self.minimum_fii_holding_percent, self.minimum_dii_holding_percent,
+            self.minimum_promoter_holding_percent,
+        )):
+            raise ValueError("Minimum ownership percentages must be between 0 and 100")
         if self.fundamental_missing_policy not in {"ALLOW", "WARN", "REJECT"}:
             raise ValueError("FUNDAMENTAL_MISSING_POLICY is invalid")
 
@@ -162,6 +171,10 @@ class QualityConfig:
             maximum_sector_pe_deviation=number("MAX_SECTOR_PE_DEVIATION", .05),
             minimum_roe_percent=number("MIN_ROE_PERCENT", 15),
             minimum_roce_percent=number("MIN_ROCE_PERCENT", 15),
+            strict_futures_selection=boolean("STRICT_FUTURES_SELECTION", True),
+            minimum_fii_holding_percent=number("MIN_FII_HOLDING_PERCENT", 5),
+            minimum_dii_holding_percent=number("MIN_DII_HOLDING_PERCENT", 5),
+            minimum_promoter_holding_percent=number("MIN_PROMOTER_HOLDING_PERCENT", 40),
             block_earnings_option_selling=boolean(
                 "BLOCK_EARNINGS_OPTION_SELLING", True),
             fundamental_missing_policy=os.getenv(

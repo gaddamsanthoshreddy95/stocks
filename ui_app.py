@@ -2647,6 +2647,67 @@ def active_trade_status_panel(platform: TradingPlatform, database: ReportDatabas
 def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> None:
     hero("Daily report", "Generate and review a point-in-time research report. Live positions are "
          "managed separately in Positions.")
+    with st.expander("Strict futures shortlist", expanded=True):
+        st.caption(
+            "PE within sector PE ±5%; delivery at least the monthly average; "
+            "debt-free; strong, stable ownership; three growing quarters; strong "
+            "commentary; ROE/ROCE thresholds; no observed block-deal impact or "
+            "negative news; a strong sector and stock over one year; "
+            "price at or above today's session VWAP. "
+            "Every check must be verified before a stock qualifies."
+        )
+        if st.button("Find verified futures candidates", key="strict-futures-scan"):
+            try:
+                with st.spinner("Checking futures research criteria…"):
+                    st.session_state["strict_futures_result"] = platform.suggest_futures(limit=10)
+            except Exception as exc:
+                st.error(f"Futures scan failed: {exc}")
+        futures_result = st.session_state.get("strict_futures_result")
+        if futures_result:
+            st.info(futures_result["message"])
+            st.caption(futures_result["data_coverage"])
+            today_news = futures_result.get("today_news")
+            if today_news:
+                checked_time = datetime.fromisoformat(today_news["checked_at"]).astimezone(
+                    ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y %H:%M IST")
+                st.caption(f"Today's news check: {today_news['run_date']} ({today_news['timezone']}) · "
+                           f"{len(today_news['symbols'])} stocks mentioned · checked {checked_time}")
+                with st.expander("Today's stocks in the news and publishers"):
+                    st.json(today_news, expanded=False)
+            futures_rows = []
+            for item in futures_result["reviewed"]:
+                selection = item["futures_selection"]
+                checks = selection["checks"]
+                factor = lambda name, key: checks.get(name, {}).get("factors", {}).get(key)
+                futures_rows.append({
+                    "Stock": item["symbol"], "Price": item.get("current_price"),
+                    "Stock PE": factor("valuation_quality", "stock_pe"),
+                    "Sector PE": factor("valuation_quality", "sector_pe"),
+                    "Delivery %": factor("delivery_quality", "delivery_percent"),
+                    "Monthly delivery %": factor("delivery_quality", "monthly_delivery_percent"),
+                    "Borrowings (₹ cr)": factor("debt_free_quality", "total_debt"),
+                    "ROE %": factor("roe_quality", "roe_percent"),
+                    "ROCE %": factor("roce_quality", "roce_percent"),
+                    "VWAP": factor("vwap_quality", "vwap"),
+                    "Research status": selection["status"],
+                    "Entry decision": item.get("final_action", "NOT_REVIEWED"),
+                    "Today's news": (item.get("today_news_alignment") or {}).get("status"),
+                    "News conflict reasons": ", ".join((item.get("today_news_alignment") or {}).get("reason_codes", [])),
+                    "Failed checks": ", ".join(selection["failed_checks"]),
+                    "Unavailable checks": ", ".join(selection["unavailable_checks"]),
+                })
+            st.dataframe(pd.DataFrame(futures_rows), hide_index=True, width="stretch")
+            with st.expander("Research evidence for each stock"):
+                st.json([
+                    {"symbol": item["symbol"], "futures_selection": item["futures_selection"],
+                     "today_news_alignment": item.get("today_news_alignment"),
+                     "entry_decision": item.get("final_action"),
+                     "selection_reason": item.get("selection_reason")}
+                    for item in futures_result["reviewed"]
+                ], expanded=False)
+            with st.expander("Detailed stock strengths and rejection reasons", expanded=True):
+                from src.presenter.futures_report import FuturesReportPresenter
+                st.markdown(FuturesReportPresenter.render(futures_result))
     active_future = daily_report_jobs().future(st.session_state.get("daily_report_job_id"))
     job_running = active_future is not None and not active_future.done()
     preferences = database.get_preferences()
@@ -2741,8 +2802,8 @@ def daily_report_page(platform: TradingPlatform, database: ReportDatabase) -> No
                 index=("SHADOW", "LEGACY", "COMPOSITE").index(
                     platform.settings.quality_config.ranking_mode),
                 help=(
-                    "SHADOW preserves current output and records the composite comparison. "
-                    "COMPOSITE changes final ranking and enforces the new quality gates."
+                    "SHADOW records a ranking comparison; COMPOSITE also enforces technical "
+                    "quality gates. Strict futures research checks apply independently."
                 ),
             )
         submitted = st.form_submit_button("Run report", type="primary", disabled=job_running)

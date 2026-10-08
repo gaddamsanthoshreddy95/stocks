@@ -1,0 +1,747 @@
+[
+  {
+    "symbol": "TCS",
+    "snapshot": {
+      "symbol": "TCS",
+      "market_cap": 756777.0,
+      "revenue_growth": null,
+      "profit_growth": null,
+      "roe": 51.8,
+      "roce": 63.0,
+      "debt_to_equity": 0.10521260723610593,
+      "total_debt": 11283.0,
+      "interest_coverage": null,
+      "operating_cash_flow": 52094.0,
+      "free_cash_flow": null,
+      "promoter_pledge": 0.0,
+      "pe_ratio": 15.28,
+      "sector_pe": 21.83,
+      "delivery_percent": 38.50593958324381,
+      "monthly_delivery_percent": 50.32524234096415,
+      "fii_holding_percent": 9.07,
+      "dii_holding_percent": 13.41,
+      "promoter_holding_percent": 71.77,
+      "fii_holding_change_pct_points": -0.5899999999999999,
+      "dii_holding_change_pct_points": 0.07000000000000028,
+      "promoter_holding_change_pct_points": 0.0,
+      "quarterly_revenue_growth_pct": [
+        4.8677,
+        9.645,
+        13.9319
+      ],
+      "quarterly_profit_growth_pct": [
+        -13.8541,
+        12.1289,
+        4.6884
+      ],
+      "commentary_strength": "MIXED",
+      "block_deal_price_impact": false,
+      "source": "Screener / Moneycontrol / NSE / company filings",
+      "as_of": "2026-10-08",
+      "evidence": {
+        "roe": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-03-31",
+          "basis": "Published consolidated ROE percent",
+          "retrieved_on": "2026-10-08"
+        },
+        "roce": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-03-31",
+          "basis": "Published consolidated ROCE percent",
+          "retrieved_on": "2026-10-08"
+        },
+        "pe_ratio": {
+          "url": "https://www.moneycontrol.com/india/stockpricequote/computers-software/tataconsultancyservices/TCS",
+          "period": "2026-10-08",
+          "basis": "Moneycontrol published TTM valuation",
+          "deal_dates": []
+        },
+        "market_cap": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-10-08",
+          "basis": "INR crore",
+          "retrieved_on": "2026-10-08"
+        },
+        "total_debt": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-03-31",
+          "basis": "Reported borrowings, INR crore; includes reported lease liabilities",
+          "retrieved_on": "2026-10-08"
+        },
+        "debt_to_equity": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-03-31",
+          "basis": "Borrowings / (equity capital + reserves), consolidated",
+          "retrieved_on": "2026-10-08"
+        },
+        "quarterly_revenue_growth_pct": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Latest three quarters, year-on-year growth, consolidated; oldest to newest",
+          "retrieved_on": "2026-10-08"
+        },
+        "quarterly_profit_growth_pct": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Latest three quarters, year-on-year growth, consolidated; oldest to newest",
+          "retrieved_on": "2026-10-08"
+        },
+        "quarterly_periods": {
+          "periods": [
+            "2025-12-31",
+            "2026-03-31",
+            "2026-06-30"
+          ],
+          "url": "https://www.screener.in/company/TCS/consolidated/"
+        },
+        "fii_holding_percent": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Published shareholding percent",
+          "retrieved_on": "2026-10-08"
+        },
+        "fii_holding_change_pct_points": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Latest reported quarter minus previous quarter, percentage points",
+          "retrieved_on": "2026-10-08"
+        },
+        "dii_holding_percent": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Published shareholding percent",
+          "retrieved_on": "2026-10-08"
+        },
+        "dii_holding_change_pct_points": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Latest reported quarter minus previous quarter, percentage points",
+          "retrieved_on": "2026-10-08"
+        },
+        "promoter_holding_percent": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Published shareholding percent",
+          "retrieved_on": "2026-10-08"
+        },
+        "promoter_holding_change_pct_points": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Latest reported quarter minus previous quarter, percentage points",
+          "retrieved_on": "2026-10-08"
+        },
+        "operating_cash_flow": {
+          "url": "https://www.screener.in/company/TCS/consolidated/",
+          "period": "2026-03-31",
+          "basis": "INR crore",
+          "retrieved_on": "2026-10-08"
+        },
+        "sector_pe": {
+          "url": "https://www.moneycontrol.com/india/stockpricequote/computers-software/tataconsultancyservices/TCS",
+          "period": "2026-10-08",
+          "basis": "Moneycontrol published TTM valuation",
+          "deal_dates": []
+        },
+        "monthly_delivery_percent": {
+          "url": "https://www.nseindia.com/all-reports",
+          "report_urls": [
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_06102026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_05102026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_02102026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_01102026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_30092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_29092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_28092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_25092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_24092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_23092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_22092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_21092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_18092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_17092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_16092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_15092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_14092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_11092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_10092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_09092026.csv"
+          ],
+          "period": "2026-09-09 to 2026-10-06",
+          "sessions": 20,
+          "basis": "Volume-weighted delivery percentage over preceding 20 sessions; excludes latest session"
+        },
+        "block_deal_price_impact": {
+          "url": "https://www.moneycontrol.com/india/stockpricequote/computers-software/tataconsultancyservices/TCS",
+          "period": "2026-10-08",
+          "basis": "Any reported block deal in the past 30 days is conservatively flagged; price causality is not inferred",
+          "deal_dates": [
+            "2026-06-24",
+            "2026-06-24",
+            "2025-09-09",
+            "2025-09-09",
+            "2025-07-14",
+            "2025-07-14",
+            "2025-01-23",
+            "2025-01-23"
+          ]
+        },
+        "delivery_percent": {
+          "url": "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_07102026.csv",
+          "period": "2026-10-07",
+          "basis": "Latest completed trading session; delivered / traded quantity"
+        },
+        "promoter_pledge": {
+          "url": "https://www.nseindia.com/api/corporate-pledgedata?index=equities&symbol=TCS",
+          "period": "2026-06-30",
+          "basis": "Promoter encumbered shares / promoter holdings, percent; not all depository pledged shares"
+        },
+        "commentary_strength": {
+          "method": "Conservative rule-based interpretation of prepared remarks; not a company-reported rating",
+          "positive_themes": [
+            "growth",
+            "orders"
+          ],
+          "negative_signal_count": 2,
+          "url": "https://www.bseindia.com/stockinfo/AnnPdfOpen.aspx?Pname=27523cab-de62-4f78-939a-6d9853bbd060.pdf",
+          "period": "2026-07-31"
+        }
+      }
+    },
+    "checks": {
+      "debt_free_quality": {
+        "score": 0,
+        "status": "FAIL",
+        "confidence": 100,
+        "factors": {
+          "debt_to_equity": 0.10521260723610593,
+          "total_debt": 11283.0
+        },
+        "reason_codes": [
+          "COMPANY_HAS_DEBT"
+        ],
+        "warnings": []
+      },
+      "roe_quality": {
+        "score": 100,
+        "status": "PASS",
+        "confidence": 100,
+        "factors": {
+          "roe_percent": 51.8,
+          "minimum": 15.0
+        },
+        "reason_codes": [
+          "ROE_PERCENT_MEETS_MINIMUM"
+        ],
+        "warnings": []
+      },
+      "roce_quality": {
+        "score": 100,
+        "status": "PASS",
+        "confidence": 100,
+        "factors": {
+          "roce_percent": 63.0,
+          "minimum": 15.0
+        },
+        "reason_codes": [
+          "ROCE_PERCENT_MEETS_MINIMUM"
+        ],
+        "warnings": []
+      },
+      "institutional_holding_quality": {
+        "score": 0,
+        "status": "FAIL",
+        "confidence": 100,
+        "factors": {
+          "fii_holding_percent": 9.07,
+          "dii_holding_percent": 13.41,
+          "minimum_fii_holding_percent": 5.0,
+          "minimum_dii_holding_percent": 5.0,
+          "fii_holding_change_pct_points": -0.5899999999999999,
+          "dii_holding_change_pct_points": 0.07000000000000028
+        },
+        "reason_codes": [
+          "FII_DII_HOLDINGS_DECLINING"
+        ],
+        "warnings": []
+      },
+      "promoter_holding_quality": {
+        "score": 100,
+        "status": "PASS",
+        "confidence": 100,
+        "factors": {
+          "promoter_holding_percent": 71.77,
+          "minimum_promoter_holding_percent": 40.0,
+          "promoter_holding_change_pct_points": 0.0,
+          "promoter_pledge_percent": 0.0
+        },
+        "reason_codes": [
+          "PROMOTER_HOLDING_STABLE_AND_UNPLEDGED"
+        ],
+        "warnings": []
+      },
+      "quarterly_results_quality": {
+        "score": 0,
+        "status": "FAIL",
+        "confidence": 100,
+        "factors": {
+          "revenue_growth_last_three_quarters": [
+            4.8677,
+            9.645,
+            13.9319
+          ],
+          "profit_growth_last_three_quarters": [
+            -13.8541,
+            12.1289,
+            4.6884
+          ]
+        },
+        "reason_codes": [
+          "RECENT_QUARTERLY_RESULTS_WEAK"
+        ],
+        "warnings": []
+      },
+      "commentary_quality": {
+        "score": 0,
+        "status": "FAIL",
+        "confidence": 100,
+        "factors": {},
+        "reason_codes": [
+          "MANAGEMENT_COMMENTARY_NOT_VERY_STRONG"
+        ],
+        "warnings": []
+      },
+      "block_deal_quality": {
+        "score": 100,
+        "status": "PASS",
+        "confidence": 100,
+        "factors": {},
+        "reason_codes": [
+          "NO_MATERIAL_BLOCK_DEAL_PRICE_IMPACT"
+        ],
+        "warnings": []
+      },
+      "recent_news_quality": {
+        "score": null,
+        "status": "UNKNOWN",
+        "confidence": 0,
+        "factors": {},
+        "reason_codes": [
+          "RECENT_NEWS_CHECK_UNAVAILABLE"
+        ],
+        "warnings": []
+      },
+      "sector_one_year_quality": {
+        "score": null,
+        "status": "UNKNOWN",
+        "confidence": 0,
+        "factors": {
+          "sector_one_year_return_percent": null
+        },
+        "reason_codes": [
+          "SECTOR_ONE_YEAR_RETURN_MISSING"
+        ],
+        "warnings": []
+      },
+      "sector_leadership_quality": {
+        "score": null,
+        "status": "UNKNOWN",
+        "confidence": 0,
+        "factors": {
+          "stock_one_year_return_percent": null,
+          "sector_one_year_return_percent": null
+        },
+        "reason_codes": [
+          "STOCK_OR_SECTOR_ONE_YEAR_RETURN_MISSING"
+        ],
+        "warnings": []
+      },
+      "valuation_quality": {
+        "score": 0,
+        "status": "FAIL",
+        "confidence": 100,
+        "factors": {
+          "stock_pe": 15.28,
+          "sector_pe": 21.83,
+          "minimum_allowed_pe": 20.7385,
+          "maximum_allowed_pe": 22.921499999999998
+        },
+        "reason_codes": [
+          "PE_EXCEEDS_SECTOR_RANGE"
+        ],
+        "warnings": []
+      },
+      "delivery_quality": {
+        "score": 0,
+        "status": "FAIL",
+        "confidence": 100,
+        "factors": {
+          "delivery_percent": 38.50593958324381,
+          "monthly_delivery_percent": 50.32524234096415
+        },
+        "reason_codes": [
+          "DELIVERY_BELOW_MONTHLY_AVERAGE"
+        ],
+        "warnings": []
+      }
+    }
+  },
+  {
+    "symbol": "COFORGE",
+    "snapshot": {
+      "symbol": "COFORGE",
+      "market_cap": 81178.0,
+      "revenue_growth": null,
+      "profit_growth": null,
+      "roe": 21.4,
+      "roce": 23.5,
+      "debt_to_equity": 0.07633427702631855,
+      "total_debt": 728.0,
+      "interest_coverage": null,
+      "operating_cash_flow": 1792.0,
+      "free_cash_flow": null,
+      "promoter_pledge": null,
+      "pe_ratio": 46.32,
+      "sector_pe": 21.83,
+      "delivery_percent": 47.23420918512921,
+      "monthly_delivery_percent": 46.73460504626142,
+      "fii_holding_percent": 24.31,
+      "dii_holding_percent": 42.62,
+      "promoter_holding_percent": null,
+      "fii_holding_change_pct_points": -6.350000000000001,
+      "dii_holding_change_pct_points": -13.560000000000002,
+      "promoter_holding_change_pct_points": null,
+      "quarterly_revenue_growth_pct": [
+        29.8956,
+        30.0409,
+        49.2441
+      ],
+      "quarterly_profit_growth_pct": [
+        16.0156,
+        116.9381,
+        49.4382
+      ],
+      "commentary_strength": null,
+      "block_deal_price_impact": false,
+      "source": "Screener / Moneycontrol / NSE / company filings",
+      "as_of": "2026-10-08",
+      "evidence": {
+        "roe": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-03-31",
+          "basis": "Published consolidated ROE percent",
+          "retrieved_on": "2026-10-08"
+        },
+        "roce": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-03-31",
+          "basis": "Published consolidated ROCE percent",
+          "retrieved_on": "2026-10-08"
+        },
+        "pe_ratio": {
+          "url": "https://www.moneycontrol.com/india/stockpricequote/computers-software/coforge/NII02",
+          "period": "2026-10-08",
+          "basis": "Moneycontrol published TTM valuation",
+          "deal_dates": []
+        },
+        "market_cap": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-10-08",
+          "basis": "INR crore",
+          "retrieved_on": "2026-10-08"
+        },
+        "total_debt": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-03-31",
+          "basis": "Reported borrowings, INR crore; includes reported lease liabilities",
+          "retrieved_on": "2026-10-08"
+        },
+        "debt_to_equity": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-03-31",
+          "basis": "Borrowings / (equity capital + reserves), consolidated",
+          "retrieved_on": "2026-10-08"
+        },
+        "quarterly_revenue_growth_pct": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Latest three quarters, year-on-year growth, consolidated; oldest to newest",
+          "retrieved_on": "2026-10-08"
+        },
+        "quarterly_profit_growth_pct": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Latest three quarters, year-on-year growth, consolidated; oldest to newest",
+          "retrieved_on": "2026-10-08"
+        },
+        "quarterly_periods": {
+          "periods": [
+            "2025-12-31",
+            "2026-03-31",
+            "2026-06-30"
+          ],
+          "url": "https://www.screener.in/company/COFORGE/consolidated/"
+        },
+        "fii_holding_percent": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Published shareholding percent",
+          "retrieved_on": "2026-10-08"
+        },
+        "fii_holding_change_pct_points": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Latest reported quarter minus previous quarter, percentage points",
+          "retrieved_on": "2026-10-08"
+        },
+        "dii_holding_percent": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Published shareholding percent",
+          "retrieved_on": "2026-10-08"
+        },
+        "dii_holding_change_pct_points": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-06-30",
+          "basis": "Latest reported quarter minus previous quarter, percentage points",
+          "retrieved_on": "2026-10-08"
+        },
+        "operating_cash_flow": {
+          "url": "https://www.screener.in/company/COFORGE/consolidated/",
+          "period": "2026-03-31",
+          "basis": "INR crore",
+          "retrieved_on": "2026-10-08"
+        },
+        "sector_pe": {
+          "url": "https://www.moneycontrol.com/india/stockpricequote/computers-software/coforge/NII02",
+          "period": "2026-10-08",
+          "basis": "Moneycontrol published TTM valuation",
+          "deal_dates": []
+        },
+        "monthly_delivery_percent": {
+          "url": "https://www.nseindia.com/all-reports",
+          "report_urls": [
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_06102026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_05102026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_02102026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_01102026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_30092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_29092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_28092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_25092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_24092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_23092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_22092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_21092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_18092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_17092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_16092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_15092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_14092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_11092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_10092026.csv",
+            "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_09092026.csv"
+          ],
+          "period": "2026-09-09 to 2026-10-06",
+          "sessions": 20,
+          "basis": "Volume-weighted delivery percentage over preceding 20 sessions; excludes latest session"
+        },
+        "block_deal_price_impact": {
+          "url": "https://www.moneycontrol.com/india/stockpricequote/computers-software/coforge/NII02",
+          "period": "2026-10-08",
+          "basis": "Any reported block deal in the past 30 days is conservatively flagged; price causality is not inferred",
+          "deal_dates": [
+            "2025-10-14",
+            "2025-10-14",
+            "2025-10-13",
+            "2025-10-13",
+            "2025-01-23",
+            "2025-01-23"
+          ]
+        },
+        "delivery_percent": {
+          "url": "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_07102026.csv",
+          "period": "2026-10-07",
+          "basis": "Latest completed trading session; delivered / traded quantity"
+        }
+      }
+    },
+    "checks": {
+      "debt_free_quality": {
+        "score": 0,
+        "status": "FAIL",
+        "confidence": 100,
+        "factors": {
+          "debt_to_equity": 0.07633427702631855,
+          "total_debt": 728.0
+        },
+        "reason_codes": [
+          "COMPANY_HAS_DEBT"
+        ],
+        "warnings": []
+      },
+      "roe_quality": {
+        "score": 100,
+        "status": "PASS",
+        "confidence": 100,
+        "factors": {
+          "roe_percent": 21.4,
+          "minimum": 15.0
+        },
+        "reason_codes": [
+          "ROE_PERCENT_MEETS_MINIMUM"
+        ],
+        "warnings": []
+      },
+      "roce_quality": {
+        "score": 100,
+        "status": "PASS",
+        "confidence": 100,
+        "factors": {
+          "roce_percent": 23.5,
+          "minimum": 15.0
+        },
+        "reason_codes": [
+          "ROCE_PERCENT_MEETS_MINIMUM"
+        ],
+        "warnings": []
+      },
+      "institutional_holding_quality": {
+        "score": 0,
+        "status": "FAIL",
+        "confidence": 100,
+        "factors": {
+          "fii_holding_percent": 24.31,
+          "dii_holding_percent": 42.62,
+          "minimum_fii_holding_percent": 5.0,
+          "minimum_dii_holding_percent": 5.0,
+          "fii_holding_change_pct_points": -6.350000000000001,
+          "dii_holding_change_pct_points": -13.560000000000002
+        },
+        "reason_codes": [
+          "FII_DII_HOLDINGS_DECLINING"
+        ],
+        "warnings": []
+      },
+      "promoter_holding_quality": {
+        "score": null,
+        "status": "UNKNOWN",
+        "confidence": 0,
+        "factors": {
+          "promoter_holding_percent": null,
+          "minimum_promoter_holding_percent": 40.0,
+          "promoter_holding_change_pct_points": null,
+          "promoter_pledge_percent": null
+        },
+        "reason_codes": [
+          "PROMOTER_HOLDING_DATA_MISSING"
+        ],
+        "warnings": []
+      },
+      "quarterly_results_quality": {
+        "score": 100,
+        "status": "PASS",
+        "confidence": 100,
+        "factors": {
+          "revenue_growth_last_three_quarters": [
+            29.8956,
+            30.0409,
+            49.2441
+          ],
+          "profit_growth_last_three_quarters": [
+            16.0156,
+            116.9381,
+            49.4382
+          ]
+        },
+        "reason_codes": [
+          "LAST_THREE_QUARTERS_REVENUE_AND_PROFIT_GROWING"
+        ],
+        "warnings": []
+      },
+      "commentary_quality": {
+        "score": null,
+        "status": "UNKNOWN",
+        "confidence": 0,
+        "factors": {},
+        "reason_codes": [
+          "MANAGEMENT_COMMENTARY_MISSING"
+        ],
+        "warnings": []
+      },
+      "block_deal_quality": {
+        "score": 100,
+        "status": "PASS",
+        "confidence": 100,
+        "factors": {},
+        "reason_codes": [
+          "NO_MATERIAL_BLOCK_DEAL_PRICE_IMPACT"
+        ],
+        "warnings": []
+      },
+      "recent_news_quality": {
+        "score": null,
+        "status": "UNKNOWN",
+        "confidence": 0,
+        "factors": {},
+        "reason_codes": [
+          "RECENT_NEWS_CHECK_UNAVAILABLE"
+        ],
+        "warnings": []
+      },
+      "sector_one_year_quality": {
+        "score": null,
+        "status": "UNKNOWN",
+        "confidence": 0,
+        "factors": {
+          "sector_one_year_return_percent": null
+        },
+        "reason_codes": [
+          "SECTOR_ONE_YEAR_RETURN_MISSING"
+        ],
+        "warnings": []
+      },
+      "sector_leadership_quality": {
+        "score": null,
+        "status": "UNKNOWN",
+        "confidence": 0,
+        "factors": {
+          "stock_one_year_return_percent": null,
+          "sector_one_year_return_percent": null
+        },
+        "reason_codes": [
+          "STOCK_OR_SECTOR_ONE_YEAR_RETURN_MISSING"
+        ],
+        "warnings": []
+      },
+      "valuation_quality": {
+        "score": 0,
+        "status": "FAIL",
+        "confidence": 100,
+        "factors": {
+          "stock_pe": 46.32,
+          "sector_pe": 21.83,
+          "minimum_allowed_pe": 20.7385,
+          "maximum_allowed_pe": 22.921499999999998
+        },
+        "reason_codes": [
+          "PE_EXCEEDS_SECTOR_RANGE"
+        ],
+        "warnings": []
+      },
+      "delivery_quality": {
+        "score": 100,
+        "status": "PASS",
+        "confidence": 100,
+        "factors": {
+          "delivery_percent": 47.23420918512921,
+          "monthly_delivery_percent": 46.73460504626142
+        },
+        "reason_codes": [
+          "DELIVERY_AT_OR_ABOVE_MONTHLY_AVERAGE"
+        ],
+        "warnings": []
+      }
+    }
+  }
+]

@@ -18,6 +18,7 @@ from time import monotonic, perf_counter
 from typing import Any
 from urllib.parse import quote_plus
 from xml.etree import ElementTree
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -63,17 +64,22 @@ class NewsAnalysisService:
 
     @classmethod
     def analyze(cls, symbol: str, timeout: float = 4.0, limit: int = 8,
-                analyzer: AISentimentAnalyzer | None = None) -> dict[str, Any]:
+                analyzer: AISentimentAnalyzer | None = None, *, force_refresh: bool = False,
+                extra_articles: list[dict[str, Any]] | None = None,
+                excluded_titles: set[str] | None = None,
+                company_aliases: dict[str, set[str]] | None = None) -> dict[str, Any]:
         """Return a bounded sentiment/event assessment for a stock symbol."""
         cache_key = symbol.strip().upper().removesuffix(".NS")
         max_age_hours = max(1, int(os.getenv("NEWS_MAX_AGE_HOURS", "72")))
-        if analyzer is None:
+        if analyzer is None and not force_refresh and not extra_articles and not excluded_titles and not company_aliases:
             with cls._cache_lock:
                 cached = cls._cache.get(cache_key)
                 if cached and monotonic() - cached[0] < cls.cache_ttl_seconds:
                     return deepcopy(cached[1])
         search = quote_plus(f"{symbol} NSE stock when:{max_age_hours}h")
         url = "https://news.google.com/rss/search?q=" + search + "&hl=en-IN&gl=IN&ceid=IN:en"
+        if force_refresh:
+            url += "&_=" + str(int(datetime.now(timezone.utc).timestamp() * 1000))
         network_started = perf_counter()
         try:
             response = requests.get(url, timeout=timeout, headers={"User-Agent": "alphatrace/1.0"})
@@ -94,6 +100,7 @@ class NewsAnalysisService:
                 "requested": True, "fetch_failed": True,
                 "collection_state": "FETCH_FAILED", "analysis_state": "FETCH_FAILED",
                 "news_state": "FETCH_FAILED",
+                "checked_at": datetime.now(timezone.utc).isoformat(),
                 "timings": {"network_seconds": round(perf_counter() - network_started, 3),
                             "model_load_seconds": 0, "inference_seconds": 0},
             }
@@ -103,14 +110,27 @@ class NewsAnalysisService:
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=max_age_hours)
         articles = []
+        discarded_articles = []
         stale_article_count = 0
         seen: set[tuple[str, str]] = set()
         for item in root.findall("./channel/item"):
             title = cls._text(item.findtext("title", ""))
+            if company_aliases:
+                from src.news.today import matches
+                mentioned = matches(title, company_aliases)
+                reason = ("UNRELATED_HEADLINE" if cache_key not in mentioned else
+                          "MULTI_COMPANY_HEADLINE" if len(mentioned) > 1 else
+                          "QUOTE_PAGE" if re.search(r"share price.*(?:live|today|chart)|stock (?:pre.market|after.hours)|live level", title, re.I)
+                          else None)
+                if reason:
+                    discarded_articles.append({"title": title, "reason": reason})
+                    continue
+            if title.casefold() in (excluded_titles or set()):
+                continue
             description = cls._text(item.findtext("description", ""))
             source = cls._text(item.findtext("source", "Google News"))
             published_at = cls._published_datetime(item.findtext("pubDate", ""))
-            if published_at is None or published_at < cutoff or published_at > now + timedelta(minutes=5):
+            if published_at is None or published_at < cutoff or published_at > now:
                 stale_article_count += 1
                 continue
             identity = (title.casefold(), source.casefold())
@@ -124,6 +144,21 @@ class NewsAnalysisService:
                 "published": published_at.isoformat(),
                 "url": cls._text(item.findtext("link", "")) or None,
             })
+        for article in extra_articles or []:
+            # Discovery roundups are never assigned aggregate sentiment to each company.
+            if (len(article.get("matched_symbols", [])) != 1
+                    or cache_key not in article["matched_symbols"]):
+                continue
+            try:
+                stamp = datetime.fromisoformat(article["published"])
+            except (ValueError, KeyError, TypeError):
+                continue
+            if stamp.tzinfo is None:
+                continue
+            identity = (article.get("title", "").casefold(), article.get("source", "").casefold())
+            if cutoff <= stamp <= now and identity not in seen:
+                articles.append(article)
+                seen.add(identity)
         articles.sort(key=lambda article: article["published"], reverse=True)
         articles = articles[:limit]
 
@@ -138,6 +173,8 @@ class NewsAnalysisService:
                         f"No timestamped news newer than {max_age_hours} hours was available."
                     ],
                     "max_age_hours": max_age_hours,
+                    "checked_at": now.isoformat(),
+                    "discarded_articles": discarded_articles,
                     "stale_article_count": stale_article_count,
                     "timings": {"network_seconds": round(network_seconds, 3),
                                 "model_load_seconds": 0, "inference_seconds": 0}}
@@ -152,6 +189,7 @@ class NewsAnalysisService:
                     "requested": True, "fetch_failed": True, "collection_state": "FETCHED",
                     "analysis_state": "FETCH_FAILED", "news_state": "FETCH_FAILED",
                     "reasons": [str(exc)], "analysis_method": "AI_UNAVAILABLE",
+                    "checked_at": now.isoformat(),
                     "timings": {"network_seconds": round(network_seconds, 3),
                                 "model_load_seconds": 0, "inference_seconds": 0}}
         ai_timings = assessment.get("timings", {})
@@ -174,6 +212,11 @@ class NewsAnalysisService:
             "analysis_method": assessment.get("analysis_provider", "LOCAL_AI_MODEL"),
             "model": ai_analyzer.model,
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "checked_at": now.isoformat(),
+            "discarded_articles": discarded_articles,
+            "today_headlines": [article for article in articles if datetime.fromisoformat(
+                article["published"]).astimezone(ZoneInfo("Asia/Kolkata")).date()
+                == now.astimezone(ZoneInfo("Asia/Kolkata")).date()],
             "max_age_hours": max_age_hours,
             "stale_article_count": stale_article_count,
             "timings": {
@@ -182,7 +225,7 @@ class NewsAnalysisService:
                 "inference_seconds": ai_timings.get("inference_seconds", 0),
             },
         }
-        if analyzer is None:
+        if analyzer is None and not extra_articles and not excluded_titles and not company_aliases:
             with cls._cache_lock:
                 cls._cache[cache_key] = (monotonic(), deepcopy(result))
         return result

@@ -23,6 +23,88 @@ KITE_ACCESS_TOKEN=your_daily_access_token
 .venv/bin/python main.py portfolio
 ```
 
+`suggest` now returns only futures research candidates that pass every required
+company check and have an unexpired NSE futures contract. A technically strong
+stock with missing evidence does not qualify. Use `suggest --technical-only`
+to inspect preliminary technical candidates separately.
+Normal `suggest` output explains each stock's measured strengths, exact stock
+and sector PE, permitted band, borrowings, delivery baseline, ownership changes,
+quarterly growth, VWAP, and source periods. Use `suggest --json` for the full
+machine-readable payload. The UI includes the same detailed explanations.
+The normal futures scan runs the complete daily-report pipeline: discovery and
+ranking, advanced technical analysis, candlesticks, support/resistance, breakout
+and entry confirmation, targeted news, market/sector context, historical checks,
+and risk controls. The new fundamental and VWAP requirements are additional
+gates. A company-data match alone is never an approved entry. The separate
+`audit_futures_fundamentals` method audits company data on a preliminary shortlist
+without claiming final entry approval.
+
+Strict futures research checks also apply to daily reports independently of
+SHADOW/LEGACY/COMPOSITE ranking. The UI's Daily report page includes a
+**Find verified futures candidates** button and per-stock failure details.
+The checks require positive stock PE within sector PE ±5%, daily delivery at
+least the monthly baseline, debt/equity of zero, ROE and ROCE at least 15%,
+FII and DII holdings at least 5% each, promoter holdings at least 40%, stable
+or increasing ownership, no promoter pledge, positive revenue and profit
+growth in each of the latest three quarters, very strong management commentary,
+no observed material block-deal impact, a completed recent-news check with no
+negative news, positive sector one-year returns, and stock returns above the
+sector, and price at or above today's underlying-stock session VWAP. VWAP uses
+fresh five-minute bars and volume-weighted HLC3, resets each NSE session, and
+rejects unavailable, stale, or zero-volume data. It estimates trade-level VWAP;
+the futures contract can trade at a different price.
+Sector outperformance is a leadership proxy, not a calculation of
+the stock's weighted contribution to an index. PE parity is a relative valuation
+check, not an intrinsic-value estimate. No block-deal filter guarantees future
+price behavior.
+
+Thresholds are configurable with `MIN_ROE_PERCENT`, `MIN_ROCE_PERCENT`,
+`MIN_FII_HOLDING_PERCENT`, `MIN_DII_HOLDING_PERCENT`,
+`MIN_PROMOTER_HOLDING_PERCENT`, and `MAX_SECTOR_PE_DEVIATION`.
+`STRICT_FUTURES_SELECTION` defaults to `true` for daily reports.
+These screens do not execute futures trades.
+
+Each live daily/futures scan freshly discovers **today's stocks in the news**
+from Moneycontrol, Economic Times, Mint, and CNBC-TV18 publisher searches via
+Google News RSS. Publication timestamps must fall on the execution date in
+Asia/Kolkata and must not be in the future. Technically eligible news stocks
+receive shortlist places alongside the existing discovery/ranking buckets;
+news mentions never waive technical, liquidity, fundamentals, or risk checks.
+Stock-specific news is fetched again for each execution, bypassing the five-minute
+analysis cache, while the existing 72-hour recent-risk window is retained.
+
+The final report compares today's article-level sentiment with the day's price
+move and intended direction. Rising price with negative news, falling price with
+positive news, mixed news, or news opposing the intended trade blocks approval.
+News roundups mentioning several companies are used for discovery, not assigned
+one aggregate sentiment per stock. Incomplete same-day verification blocks an
+entry; raw headlines, publishers, links, times, and conflict reasons are retained.
+Only sufficiently confident, non-neutral-dominant model results receive a
+directional sentiment label. Neutral-dominant probabilities must not create
+negative-news rejection reasons. Quote pages and unrelated or multi-company
+headlines are filtered before stock-specific sentiment analysis. A model label
+is distinct from independent verification of an adverse company development.
+
+**Public company data:** the default provider combines Screener's financial
+statements and shareholding tables, Moneycontrol's stock/sector PE and block-deal
+history, NSE's security-wise delivery archives, NSE pledge disclosures, and
+company earnings-call PDFs linked from Screener. Delivery uses the latest
+completed session and a volume-weighted baseline over the preceding 20 trading
+sessions, excluding that latest session. Quarterly results compare each of the
+latest three quarters with the same quarter one year earlier. Reported
+borrowings take precedence over a rounded debt/equity ratio. All fields retain
+source URLs, reporting periods, and calculation bases. Consolidated results are
+preferred; a standalone fallback is explicitly labelled.
+
+Public pages and immutable reports are cached with bounded requests. Filings
+outside the accepted reporting windows do not count as current evidence.
+Commentary strength is a conservative rule-based interpretation of management's
+prepared remarks, with positive themes and negative flags recorded; it is not a
+company-reported metric. Any reported block deal in the preceding 30 days is
+conservatively flagged for review, rather than claiming no causal price impact.
+Sources that fail or omit a field do not make that field pass. A different
+published-data provider can be passed through `fundamental_provider`.
+
 Each `daily-report` run deletes the previous `reports/daily_report.log`, then
 writes both runtime messages and the complete final report to a fresh file.
 Use `--log-file PATH` to choose another location. To restrict all option-chain

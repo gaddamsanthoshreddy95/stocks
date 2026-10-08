@@ -49,6 +49,7 @@ pydeck==0.9.3
 Pygments==2.20.0
 pyparsing==3.3.2
 pytest>=8,<10
+pypdf>=6,<7
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 python-multipart==0.0.32

@@ -51,8 +51,9 @@ def analyze(request: SymbolRequest):
 
 
 @app.get("/suggestions")
-def suggestions(limit: int = 5, minimum_score: int = 40):
-    return _call(lambda: platform.suggest_stocks(limit, minimum_score))
+def suggestions(limit: int = 5, minimum_score: int = 40, technical_only: bool = False):
+    return _call(lambda: platform.suggest_stocks(limit, minimum_score)
+                 if technical_only else platform.suggest_futures(limit, minimum_score))
 
 
 @app.get("/daily-report")

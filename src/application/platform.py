@@ -19,6 +19,7 @@ from kiteconnect.exceptions import TokenException
 from requests.exceptions import RequestException
 
 from src.application.errors import (
+    PlatformError,
     AuthenticationError,
     DataUnavailableError,
     OrderError,
@@ -723,7 +724,7 @@ class TradingPlatform:
         })
 
     def suggest_stocks(self, limit: int = 5, minimum_score: int = 40,
-                       enrich: bool = True) -> dict[str, Any]:
+                       enrich: bool = True, today_news: dict | None = None) -> dict[str, Any]:
         """Rank candidates using a fresh live snapshot when Kite is configured."""
         if not isinstance(limit, int) or not 1 <= limit <= 50:
             raise ValidationError("limit must be an integer between 1 and 50")
@@ -740,13 +741,135 @@ class TradingPlatform:
                     self._analysis_cache.clear()
                 begin_live_refresh(self._universe_symbols())
                 refresh_started = True
-            return self._suggest_stocks(limit, minimum_score, enrich)
+            return self._suggest_stocks(limit, minimum_score, enrich, today_news)
         finally:
             if refresh_started and end_live_refresh is not None:
                 end_live_refresh()
 
+    def suggest_futures(self, limit: int = 5, minimum_score: int = 40,
+                        fundamental_provider=None) -> dict[str, Any]:
+        """Apply strict futures requirements after the complete daily selection pipeline."""
+        if not isinstance(limit, int) or not 1 <= limit <= 20:
+            raise ValidationError("limit must be an integer between 1 and 20")
+        # Keep the cached UI platform's settings unchanged when enforcing this scan.
+        runner = copy(self)
+        runner.settings = replace(
+            self.settings, quality_config=replace(
+                self.settings.quality_config, strict_futures_selection=True))
+        report = (runner.daily_report(limit, minimum_score)
+                  if fundamental_provider is None else
+                  runner.daily_report(limit, minimum_score,
+                                      fundamental_provider=fundamental_provider))
+        reviewed = report.get("futures_review", [])
+        qualified = [
+            item for item in report.get("trades", [])
+            if item.get("futures_selection", {}).get("eligible")
+            and item.get("trade_eligibility", {}).get("eligible")
+            and item.get("final_action") == "BUY"
+        ]
+        return {
+            "market_data_source": self.settings.market_data_source,
+            "universe_size": report.get("summary", {}).get("stocks_scanned", 0),
+            "reviewed_count": len(reviewed), "suggestions": qualified[:limit],
+            "reviewed": reviewed, "watchlist": report.get("watchlist", []),
+            "today_news": report.get("today_news"),
+            "filter_stages": report.get("filter_stages", []),
+            "rankings": {"ranking_mode": report.get("ranking_mode"),
+                         "quality_ranking_mode": report.get("quality_ranking_mode"),
+                         "sector_ranking": report.get("sector_ranking", [])},
+            "timings": report.get("timings", {}),
+            "message": ("Futures candidates passed the complete technical and research pipeline."
+                        if qualified else "No verified futures candidates passed every technical and research requirement."),
+            "data_coverage": "Financials and ownership: Screener. Stock/sector PE and block deals: Moneycontrol. Delivery and pledge: NSE. Commentary: company earnings-call filings. Per-field source links and dates are included in the audit.",
+            "screening_scope": "The full ranking, candlestick, news, entry, and risk pipeline is preserved; strict futures requirements are additional gates.",
+        }
+
+    def audit_futures_fundamentals(self, limit: int = 5, minimum_score: int = 40,
+                        fundamental_provider=None, news_provider=None) -> dict[str, Any]:
+        """Audit company checks on a technical shortlist; this does not approve entry."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from src.quality.engine import CandidateQualityEngine, _returns
+        from src.quality.public_fundamentals import PublicFundamentalProvider
+        from src.quality.futures_selection import (
+            active_contracts, assess_futures_selection, session_vwap_quality,
+        )
+        from src.sector.sector_strength import SectorStrength
+        from src.news.analysis_service import NewsAnalysisService
+
+        if not isinstance(limit, int) or not 1 <= limit <= 50:
+            raise ValidationError("limit must be an integer between 1 and 50")
+        scan_limit = min(50, max(limit, self.settings.ranking_shortlist_size))
+        ranked = self.suggest_stocks(scan_limit, minimum_score, enrich=False)
+        engine = CandidateQualityEngine(
+            self.settings.quality_config,
+            fundamental_provider=fundamental_provider or PublicFundamentalProvider(),
+        )
+        get_instruments = getattr(self.provider, "get_nfo_instruments", None)
+        try:
+            instruments = get_instruments() if get_instruments else None
+        except (RequestException, ValueError, OSError):
+            instruments = None
+        today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+        reviewed, qualified = [], []
+        sectors = SectorMapper()
+        for candidate in ranked["suggestions"]:
+            symbol = candidate["symbol"]
+            scores = engine.stock_selection_quality(
+                symbol, sector_one_year_return=None, stock_one_year_return=None, news=None)
+            scores["valuation_quality"] = engine.valuation_quality(symbol)
+            scores["delivery_quality"] = engine.delivery_quality(symbol)
+            scores["vwap_quality"] = session_vwap_quality(None, candidate.get("current_price"))
+            # Avoid expensive news/model work until the published company data passes.
+            company_checks = [score for name, score in scores.items() if name not in {
+                "recent_news_quality", "sector_one_year_quality", "sector_leadership_quality",
+                "vwap_quality"}]
+            if all(score.status == "PASS" for score in company_checks):
+                get_session = getattr(self.provider, "get_session_intraday", None)
+                try:
+                    bars = get_session(symbol) if get_session else None
+                except (RequestException, ValueError, PlatformError):
+                    bars = None
+                scores["vwap_quality"] = session_vwap_quality(bars, candidate.get("current_price"))
+                sector_returns = None
+                stock_returns = None
+                try:
+                    get_history = getattr(self.provider, "get_annual_history", self.provider.get_data)
+                    stock_returns = _returns(get_history(symbol), (252,))
+                    index = SectorStrength.KITE_INDEX_SYMBOLS.get(sectors.get_sector(symbol))
+                    if index:
+                        sector_returns = _returns(get_history(index), (252,))
+                except (RequestException, ValueError, KeyError, PlatformError) as exc:
+                    logger.warning("Futures annual history unavailable for %s: %s", symbol,
+                                   exc.__class__.__name__)
+                try:
+                    news = (news_provider or NewsAnalysisService.analyze)(symbol)
+                except (RequestException, ValueError, PlatformError):
+                    news = None
+                scores.update(engine.stock_selection_quality(
+                    symbol,
+                    sector_one_year_return=sector_returns[252] if sector_returns else None,
+                    stock_one_year_return=stock_returns[252] if stock_returns else None,
+                    news=news))
+            contracts = active_contracts(symbol, instruments, today) if instruments is not None else None
+            assessment = assess_futures_selection(scores, contracts)
+            snapshot = engine._fundamental_snapshot(symbol)
+            assessment["data_evidence"] = snapshot.evidence if snapshot else {}
+            reviewed.append({"symbol": symbol, "current_price": candidate.get("current_price"),
+                             "technical_score": candidate.get("technical_score"),
+                             "futures_selection": assessment})
+            if assessment["eligible"]:
+                qualified.append(reviewed[-1])
+        return {"market_data_source": ranked["market_data_source"],
+                "universe_size": ranked["universe_size"], "reviewed_count": len(reviewed),
+                "suggestions": qualified[:limit], "reviewed": reviewed,
+                "message": ("Qualified futures research candidates; entry confirmation is still required."
+                            if qualified else "No verified futures candidates meet every requirement."),
+                "data_coverage": "Company metrics are sourced from Screener, Moneycontrol, NSE delivery archives, pledge disclosures, and company earnings-call filings.",
+                "screening_scope": "Research checks apply to the technical shortlist, not every stock in the universe."}
+
     def _suggest_stocks(self, limit: int = 5, minimum_score: int = 40,
-                        enrich: bool = True) -> dict[str, Any]:
+                        enrich: bool = True, today_news: dict | None = None) -> dict[str, Any]:
         """Rank the configured stock universe and return actionable setups.
 
         A candidate must meet the score threshold and receive BUY, BUY ON DIP,
@@ -1009,16 +1132,31 @@ class TradingPlatform:
                 item["discovery_metrics"].get("catalyst_proxy_score") or 0,
                 item["discovery_score"])),
         ]
-        weights = (.35, .25, .10, .10, .10, .10)
+        news_symbols = set((today_news or {}).get("symbols", []))
+        if news_symbols:
+            bucket_specs.insert(0, ("TODAY_NEWS", [
+                item for item in eligible_actions if item["symbol"] in news_symbols
+            ], lambda item: (item["discovery_score"], item["technical_score"])))
+        for candidate in candidates:
+            candidate["today_news_mentions"] = [article for article in (today_news or {}).get("articles", [])
+                                                  if candidate["symbol"] in article["matched_symbols"]]
+        weights = (.20, .30, .20, .08, .08, .07, .07) if news_symbols else (.35, .25, .10, .10, .10, .10)
         quotas = [max(1, int(round(limit * weight))) for weight in weights]
         while sum(quotas) > limit:
             quotas[quotas.index(max(quotas))] -= 1
         while sum(quotas) < limit:
             quotas[0] += 1
+        if news_symbols and quotas[0] == 0:
+            donor = next(index for index in range(1, len(quotas)) if quotas[index] > 0)
+            quotas[donor] -= 1
+            quotas[0] = 1
         selected: list[dict[str, Any]] = []
         selected_symbols: set[str] = set()
         bucket_counts: dict[str, int] = {}
         for (bucket, pool, sort_key), quota in zip(bucket_specs, quotas):
+            if news_symbols and quota == 0:
+                bucket_counts[bucket] = 0
+                continue
             added = 0
             for item in sorted(pool, key=sort_key, reverse=True):
                 item.setdefault("discovery_buckets_considered", []).append(bucket)
@@ -1117,6 +1255,7 @@ class TradingPlatform:
             "screening_failures": screening_failures,
             "discovery": {
                 "strategy": "DIVERSIFIED_FAST_SCAN",
+                "today_news": today_news,
                 "universe_return_median": round(universe_return, 4),
                 "bucket_quotas": dict(zip((item[0] for item in bucket_specs), quotas)),
                 "bucket_selected": bucket_counts,
@@ -1507,7 +1646,8 @@ class TradingPlatform:
 
     def daily_report(self, limit: int | None = None, minimum_score: int | None = None,
                      option_month: str | None = None,
-                     excluded_symbols: set[str] | None = None) -> dict[str, Any]:
+                     excluded_symbols: set[str] | None = None,
+                     fundamental_provider=None) -> dict[str, Any]:
         """Generate the final ranked daily trade report.
 
         This is a research/paper-trading recommendation only.  It never sends
@@ -1543,6 +1683,8 @@ class TradingPlatform:
             assistant = (DailyTradingAssistant(
                 self, option_month=option_month, excluded_symbols=excluded_symbols
             ) if excluded_symbols else DailyTradingAssistant(self, option_month=option_month))
+            if fundamental_provider is not None:
+                assistant.quality_engine.fundamental_provider = fundamental_provider
             report = assistant.generate(
                 limit, minimum_score
             )

@@ -276,6 +276,20 @@ class KiteDataProvider:
                 history.to_parquet(cache_path)
             return self._long_history_cache[key].copy()
 
+    def get_annual_history(self, symbol: str) -> pd.DataFrame:
+        """Supply enough observations for a 252-session comparison after holidays."""
+        recent = self.get_data(symbol)
+        if recent is not None and len(recent) > 252:
+            return recent
+        longer = self.get_long_history(symbol, period="2y")
+        return self._merge_history(longer, recent)
+
+    def get_session_intraday(self, symbol: str) -> pd.DataFrame:
+        """Fetch fresh five-minute bars for today's NSE session for VWAP checks."""
+        today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+        return self.provider.get_historical_data(
+            symbol.upper().removesuffix(".NS"), interval="5minute", from_date=today)
+
     def get_intraday_history(self, symbol: str, period: str = "6mo",
                              interval: str = "15minute") -> pd.DataFrame:
         """Return cached ordered intraday bars for overnight path-risk studies."""

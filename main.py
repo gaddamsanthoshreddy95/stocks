@@ -6,6 +6,7 @@ from pathlib import Path
 from src.application.errors import PlatformError
 from src.application.platform import TradingPlatform
 from src.presenter.daily_report import DailyReportPresenter
+from src.presenter.futures_report import FuturesReportPresenter
 
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -40,9 +41,12 @@ def main():
     for name in ("analyze", "backtest"):
         command = subcommands.add_parser(name)
         command.add_argument("symbol")
-    suggest = subcommands.add_parser("suggest", help="rank the available cached stocks")
+    suggest = subcommands.add_parser("suggest", help="screen verified futures research candidates")
     suggest.add_argument("--limit", type=int, default=5)
     suggest.add_argument("--minimum-score", type=int, default=40)
+    suggest.add_argument("--technical-only", action="store_true",
+                         help="show preliminary technical candidates without futures research approval")
+    suggest.add_argument("--json", action="store_true", help="emit machine-readable JSON instead of detailed explanations")
     daily = subcommands.add_parser("daily-report", help="generate the final daily trading report")
     daily.add_argument("--limit", type=int, default=5, help="maximum final trades; top 20 are risk-reviewed")
     daily.add_argument("--minimum-score", type=int, default=40)
@@ -75,7 +79,9 @@ def main():
         elif args.command == "backtest":
             result = platform.backtest(args.symbol)
         elif args.command == "suggest":
-            result = platform.suggest_stocks(args.limit, args.minimum_score)
+            result = (platform.suggest_stocks(args.limit, args.minimum_score)
+                      if args.technical_only else
+                      platform.suggest_futures(args.limit, args.minimum_score))
         elif args.command == "daily-report":
             result = platform.daily_report(args.limit, args.minimum_score, args.option_month)
         elif args.command == "record-outcome":
@@ -91,6 +97,8 @@ def main():
         parser.error(str(exc))
     if args.command == "daily-report" and not args.json:
         output = DailyReportPresenter.render(result)
+    elif args.command == "suggest" and not args.technical_only and not args.json:
+        output = FuturesReportPresenter.render(result)
     else:
         output = json.dumps(result, indent=2, default=str)
     print(output)

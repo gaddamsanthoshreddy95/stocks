@@ -583,7 +583,8 @@ class CandidateQualityEngine:
             100 if passed else 0, "PASS" if passed else "FAIL", 100,
             {"stock_pe": snapshot.pe_ratio, "sector_pe": snapshot.sector_pe,
              "minimum_allowed_pe": minimum_pe, "maximum_allowed_pe": maximum_pe},
-            ["PE_WITHIN_SECTOR_RANGE" if passed else "PE_EXCEEDS_SECTOR_RANGE"],
+            ["PE_WITHIN_SECTOR_RANGE" if passed else
+             "PE_BELOW_SECTOR_RANGE" if snapshot.pe_ratio < minimum_pe else "PE_ABOVE_SECTOR_RANGE"],
         )
 
     def delivery_quality(self, symbol: str) -> QualityScore:
@@ -643,14 +644,15 @@ class CandidateQualityEngine:
             ):
                 results[name] = unknown("FUNDAMENTAL_DATA_MISSING")
         else:
-            if snapshot.debt_to_equity is None:
+            if snapshot.debt_to_equity is None and snapshot.total_debt is None:
                 results["debt_free_quality"] = unknown("DEBT_DATA_MISSING")
             else:
-                is_debt_free = snapshot.debt_to_equity == 0
+                is_debt_free = (snapshot.total_debt == 0 if snapshot.total_debt is not None
+                                else snapshot.debt_to_equity == 0)
                 results["debt_free_quality"] = QualityScore(
                     100 if is_debt_free else 0,
                     "PASS" if is_debt_free else "FAIL", 100,
-                    {"debt_to_equity": snapshot.debt_to_equity},
+                    {"debt_to_equity": snapshot.debt_to_equity, "total_debt": snapshot.total_debt},
                     ["DEBT_FREE" if is_debt_free else "COMPANY_HAS_DEBT"],
                 )
             results["roe_quality"] = threshold_score(
@@ -668,14 +670,22 @@ class CandidateQualityEngine:
                 fii is not None and dii is not None
                 and fii_percent is not None and dii_percent is not None
                 and fii >= 0 and dii >= 0
-                and fii_percent > 0 and dii_percent > 0
+                and fii_percent >= self.config.minimum_fii_holding_percent
+                and dii_percent >= self.config.minimum_dii_holding_percent
             )
+            institutions_failed = (
+                (fii is not None and fii < 0) or (dii is not None and dii < 0)
+                or (fii_percent is not None and fii_percent < self.config.minimum_fii_holding_percent)
+                or (dii_percent is not None and dii_percent < self.config.minimum_dii_holding_percent))
+            institutions_known = institutions_known or institutions_failed
             results["institutional_holding_quality"] = QualityScore(
                 100 if institutions_pass else 0 if institutions_known else None,
                 "PASS" if institutions_pass else "FAIL" if institutions_known else "UNKNOWN",
                 100 if institutions_known else 0,
                 {"fii_holding_percent": fii_percent,
                  "dii_holding_percent": dii_percent,
+                 "minimum_fii_holding_percent": self.config.minimum_fii_holding_percent,
+                 "minimum_dii_holding_percent": self.config.minimum_dii_holding_percent,
                  "fii_holding_change_pct_points": fii,
                  "dii_holding_change_pct_points": dii},
                 ["FII_DII_HOLDINGS_STABLE_OR_INCREASING" if institutions_pass else
@@ -693,14 +703,21 @@ class CandidateQualityEngine:
             promoter_pledge = snapshot.promoter_pledge
             promoter_pass = (
                 promoter_percent is not None and promoter_change is not None
-                and promoter_pledge is not None and promoter_percent > 0
+                and promoter_pledge is not None
+                and promoter_percent >= self.config.minimum_promoter_holding_percent
                 and promoter_change >= 0 and promoter_pledge == 0
             )
+            promoter_failed = (
+                (promoter_percent is not None and promoter_percent < self.config.minimum_promoter_holding_percent)
+                or (promoter_change is not None and promoter_change < 0)
+                or (promoter_pledge is not None and promoter_pledge > 0))
+            promoter_known = promoter_known or promoter_failed
             results["promoter_holding_quality"] = QualityScore(
                 100 if promoter_pass else 0 if promoter_known else None,
                 "PASS" if promoter_pass else "FAIL" if promoter_known else "UNKNOWN",
                 100 if promoter_known else 0,
                 {"promoter_holding_percent": promoter_percent,
+                 "minimum_promoter_holding_percent": self.config.minimum_promoter_holding_percent,
                  "promoter_holding_change_pct_points": promoter_change,
                  "promoter_pledge_percent": promoter_pledge},
                 ["PROMOTER_HOLDING_STABLE_AND_UNPLEDGED" if promoter_pass else
@@ -740,7 +757,7 @@ class CandidateQualityEngine:
                 else not snapshot.block_deal_price_impact,
                 missing_reason="BLOCK_DEAL_IMPACT_DATA_MISSING",
                 pass_reason="NO_MATERIAL_BLOCK_DEAL_PRICE_IMPACT",
-                fail_reason="BLOCK_DEAL_HAS_MATERIAL_PRICE_IMPACT",
+                fail_reason="BLOCK_DEAL_PRICE_IMPACT_OR_RECENT_DEAL_RISK",
             )
         results["recent_news_quality"] = self._binary_quality(
             None if not news or str(news.get("news_state", "")).upper() not in {
@@ -784,7 +801,8 @@ class CandidateQualityEngine:
             return True
         if str(news.get("trade_impact", "")).strip().upper() in {"BLOCK", "NEGATIVE"}:
             return True
-        if news.get("events"):
+        if any(str(event).upper() not in {"EARNINGS_BEAT", "ORDER_WIN", "UPGRADE", "BUYBACK"}
+               for event in news.get("events", [])):
             return True
         for article in news.get("article_assessments", []):
             if not isinstance(article, dict):
@@ -795,7 +813,9 @@ class CandidateQualityEngine:
             if isinstance(probabilities, dict):
                 positive = probabilities.get("positive")
                 negative = probabilities.get("negative")
-                if positive is not None and negative is not None and negative > positive:
+                neutral = probabilities.get("neutral", 0)
+                if (positive is not None and negative is not None
+                        and negative >= 60 and negative > positive and negative > neutral):
                     return True
         return False
 
@@ -946,6 +966,8 @@ class CandidateQualityEngine:
         benchmark_data: pd.DataFrame | None = None,
         sector_benchmark_data: pd.DataFrame | None = None,
         news: dict[str, Any] | None = None,
+        session_vwap: QualityScore | None = None,
+        annual_stock_data: pd.DataFrame | None = None,
     ) -> CandidateQualityAssessment:
         started = perf_counter()
         timings: dict[str, float] = {}
@@ -965,7 +987,7 @@ class CandidateQualityEngine:
             "price_behaviour_seconds", lambda: self.price_behaviour(daily_data))
         scores["vwap_quality"] = timed(
             "vwap_quality_seconds",
-            lambda: self.vwap_quality(
+            lambda: session_vwap if session_vwap is not None else self.vwap_quality(
                 daily_data,
                 current_price=candidate.get("current_price"),
                 intraday_recovery=analysis.get("intraday_recovery"),
@@ -1018,7 +1040,8 @@ class CandidateQualityEngine:
             "valuation_quality_seconds", lambda: self.valuation_quality(symbol))
         scores["delivery_quality"] = timed(
             "delivery_quality_seconds", lambda: self.delivery_quality(symbol))
-        annual_stock_returns = _returns(daily_data, (252,))
+        annual_stock_returns = _returns(
+            annual_stock_data if annual_stock_data is not None else daily_data, (252,))
         annual_sector_returns = _returns(sector_benchmark_data, (252,))
         scores.update(timed(
             "stock_selection_quality_seconds",
