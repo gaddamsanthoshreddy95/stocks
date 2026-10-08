@@ -19,6 +19,7 @@ from src.news.analysis_service import NewsAnalysisService
 from src.news.today import TodayNewsService, stock_aliases
 from src.news.ai_sentiment import AISentimentAnalyzer
 from src.presenter.futures_report import FuturesReportPresenter
+from src.quality.futures_execution import assess_execution
 from src.workflow.context_enrichment import ContextEnrichment
 from src.learning.outcome_repository import OutcomeRepository
 from src.position_sizing.position_size import PositionSizingEngine
@@ -1599,7 +1600,20 @@ class DailyTradingAssistant:
                 candidate["symbol"], self._futures_instruments,
                 datetime.now(ZoneInfo("Asia/Kolkata")).date(),
             ) if self._futures_instruments is not None else None)
-            selection = assess_futures_selection(quality_assessment["scores"], contracts)
+            get_execution = getattr(self.platform.provider, "get_futures_execution_data", None)
+            execution_data = None
+            if contracts and get_execution:
+                try:
+                    execution_data = get_execution(candidate["symbol"], contracts[0])
+                except Exception as exc:
+                    logger.warning("Futures execution data unavailable for %s: %s",
+                                   candidate["symbol"], exc.__class__.__name__)
+            execution_scores = assess_execution(
+                execution_data, stock_history=quality_daily, sector_history=sector_benchmark_data,
+                levels=trade["levels"], event=event_assessment, direction=direction)
+            selection = assess_futures_selection(quality_assessment["scores"], contracts,
+                                                execution_scores)
+            selection["execution_contract"] = contracts[0] if contracts else None
             snapshot = self.quality_engine._fundamental_snapshot(candidate["symbol"])
             selection["data_evidence"] = snapshot.evidence if snapshot else {}
             block_unqualified_trade(trade, selection)

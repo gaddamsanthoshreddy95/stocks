@@ -87,13 +87,19 @@ def active_contracts(symbol: str, instruments: list[dict], today: date) -> list[
     return sorted(contracts, key=lambda item: item["expiry"])
 
 
-def assess_futures_selection(scores: dict[str, Any], contracts: list[dict] | None) -> dict:
+def assess_futures_selection(scores: dict[str, Any], contracts: list[dict] | None,
+                            execution_scores: dict[str, Any] | None = None) -> dict:
     checks = {}
     for name in REQUIRED_CHECKS:
         score = scores.get(name)
         details = score.to_dict() if hasattr(score, "to_dict") else dict(score or {})
         checks[name] = {**details, "status": details.get("status", "UNKNOWN"),
                        "passed": details.get("status") == "PASS"}
+    if execution_scores is not None:
+        for name, score in execution_scores.items():
+            details = score.to_dict() if hasattr(score, "to_dict") else dict(score or {})
+            checks[name] = {**details, "status": details.get("status", "UNKNOWN"),
+                           "passed": details.get("status") == "PASS"}
     checks["listed_futures_contract"] = {
         "status": "PASS" if contracts else "UNKNOWN" if contracts is None else "FAIL",
         "passed": bool(contracts), "contracts": contracts or [],

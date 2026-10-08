@@ -26,6 +26,7 @@ from src.application.errors import (
     ValidationError,
 )
 from src.application.settings import PlatformSettings
+from src.application.market_session_cache import cached_command
 from src.backtesting.backtester import Backtester
 from src.backtesting.metrics import Metrics
 from src.broker.paper_broker import PaperBroker
@@ -412,6 +413,7 @@ class TradingPlatform:
         return {"score": score, "status": "TRUSTED" if score >= 70 else "CAUTION" if score >= 55 else "EXCLUDE",
                 "atr_percent": round(atr_percent, 2), "flags": flags}
 
+    @cached_command("analyze")
     def analyze(self, symbol: str) -> dict[str, Any]:
         symbol = self._symbol(symbol)
         with self._analysis_cache_lock:
@@ -502,6 +504,7 @@ class TradingPlatform:
             self._analysis_cache[symbol] = deepcopy(result)
         return result
 
+    @cached_command("backtest")
     def backtest(self, symbol: str) -> dict[str, Any]:
         symbol = self._symbol(symbol)
         try:
@@ -723,6 +726,7 @@ class TradingPlatform:
             "advanced_analysis_seconds": round(perf_counter() - started, 6),
         })
 
+    @cached_command("technical_suggest")
     def suggest_stocks(self, limit: int = 5, minimum_score: int = 40,
                        enrich: bool = True, today_news: dict | None = None) -> dict[str, Any]:
         """Rank candidates using a fresh live snapshot when Kite is configured."""
@@ -746,6 +750,7 @@ class TradingPlatform:
             if refresh_started and end_live_refresh is not None:
                 end_live_refresh()
 
+    @cached_command("futures_suggest")
     def suggest_futures(self, limit: int = 5, minimum_score: int = 40,
                         fundamental_provider=None) -> dict[str, Any]:
         """Apply strict futures requirements after the complete daily selection pipeline."""
@@ -1644,6 +1649,7 @@ class TradingPlatform:
     def portfolio(self) -> dict[str, Any]:
         return self._serialize(self.paper_broker.portfolio())
 
+    @cached_command("daily_report")
     def daily_report(self, limit: int | None = None, minimum_score: int | None = None,
                      option_month: str | None = None,
                      excluded_symbols: set[str] | None = None,

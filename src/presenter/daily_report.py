@@ -359,4 +359,23 @@ class DailyReportPresenter:
             ),
             "Research and paper-trading use only; no order has been placed.",
         ])
+        execution_rows = []
+        for item in report.get("futures_review", []):
+            selection = item.get("futures_selection") or {}
+            contract = selection.get("execution_contract") or {}
+            checks = {key: value for key, value in selection.get("checks", {}).items()
+                      if key.startswith("futures_")}
+            if not checks:
+                continue
+            execution_rows.append(f"{item['symbol']} / {contract.get('tradingsymbol', 'contract unavailable')}")
+            for key, value in checks.items():
+                execution_rows.append(f"  {key}: {value.get('status', 'UNKNOWN')}; "
+                                      f"values={value.get('factors', {})}; "
+                                      f"reasons={', '.join(value.get('reason_codes', []))}")
+        if execution_rows:
+            rows.extend(["FUTURES EXECUTION CHECKS", "-" * 68, *execution_rows])
+        cache = report.get("data_cache") or {}
+        if cache.get("source") == "CACHE":
+            rows.insert(0, f"CACHED HISTORICAL SNAPSHOT: {cache.get('saved_at')}. "
+                        "Outside the live IST window; historical approvals are not current entry approvals.")
         return "\n".join(rows)

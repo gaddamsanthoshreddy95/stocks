@@ -538,3 +538,65 @@ renewables, mining, electronics, apparel, beverages, and asset management.
 Company-type overrides handle materially different businesses within the same
 sector, such as upstream versus oil marketing and renewable versus thermal
 power.
+
+## Intraday futures execution requirements
+
+Strict `suggest` and `daily-report` selection now additionally requires every
+intraday futures check to pass. These checks use the nearest unexpired NFO
+futures contract's fresh quote and its own historical candles, retaining the
+existing fundamental, delivery, news and technical requirements. Futures margin
+is excluded from this new screen; no margin lookup or order is submitted.
+The report shows the selected expiry, measured values, PASS/FAIL/UNKNOWN and
+reason codes. A failed or unavailable required check prevents approval.
+
+Default thresholds (configurable using `FUTURES_` plus the uppercase field
+name in `src/quality/futures_execution.py`):
+
+| Check | Default requirement |
+|---|---|
+| ATR (14), Wilder smoothing | Completed daily ATR 0.3–5% and five-minute ATR 0.03–1% of futures price |
+| Futures session VWAP | Long price at/above VWAP; short price at/below VWAP; HLC3 volume-weighted estimate |
+| RVOL | At least 1.2× cumulative volume in matched completed five-minute buckets; at least five prior sessions, up to 20 |
+| OI | Long buildup for longs / short buildup for shorts; price and OI compared with the same expiry's previous completed session |
+| Bid/ask spread | At most 0.05% of bid/ask midpoint; valid two-sided futures book |
+| Market depth | At least five contract lots on each side across displayed depth levels |
+| ADX (14) | Greater than 25 on five-minute futures bars |
+| RSI (14) | Long: strictly 50–70; short: strictly 30–50; Wilder smoothing |
+| Supertrend | Direction agrees with trade; five-minute ATR (14), multiplier 3 |
+| EMA 9/21 | Long price > EMA9 > EMA21; reverse for shorts, on five-minute futures bars |
+| Sector relative strength | Aligned 20-session underlying return above sector index for longs, below for shorts |
+| Support/resistance room | Underlying level offers at least 0.3% plus futures spread; explicitly a proxy, not a futures-native level |
+| Opening gap | Absolute futures gap at most 3%; price follows through in the intended direction from the open |
+| Event risk | Complete source coverage, low/very-low risk, no hard block or active scheduled results/corporate-action risk; stale/delayed coverage cannot pass |
+
+The 0.3% target-space test does not estimate brokerage, taxes or slippage.
+Quotes older than five minutes, closed-market snapshots, invalid depth, missing
+OI baselines, incomplete current-session candles, and insufficient history do
+not count as verified execution evidence. At least 28 completed current-session
+five-minute bars are required; the screen cannot approve early-session entries.
+A new expiry without enough same-contract daily history remains unverified.
+Kite quote and historical formats follow the official
+[market quotes](https://kite.trade/docs/connect/v3/market-quotes/) and
+[historical candles](https://kite.trade/docs/connect/v3/historical/) documentation.
+
+## Market-hours command cache
+
+With `MARKET_DATA_SOURCE=kite`, `suggest`, `suggest --technical-only`,
+`daily-report`, `analyze` and `backtest` fetch live inputs only on weekdays
+from **09:15 inclusive to 15:30 exclusive, Asia/Kolkata**. Outside that window,
+they return the last complete saved result for the same command, arguments and
+settings without refreshing quotes, news, fundamentals, instruments or model
+inputs. A live run already in progress finishes using its starting mode.
+
+Complete snapshots are written atomically to `.cache/market_reports` after a
+successful live run. Off-hours results show their saved timestamp and are
+labelled historical snapshots; an old approval is not a current entry approval.
+A missing, corrupt or incompatible snapshot produces a clear cache-unavailable
+message and never triggers an off-hours network fallback. Existing report
+exports made before this feature are not automatically treated as compatible
+snapshots. Run each desired command during market hours once to seed its cache.
+
+`MARKET_REPORT_CACHE_DIR` can change the storage directory.
+`MARKET_HOLIDAYS_IST` accepts a comma-separated list of closed dates in
+`YYYY-MM-DD` format. No external calendar is fetched. Normal weekends are
+closed; special exchange sessions are not automatically detected.

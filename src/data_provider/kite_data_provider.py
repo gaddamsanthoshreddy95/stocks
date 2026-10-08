@@ -290,6 +290,31 @@ class KiteDataProvider:
         return self.provider.get_historical_data(
             symbol.upper().removesuffix(".NS"), interval="5minute", from_date=today)
 
+    def get_futures_execution_data(self, symbol: str, contract: dict) -> dict:
+        """Fresh quotes and OI candles for the exact selected expiry; no margins/orders."""
+        from datetime import timedelta
+        now = datetime.now(ZoneInfo("Asia/Kolkata"))
+        master = next((item for item in self.get_nfo_instruments()
+                       if item.get("tradingsymbol") == contract["tradingsymbol"]
+                       and item.get("segment") == "NFO-FUT"), None)
+        if master is None:
+            return {}
+        kite = self.provider.kite
+        key, spot_key = "NFO:" + contract["tradingsymbol"], "NSE:" + symbol
+        quotes = kite.quote([key, spot_key])
+        def history(interval, days):
+            rows = kite.historical_data(master["instrument_token"],
+                                        now - timedelta(days=days), now,
+                                        interval, continuous=False, oi=True)
+            if not rows:
+                return pd.DataFrame()
+            return pd.DataFrame(rows).set_index("date").rename(columns={
+                "open": "Open", "high": "High", "low": "Low",
+                "close": "Close", "volume": "Volume", "oi": "OI"})
+        return {"contract": contract, "quote": quotes.get(key, {}),
+                "spot_price": quotes.get(spot_key, {}).get("last_price"),
+                "daily": history("day", 120), "intraday": history("5minute", 45)}
+
     def get_intraday_history(self, symbol: str, period: str = "6mo",
                              interval: str = "15minute") -> pd.DataFrame:
         """Return cached ordered intraday bars for overnight path-risk studies."""

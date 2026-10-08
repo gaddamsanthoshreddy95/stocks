@@ -44,6 +44,14 @@ class FuturesReportPresenter:
         technical = item.get("technical") or {}
         rows.append("Why reviewed: " + (item.get("discovery_reason") or "Technical/discovery shortlist; this does not mean all futures requirements passed.") )
         rows.append("Final decision: " + item.get("selection_reason", item.get("final_action", "Not verified")))
+        contract = selection.get("execution_contract") or {}
+        if contract:
+            rows.append(f"Execution contract: {contract.get('tradingsymbol')}; expiry {contract.get('expiry')}; lot size {contract.get('lot_size')}.")
+        for key, value in checks.items():
+            if key.startswith("futures_"):
+                values = ", ".join(f"{name}: {n(number)}" for name, number in value.get("factors", {}).items())
+                rows.append(f"{key.removeprefix('futures_').replace('_', ' ').title()}: {value.get('status', 'UNKNOWN')}. "
+                            f"{values}. Reason: {', '.join(value.get('reason_codes', []))}.")
         rows.append(f"Trend: {technical.get('trend', 'Not verified')}; momentum: {technical.get('momentum', 'Not verified')}; "
                     f"RSI: {n(technical.get('rsi'))} ({cls.rsi_label(technical.get('rsi'))}); relative volume: {n(technical.get('relative_volume'), 'x')}.")
         price_range = technical.get("price_range") or {}
@@ -134,6 +142,10 @@ class FuturesReportPresenter:
                  f"Approved: {len(report.get('suggestions', []))}.", "",
                  "Company strengths and trade approval are separate. Each failed rule and unverified check is shown below.", ""]
         market_pe = report.get("market_pe") or {}
+        cache = report.get("data_cache") or {}
+        if cache.get("source") == "CACHE":
+            lines.extend([f"Cached historical snapshot saved at {cache.get('saved_at')}; "
+                          "market is outside the live window. Historical approvals are not current entry approvals.", ""])
         lines.extend([f"Market benchmark PE ({market_pe.get('benchmark', 'Nifty 50')}): {cls.number(market_pe.get('value'))}; "
                       f"as of {market_pe.get('as_of', 'Not verified')}.", ""])
         if items:
