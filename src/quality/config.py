@@ -48,14 +48,18 @@ class QualityConfig:
     minimum_strike_distance_percent: float = 5.0
     minimum_option_sell_score: float = 65.0
     maximum_margin_per_trade: float = 100_000.0
+    maximum_sector_pe_deviation: float = .05
+    minimum_roe_percent: float = 15.0
+    minimum_roce_percent: float = 15.0
     block_earnings_option_selling: bool = True
-    fundamental_missing_policy: str = "WARN"
+    fundamental_missing_policy: str = "REJECT"
     event_missing_policy: str = "NEUTRAL"
     sector_missing_policy: str = "NEUTRAL"
     intraday_missing_policy: str = "RENORMALIZE"
     stock_quality_weights: dict[str, float] = field(default_factory=lambda: _weights(
-        data_quality=.10, liquidity=.15, price_behaviour=.15, relative_strength=.24,
-        sector_strength=.06, trend_quality=.15, fundamental_quality=.15,
+        data_quality=.09, liquidity=.12, price_behaviour=.12, relative_strength=.18,
+        sector_strength=.06, trend_quality=.13, fundamental_quality=.11,
+        valuation_quality=.07, delivery_quality=.04, vwap_quality=.08,
     ))
     directional_weights: dict[str, float] = field(default_factory=lambda: _weights(
         stock_quality=.25, setup_quality=.25, entry_readiness=.20,
@@ -74,8 +78,14 @@ class QualityConfig:
     ))
     hard_gate_thresholds: dict[str, float] = field(default_factory=lambda: {
         "data_quality": 60, "liquidity": 40, "stock_quality": 50,
+        "price_behaviour": 60, "trend_quality": 60, "vwap_quality": 100,
         "setup_quality": 55, "entry_readiness": 55, "path_quality": 40,
-        "event_safety": 40,
+        "event_safety": 40, "valuation_quality": 100, "delivery_quality": 100,
+        "debt_free_quality": 100, "roe_quality": 100, "roce_quality": 100,
+        "institutional_holding_quality": 100, "promoter_holding_quality": 100,
+        "quarterly_results_quality": 100, "commentary_quality": 100,
+        "block_deal_quality": 100, "recent_news_quality": 100,
+        "sector_one_year_quality": 100, "sector_leadership_quality": 100,
     })
 
     def __post_init__(self) -> None:
@@ -100,6 +110,10 @@ class QualityConfig:
             raise ValueError("Risk/reward thresholds are invalid")
         if not 0 <= self.maximum_correlation <= 1:
             raise ValueError("MAX_CORRELATION must be between 0 and 1")
+        if not 0 <= self.maximum_sector_pe_deviation <= 1:
+            raise ValueError("MAX_SECTOR_PE_DEVIATION must be between 0 and 1")
+        if self.minimum_roe_percent < 0 or self.minimum_roce_percent < 0:
+            raise ValueError("Minimum ROE and ROCE must not be negative")
         if self.fundamental_missing_policy not in {"ALLOW", "WARN", "REJECT"}:
             raise ValueError("FUNDAMENTAL_MISSING_POLICY is invalid")
 
@@ -145,10 +159,13 @@ class QualityConfig:
                 "MIN_STRIKE_DISTANCE_PCT", 5),
             minimum_option_sell_score=number("MIN_OPTION_SELL_SCORE", 65),
             maximum_margin_per_trade=number("MAX_MARGIN_PER_TRADE", 100_000),
+            maximum_sector_pe_deviation=number("MAX_SECTOR_PE_DEVIATION", .05),
+            minimum_roe_percent=number("MIN_ROE_PERCENT", 15),
+            minimum_roce_percent=number("MIN_ROCE_PERCENT", 15),
             block_earnings_option_selling=boolean(
                 "BLOCK_EARNINGS_OPTION_SELLING", True),
             fundamental_missing_policy=os.getenv(
-                "FUNDAMENTAL_MISSING_POLICY", "WARN").upper(),
+                "FUNDAMENTAL_MISSING_POLICY", "REJECT").upper(),
             event_missing_policy=os.getenv("EVENT_MISSING_POLICY", "NEUTRAL").upper(),
             sector_missing_policy=os.getenv("SECTOR_MISSING_POLICY", "NEUTRAL").upper(),
             intraday_missing_policy=os.getenv(

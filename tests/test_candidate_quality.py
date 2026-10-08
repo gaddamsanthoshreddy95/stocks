@@ -10,6 +10,7 @@ from src.indicators.pipeline import IndicatorPipeline
 from src.quality.config import QualityConfig
 from src.quality.engine import CandidateQualityEngine
 from src.quality.models import FundamentalSnapshot
+from src.quality.nse_provider import NseFundamentalProvider
 from src.quality.portfolio import (
     apply_soft_sector_cap, reduce_correlated_exposure,
 )
@@ -75,6 +76,8 @@ def test_leading_sector_scores_above_lagging():
     leading = CandidateQualityEngine.sector_quality(frame(1), benchmark(-1))
     lagging = CandidateQualityEngine.sector_quality(frame(-1), benchmark(1))
     assert leading.score > lagging.score
+    assert leading.factors["annual_growth"] > lagging.factors["annual_growth"]
+    assert "SECTOR_ONE_YEAR_GROWTH_POSITIVE" in leading.reason_codes
 
 
 def test_unknown_sector_is_not_perfect():
@@ -256,6 +259,7 @@ def test_tight_stop_penalized():
 def test_missing_fundamentals_policy_is_explicit():
     score = CandidateQualityEngine().fundamental_quality("TEST")
     assert score.score is None and score.status == "UNKNOWN"
+    assert QualityConfig().fundamental_missing_policy == "REJECT"
 
 
 def test_strong_fundamentals_above_balance_sheet_risk():
@@ -275,6 +279,131 @@ def test_fundamental_provider_failure_does_not_raise():
         fundamental_provider=FundamentalProvider(failure=RuntimeError("offline"))
     ).fundamental_quality("A")
     assert score.status == "UNKNOWN"
+
+
+def test_fundamental_quality_does_not_treat_missing_metrics_as_neutral():
+    score = CandidateQualityEngine(
+        fundamental_provider=FundamentalProvider(
+            FundamentalSnapshot("A", pe_ratio=20, sector_pe=22))
+    ).fundamental_quality("A")
+    assert score.score is None and score.status == "UNKNOWN"
+
+
+def test_stock_pe_must_stay_within_five_percent_of_sector_pe():
+    engine = CandidateQualityEngine(
+        fundamental_provider=FundamentalProvider(
+            FundamentalSnapshot("A", pe_ratio=31.5, sector_pe=30)))
+    assert engine.valuation_quality("A").status == "PASS"
+
+    expensive = CandidateQualityEngine(
+        fundamental_provider=FundamentalProvider(
+            FundamentalSnapshot("B", pe_ratio=31.6, sector_pe=30)))
+    assert expensive.valuation_quality("B").status == "FAIL"
+
+    cheap = CandidateQualityEngine(
+        fundamental_provider=FundamentalProvider(
+            FundamentalSnapshot("C", pe_ratio=28.5, sector_pe=30)))
+    assert cheap.valuation_quality("C").status == "PASS"
+
+    too_cheap = CandidateQualityEngine(
+        fundamental_provider=FundamentalProvider(
+            FundamentalSnapshot("D", pe_ratio=28.4, sector_pe=30)))
+    assert too_cheap.valuation_quality("D").status == "FAIL"
+
+
+def test_delivery_must_match_or_exceed_monthly_average():
+    engine = CandidateQualityEngine(
+        fundamental_provider=FundamentalProvider(
+            FundamentalSnapshot(
+                "A", delivery_percent=32, monthly_delivery_percent=35)))
+    result = engine.delivery_quality("A")
+    assert result.status == "FAIL"
+    assert "DELIVERY_BELOW_MONTHLY_AVERAGE" in result.reason_codes
+
+    missing_baseline = CandidateQualityEngine(
+        fundamental_provider=FundamentalProvider(
+            FundamentalSnapshot("B", delivery_percent=45)))
+    assert missing_baseline.delivery_quality("B").status == "UNKNOWN"
+
+
+def test_strict_selection_checks_fail_closed_when_data_is_missing():
+    engine = CandidateQualityEngine(
+        fundamental_provider=FundamentalProvider(FundamentalSnapshot("A")))
+    checks = engine.stock_selection_quality(
+        "A", sector_one_year_return=None, stock_one_year_return=None,
+        news={"news_state": "UNAVAILABLE"},
+    )
+
+    assert checks["debt_free_quality"].status == "UNKNOWN"
+    assert checks["quarterly_results_quality"].status == "UNKNOWN"
+    assert checks["recent_news_quality"].status == "UNKNOWN"
+    assert checks["sector_leadership_quality"].status == "UNKNOWN"
+
+
+@pytest.mark.parametrize("news", [
+    {"sentiment": "BEARISH", "trade_impact": "CAUTION"},
+    {"sentiment": "BULLISH", "article_assessments": [{"sentiment": "NEGATIVE"}]},
+    {"sentiment": "BULLISH", "article_assessments": [
+        {"probabilities": {"positive": 20, "negative": 60}},
+    ]},
+])
+def test_any_negative_news_blocks_even_if_aggregate_news_is_positive(news):
+    result = CandidateQualityEngine().stock_selection_quality(
+        "A", sector_one_year_return=10, stock_one_year_return=20,
+        news={"news_state": "ANALYZED", **news},
+    )
+
+    assert result["recent_news_quality"].status == "FAIL"
+
+
+def test_vwap_quality_requires_price_above_vwap():
+    data = frame()
+    data["VWAP"] = data["Close"] - 1
+    above = CandidateQualityEngine.vwap_quality(data)
+    data["VWAP"] = data["Close"] + 1
+    below = CandidateQualityEngine.vwap_quality(data)
+
+    assert above.status == "PASS"
+    assert below.status == "FAIL"
+    assert CandidateQualityEngine.vwap_quality(frame()).status == "UNKNOWN"
+
+
+def test_verified_selection_data_passes_only_when_every_requirement_matches():
+    snapshot = FundamentalSnapshot(
+        "A", roe=18, roce=21, debt_to_equity=0, promoter_pledge=0,
+        pe_ratio=25, sector_pe=25, delivery_percent=42,
+        monthly_delivery_percent=40,
+        fii_holding_percent=10, dii_holding_percent=5,
+        promoter_holding_percent=45,
+        fii_holding_change_pct_points=0.2,
+        dii_holding_change_pct_points=0.1,
+        promoter_holding_change_pct_points=0,
+        quarterly_revenue_growth_pct=(2, 3, 4),
+        quarterly_profit_growth_pct=(1, 2, 3),
+        commentary_strength="VERY_STRONG",
+        block_deal_price_impact=False,
+    )
+    engine = CandidateQualityEngine(fundamental_provider=FundamentalProvider(snapshot))
+    checks = engine.stock_selection_quality(
+        "A", sector_one_year_return=12, stock_one_year_return=18,
+        news={"news_state": "NO_RELEVANT_NEWS"},
+    )
+    checks["valuation_quality"] = engine.valuation_quality("A")
+    checks["delivery_quality"] = engine.delivery_quality("A")
+    assert all(score.status == "PASS" for score in checks.values())
+
+
+def test_nse_provider_parses_pe_and_delivery_fields():
+    snapshot = NseFundamentalProvider._parse_snapshot(
+        "RELIANCE",
+        {"metadata": {"pdSymbolPe": "25.5", "pdSectorPe": "24.0",
+                      "lastUpdateTime": "08-Oct-2026 15:30:00"}},
+        {"securityWiseDP": {"deliveryToTradedQuantity": "42.5"}},
+    )
+    assert snapshot.pe_ratio == 25.5
+    assert snapshot.sector_pe == 24.0
+    assert snapshot.delivery_percent == 42.5
+    assert snapshot.source == "NSE"
 
 
 @pytest.mark.parametrize("days,minimum", [(1, 0), (3, 40), (7, 70), (20, 90)])

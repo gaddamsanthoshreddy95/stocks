@@ -43,6 +43,7 @@ from src.workflow.opportunity_ranking import (
 )
 from src.options.structure_validator import OptionStructureValidator
 from src.quality.engine import CandidateQualityEngine
+from src.quality.nse_provider import NseFundamentalProvider
 from src.quality.portfolio import apply_soft_sector_cap, reduce_correlated_exposure
 from uuid import uuid4
 
@@ -76,7 +77,10 @@ class DailyTradingAssistant:
         self.option_month = option_month
         self.sectors = SectorMapper()
         self.outcomes = OutcomeRepository()
-        self.quality_engine = CandidateQualityEngine(platform.settings.quality_config)
+        self.quality_engine = CandidateQualityEngine(
+            platform.settings.quality_config,
+            fundamental_provider=NseFundamentalProvider(),
+        )
         self.completed_outcomes = self.outcomes.learning_summary().get("completed_outcomes", 0)
         commodity_fetcher = (CommodityProvider().get_snapshot
                              if platform.settings.market_data_source == "kite" else None)
@@ -923,12 +927,23 @@ class DailyTradingAssistant:
                 "Open": "first", "High": "max", "Low": "min",
                 "Close": "last", "Volume": "sum",
             }).dropna()
+        sector_benchmark_data = None
+        sector_index = SectorStrength.KITE_INDEX_SYMBOLS.get(sector)
+        if (sector_index and self.platform.settings.market_data_source == "kite"):
+            try:
+                sector_benchmark_data = self.platform.provider.get_data(sector_index)
+            except Exception as exc:
+                logger.warning(
+                    "Sector history unavailable for %s: %s",
+                    sector, exc.__class__.__name__,
+                )
         quality_assessment = self.quality_engine.assess(
             symbol=candidate["symbol"], daily_data=quality_daily,
             candidate=candidate, analysis=analysis,
             relative_strength=relative_strength, sector=sector_data,
             market=market, event=event_assessment, option=option,
             setup=setup, plan=plan, weekly_data=weekly_data,
+            sector_benchmark_data=sector_benchmark_data, news=news,
         ).to_dict()
         base_candidate_score = float(quality_assessment["final_candidate_score"])
         sector_adjustment = SectorStrength.ranking_adjustment(sector_data)

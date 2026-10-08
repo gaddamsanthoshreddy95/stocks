@@ -213,6 +213,7 @@ class CandidateQualityEngine:
             * 100 / 3)
         momentum = _clamp(float(latest["RSI"]) / 70 * 100)
         sector_returns = _returns(sector_data, (5, 20, 60))
+        annual_returns = _returns(sector_data, (252,))
         benchmark_returns = _returns(benchmark_data, (5, 20, 60))
         relative = None
         if sector_returns and benchmark_returns:
@@ -222,12 +223,15 @@ class CandidateQualityEngine:
                     for days in (5, 20, 60)
                 ]) * 8
             )
+        annual_growth = (
+            _clamp(50 + annual_returns[252] * 2) if annual_returns else None)
         breadth_score = (
             float(np.mean(list(breadth.values()))) if breadth else None)
         score = _weighted(
             {"trend": trend, "momentum": momentum, "relative": relative,
-             "breadth": breadth_score},
-            {"trend": .30, "momentum": .20, "relative": .30, "breadth": .20},
+             "annual_growth": annual_growth, "breadth": breadth_score},
+            {"trend": .25, "momentum": .15, "relative": .25,
+             "annual_growth": .20, "breadth": .15},
         )
         classification = (
             "LEADING" if (score.score or 0) >= 85 else
@@ -236,9 +240,14 @@ class CandidateQualityEngine:
             "NEUTRAL" if (score.score or 0) >= 40 else
             "WEAKENING" if (score.score or 0) >= 25 else "LAGGING"
         )
+        reasons = [f"SECTOR_{classification}"]
+        if annual_returns:
+            reasons.append(
+                "SECTOR_ONE_YEAR_GROWTH_POSITIVE"
+                if annual_returns[252] > 0 else "SECTOR_ONE_YEAR_GROWTH_NEGATIVE")
         return QualityScore(
             score.score, classification, score.confidence, score.factors,
-            [f"SECTOR_{classification}"], score.warnings)
+            reasons, score.warnings)
 
     @staticmethod
     def support_resistance_quality(
@@ -474,44 +483,321 @@ class CandidateQualityEngine:
             "abnormal_volume_spikes": spikes, "volatility_consistency": consistency,
         }, reasons)
 
+    @staticmethod
+    def vwap_quality(
+        data: pd.DataFrame, *, current_price: float | None = None,
+        intraday_recovery: dict[str, Any] | None = None,
+    ) -> QualityScore:
+        if data is not None and not data.empty and "VWAP" in data.columns:
+            latest_vwap = pd.to_numeric(
+                pd.Series([data["VWAP"].iloc[-1]]), errors="coerce").iloc[0]
+            if pd.notna(latest_vwap):
+                vwap = float(latest_vwap)
+                close = current_price
+                if close is None:
+                    close = float(pd.to_numeric(data["Close"], errors="coerce").iloc[-1])
+                if isfinite(vwap) and vwap > 0 and isfinite(close) and close > 0:
+                    above = close >= vwap
+                    return QualityScore(
+                        100 if above else 0, "PASS" if above else "FAIL", 100,
+                        {"current_price": close, "vwap": vwap,
+                         "distance_from_vwap_percent": round((close / vwap - 1) * 100, 3)},
+                        ["PRICE_ABOVE_VWAP" if above else "PRICE_BELOW_VWAP"],
+                    )
+        recovery = intraday_recovery or {}
+        if recovery.get("available") and isinstance(recovery.get("above_vwap"), bool):
+            above = recovery["above_vwap"]
+            return QualityScore(
+                100 if above else 0, "PASS" if above else "FAIL", 100,
+                {"above_vwap": above},
+                ["PRICE_ABOVE_VWAP" if above else "PRICE_BELOW_VWAP"],
+            )
+        return QualityScore(
+            None, "UNKNOWN", 0, reason_codes=["VWAP_DATA_MISSING"])
+
+    def _fundamental_snapshot(self, symbol: str) -> FundamentalSnapshot | None:
+        if self.fundamental_provider is None:
+            return None
+        if symbol not in self._fundamental_cache:
+            try:
+                self._fundamental_cache[symbol] = (
+                    self.fundamental_provider.get_fundamentals(symbol))
+            except Exception:
+                self._fundamental_cache[symbol] = None
+        return self._fundamental_cache[symbol]
+
     def fundamental_quality(self, symbol: str) -> QualityScore:
         if self.fundamental_provider is None:
             return QualityScore(
                 None, "UNKNOWN", 0, reason_codes=["FUNDAMENTAL_DATA_MISSING"],
                 warnings=["No fundamental provider is configured."],
             )
-        if symbol not in self._fundamental_cache:
-            try:
-                self._fundamental_cache[symbol] = (
-                    self.fundamental_provider.get_fundamentals(symbol))
-            except Exception as exc:
-                self._fundamental_cache[symbol] = None
-                return QualityScore(
-                    None, "UNKNOWN", 0, reason_codes=["FUNDAMENTAL_PROVIDER_FAILED"],
-                    warnings=[f"{exc.__class__.__name__}: {exc}"],
-                )
-        snapshot = self._fundamental_cache[symbol]
+        snapshot = self._fundamental_snapshot(symbol)
         if snapshot is None:
             return QualityScore(None, "UNKNOWN", 0,
                                 reason_codes=["FUNDAMENTAL_DATA_MISSING"])
-        profitability = np.mean([
-            _clamp(50 + (snapshot.roe or 0) * 2),
-            _clamp(50 + (snapshot.roce or 0) * 2),
-        ])
-        growth = np.mean([
-            _clamp(50 + (snapshot.revenue_growth or 0) * 2),
-            _clamp(50 + (snapshot.profit_growth or 0) * 2),
-        ])
-        balance = _clamp(100 - (snapshot.debt_to_equity or 0) * 35)
-        cash = 80 if (snapshot.operating_cash_flow or 0) > 0 else 20
-        governance = _clamp(100 - (snapshot.promoter_pledge or 0) * 3)
-        score = _clamp(np.mean([profitability, growth, balance, cash, governance]))
-        status = "PASS" if score >= 60 else "CAUTION" if score >= 40 else "FAIL"
-        reasons = ["SERIOUS_BALANCE_SHEET_RISK"] if balance < 30 else []
-        return QualityScore(score, status, 100, {
-            "profitability": profitability, "growth": growth, "balance_sheet": balance,
-            "cash_flow": cash, "governance": governance,
-        }, reasons)
+        values = {
+            "roe": _clamp(50 + snapshot.roe * 2) if snapshot.roe is not None else None,
+            "roce": _clamp(50 + snapshot.roce * 2) if snapshot.roce is not None else None,
+            "revenue_growth": (
+                _clamp(50 + snapshot.revenue_growth * 2)
+                if snapshot.revenue_growth is not None else None),
+            "profit_growth": (
+                _clamp(50 + snapshot.profit_growth * 2)
+                if snapshot.profit_growth is not None else None),
+            "debt_to_equity": (
+                _clamp(100 - snapshot.debt_to_equity * 35)
+                if snapshot.debt_to_equity is not None else None),
+            "operating_cash_flow": (
+                (80 if snapshot.operating_cash_flow > 0 else 20)
+                if snapshot.operating_cash_flow is not None else None),
+            "promoter_pledge": (
+                _clamp(100 - snapshot.promoter_pledge * 3)
+                if snapshot.promoter_pledge is not None else None),
+        }
+        score = _weighted(values, {name: 1 for name in values})
+        status = (
+            "PASS" if score.score is not None and score.score >= 60 else
+            "CAUTION" if score.score is not None and score.score >= 40 else
+            "FAIL" if score.score is not None else "UNKNOWN"
+        )
+        reasons = []
+        if values["debt_to_equity"] is not None and values["debt_to_equity"] < 30:
+            reasons.append("SERIOUS_BALANCE_SHEET_RISK")
+        return QualityScore(score.score, status, score.confidence, score.factors,
+                            reasons, score.warnings)
+
+    def valuation_quality(self, symbol: str) -> QualityScore:
+        snapshot = self._fundamental_snapshot(symbol)
+        if snapshot is None or snapshot.pe_ratio is None or snapshot.sector_pe is None:
+            return QualityScore(
+                None, "UNKNOWN", 0, reason_codes=["VALUATION_DATA_MISSING"])
+        if snapshot.pe_ratio <= 0 or snapshot.sector_pe <= 0:
+            return QualityScore(
+                None, "UNKNOWN", 0, reason_codes=["VALUATION_DATA_INVALID"])
+        deviation = self.config.maximum_sector_pe_deviation
+        minimum_pe = snapshot.sector_pe * (1 - deviation)
+        maximum_pe = snapshot.sector_pe * (1 + deviation)
+        passed = minimum_pe <= snapshot.pe_ratio <= maximum_pe
+        return QualityScore(
+            100 if passed else 0, "PASS" if passed else "FAIL", 100,
+            {"stock_pe": snapshot.pe_ratio, "sector_pe": snapshot.sector_pe,
+             "minimum_allowed_pe": minimum_pe, "maximum_allowed_pe": maximum_pe},
+            ["PE_WITHIN_SECTOR_RANGE" if passed else "PE_EXCEEDS_SECTOR_RANGE"],
+        )
+
+    def delivery_quality(self, symbol: str) -> QualityScore:
+        snapshot = self._fundamental_snapshot(symbol)
+        if (snapshot is None or snapshot.delivery_percent is None
+                or snapshot.monthly_delivery_percent is None):
+            return QualityScore(
+                None, "UNKNOWN", 0,
+                reason_codes=["DELIVERY_OR_MONTHLY_BASELINE_MISSING"])
+        passed = snapshot.delivery_percent >= snapshot.monthly_delivery_percent
+        return QualityScore(
+            100 if passed else 0,
+            "PASS" if passed else "FAIL", 100,
+            {"delivery_percent": snapshot.delivery_percent,
+             "monthly_delivery_percent": snapshot.monthly_delivery_percent},
+            ["DELIVERY_AT_OR_ABOVE_MONTHLY_AVERAGE" if passed
+             else "DELIVERY_BELOW_MONTHLY_AVERAGE"],
+        )
+
+    @staticmethod
+    def _binary_quality(
+        value: bool | None, *, missing_reason: str, pass_reason: str,
+        fail_reason: str,
+    ) -> QualityScore:
+        if value is None:
+            return QualityScore(None, "UNKNOWN", 0, reason_codes=[missing_reason])
+        return QualityScore(
+            100 if value else 0, "PASS" if value else "FAIL", 100,
+            reason_codes=[pass_reason if value else fail_reason],
+        )
+
+    def stock_selection_quality(
+        self, symbol: str, *, sector_one_year_return: float | None,
+        stock_one_year_return: float | None, news: dict[str, Any] | None,
+    ) -> dict[str, QualityScore]:
+        snapshot = self._fundamental_snapshot(symbol)
+        unknown = lambda code: QualityScore(None, "UNKNOWN", 0, reason_codes=[code])
+        results: dict[str, QualityScore] = {}
+
+        def threshold_score(name: str, value: float | None, minimum: float) -> QualityScore:
+            if value is None:
+                return unknown(f"{name.upper()}_DATA_MISSING")
+            passed = value >= minimum
+            return QualityScore(
+                100 if passed else 0, "PASS" if passed else "FAIL", 100,
+                {name: value, "minimum": minimum},
+                [f"{name.upper()}_MEETS_MINIMUM" if passed
+                 else f"{name.upper()}_BELOW_MINIMUM"],
+            )
+
+        if snapshot is None:
+            for name in (
+                "debt_free_quality", "roe_quality", "roce_quality",
+                "institutional_holding_quality", "promoter_holding_quality",
+                "quarterly_results_quality", "commentary_quality",
+                "block_deal_quality",
+            ):
+                results[name] = unknown("FUNDAMENTAL_DATA_MISSING")
+        else:
+            if snapshot.debt_to_equity is None:
+                results["debt_free_quality"] = unknown("DEBT_DATA_MISSING")
+            else:
+                is_debt_free = snapshot.debt_to_equity == 0
+                results["debt_free_quality"] = QualityScore(
+                    100 if is_debt_free else 0,
+                    "PASS" if is_debt_free else "FAIL", 100,
+                    {"debt_to_equity": snapshot.debt_to_equity},
+                    ["DEBT_FREE" if is_debt_free else "COMPANY_HAS_DEBT"],
+                )
+            results["roe_quality"] = threshold_score(
+                "roe_percent", snapshot.roe, self.config.minimum_roe_percent)
+            results["roce_quality"] = threshold_score(
+                "roce_percent", snapshot.roce, self.config.minimum_roce_percent)
+
+            fii = snapshot.fii_holding_change_pct_points
+            dii = snapshot.dii_holding_change_pct_points
+            fii_percent = snapshot.fii_holding_percent
+            dii_percent = snapshot.dii_holding_percent
+            institution_data = (fii, dii, fii_percent, dii_percent)
+            institutions_known = all(value is not None for value in institution_data)
+            institutions_pass = (
+                fii is not None and dii is not None
+                and fii_percent is not None and dii_percent is not None
+                and fii >= 0 and dii >= 0
+                and fii_percent > 0 and dii_percent > 0
+            )
+            results["institutional_holding_quality"] = QualityScore(
+                100 if institutions_pass else 0 if institutions_known else None,
+                "PASS" if institutions_pass else "FAIL" if institutions_known else "UNKNOWN",
+                100 if institutions_known else 0,
+                {"fii_holding_percent": fii_percent,
+                 "dii_holding_percent": dii_percent,
+                 "fii_holding_change_pct_points": fii,
+                 "dii_holding_change_pct_points": dii},
+                ["FII_DII_HOLDINGS_STABLE_OR_INCREASING" if institutions_pass else
+                 "FII_DII_HOLDINGS_DECLINING" if institutions_known else
+                 "FII_DII_HOLDING_DATA_MISSING"],
+            )
+            promoter_known = (
+                snapshot.promoter_holding_percent is not None
+                and
+                snapshot.promoter_holding_change_pct_points is not None
+                and snapshot.promoter_pledge is not None
+            )
+            promoter_percent = snapshot.promoter_holding_percent
+            promoter_change = snapshot.promoter_holding_change_pct_points
+            promoter_pledge = snapshot.promoter_pledge
+            promoter_pass = (
+                promoter_percent is not None and promoter_change is not None
+                and promoter_pledge is not None and promoter_percent > 0
+                and promoter_change >= 0 and promoter_pledge == 0
+            )
+            results["promoter_holding_quality"] = QualityScore(
+                100 if promoter_pass else 0 if promoter_known else None,
+                "PASS" if promoter_pass else "FAIL" if promoter_known else "UNKNOWN",
+                100 if promoter_known else 0,
+                {"promoter_holding_percent": promoter_percent,
+                 "promoter_holding_change_pct_points": promoter_change,
+                 "promoter_pledge_percent": promoter_pledge},
+                ["PROMOTER_HOLDING_STABLE_AND_UNPLEDGED" if promoter_pass else
+                 "PROMOTER_HOLDING_OR_PLEDGE_RISK" if promoter_known else
+                 "PROMOTER_HOLDING_DATA_MISSING"],
+            )
+            revenue = snapshot.quarterly_revenue_growth_pct
+            profit = snapshot.quarterly_profit_growth_pct
+            quarters_known = (
+                revenue is not None and profit is not None
+                and len(revenue) >= 3 and len(profit) >= 3
+            )
+            quarters_pass = quarters_known and all(
+                value > 0 for value in (*revenue[-3:], *profit[-3:])
+            )
+            results["quarterly_results_quality"] = QualityScore(
+                100 if quarters_pass else 0 if quarters_known else None,
+                "PASS" if quarters_pass else "FAIL" if quarters_known else "UNKNOWN",
+                100 if quarters_known else 0,
+                {"revenue_growth_last_three_quarters": revenue[-3:] if revenue else None,
+                 "profit_growth_last_three_quarters": profit[-3:] if profit else None},
+                ["LAST_THREE_QUARTERS_REVENUE_AND_PROFIT_GROWING" if quarters_pass else
+                 "RECENT_QUARTERLY_RESULTS_WEAK" if quarters_known else
+                 "THREE_QUARTERS_OF_RESULTS_MISSING"],
+            )
+            commentary = snapshot.commentary_strength
+            commentary_pass = (
+                commentary is not None and commentary.strip().upper() == "VERY_STRONG")
+            results["commentary_quality"] = self._binary_quality(
+                commentary_pass if commentary is not None else None,
+                missing_reason="MANAGEMENT_COMMENTARY_MISSING",
+                pass_reason="MANAGEMENT_COMMENTARY_VERY_STRONG",
+                fail_reason="MANAGEMENT_COMMENTARY_NOT_VERY_STRONG",
+            )
+            results["block_deal_quality"] = self._binary_quality(
+                None if snapshot.block_deal_price_impact is None
+                else not snapshot.block_deal_price_impact,
+                missing_reason="BLOCK_DEAL_IMPACT_DATA_MISSING",
+                pass_reason="NO_MATERIAL_BLOCK_DEAL_PRICE_IMPACT",
+                fail_reason="BLOCK_DEAL_HAS_MATERIAL_PRICE_IMPACT",
+            )
+        results["recent_news_quality"] = self._binary_quality(
+            None if not news or str(news.get("news_state", "")).upper() not in {
+                "ANALYZED", "NO_RELEVANT_NEWS",
+            } else not self._has_negative_news(news),
+            missing_reason="RECENT_NEWS_CHECK_UNAVAILABLE",
+            pass_reason="NO_RECENT_NEGATIVE_NEWS",
+            fail_reason="RECENT_NEGATIVE_NEWS_FOUND",
+        )
+        sector_known = sector_one_year_return is not None
+        sector_pass = sector_known and sector_one_year_return > 0
+        results["sector_one_year_quality"] = QualityScore(
+            100 if sector_pass else 0 if sector_known else None,
+            "PASS" if sector_pass else "FAIL" if sector_known else "UNKNOWN",
+            100 if sector_known else 0,
+            {"sector_one_year_return_percent": sector_one_year_return},
+            ["SECTOR_ONE_YEAR_RETURN_POSITIVE" if sector_pass else
+             "SECTOR_ONE_YEAR_RETURN_NOT_POSITIVE" if sector_known else
+             "SECTOR_ONE_YEAR_RETURN_MISSING"],
+        )
+        leadership_known = (
+            stock_one_year_return is not None and sector_one_year_return is not None)
+        leadership_pass = (
+            leadership_known and stock_one_year_return > sector_one_year_return)
+        results["sector_leadership_quality"] = QualityScore(
+            100 if leadership_pass else 0 if leadership_known else None,
+            "PASS" if leadership_pass else "FAIL" if leadership_known else "UNKNOWN",
+            100 if leadership_known else 0,
+            {"stock_one_year_return_percent": stock_one_year_return,
+             "sector_one_year_return_percent": sector_one_year_return},
+            ["STOCK_OUTPERFORMS_SECTOR" if leadership_pass else
+             "STOCK_DOES_NOT_OUTPERFORM_SECTOR" if leadership_known else
+             "STOCK_OR_SECTOR_ONE_YEAR_RETURN_MISSING"],
+        )
+        return results
+
+    @staticmethod
+    def _has_negative_news(news: dict[str, Any]) -> bool:
+        negative_labels = {"BEARISH", "NEGATIVE"}
+        if str(news.get("sentiment", "")).strip().upper() in negative_labels:
+            return True
+        if str(news.get("trade_impact", "")).strip().upper() in {"BLOCK", "NEGATIVE"}:
+            return True
+        if news.get("events"):
+            return True
+        for article in news.get("article_assessments", []):
+            if not isinstance(article, dict):
+                continue
+            if str(article.get("sentiment", "")).strip().upper() in negative_labels:
+                return True
+            probabilities = article.get("probabilities")
+            if isinstance(probabilities, dict):
+                positive = probabilities.get("positive")
+                negative = probabilities.get("negative")
+                if positive is not None and negative is not None and negative > positive:
+                    return True
+        return False
 
     def event_safety(self, event: dict[str, Any] | None) -> QualityScore:
         if not event or event.get("event_data_availability_state") in {
@@ -659,6 +945,7 @@ class CandidateQualityEngine:
         weekly_data: pd.DataFrame | None = None,
         benchmark_data: pd.DataFrame | None = None,
         sector_benchmark_data: pd.DataFrame | None = None,
+        news: dict[str, Any] | None = None,
     ) -> CandidateQualityAssessment:
         started = perf_counter()
         timings: dict[str, float] = {}
@@ -676,6 +963,14 @@ class CandidateQualityEngine:
             "AVAILABLE", 100)
         scores["price_behaviour"] = timed(
             "price_behaviour_seconds", lambda: self.price_behaviour(daily_data))
+        scores["vwap_quality"] = timed(
+            "vwap_quality_seconds",
+            lambda: self.vwap_quality(
+                daily_data,
+                current_price=candidate.get("current_price"),
+                intraday_recovery=analysis.get("intraday_recovery"),
+            ),
+        )
         rs_detail = {}
         if benchmark_data is not None:
             scores["relative_strength"], rs_detail = timed(
@@ -719,6 +1014,23 @@ class CandidateQualityEngine:
         )
         scores["fundamental_quality"] = timed(
             "fundamental_quality_seconds", lambda: self.fundamental_quality(symbol))
+        scores["valuation_quality"] = timed(
+            "valuation_quality_seconds", lambda: self.valuation_quality(symbol))
+        scores["delivery_quality"] = timed(
+            "delivery_quality_seconds", lambda: self.delivery_quality(symbol))
+        annual_stock_returns = _returns(daily_data, (252,))
+        annual_sector_returns = _returns(sector_benchmark_data, (252,))
+        scores.update(timed(
+            "stock_selection_quality_seconds",
+            lambda: self.stock_selection_quality(
+                symbol,
+                sector_one_year_return=(
+                    annual_sector_returns[252] if annual_sector_returns else None),
+                stock_one_year_return=(
+                    annual_stock_returns[252] if annual_stock_returns else None),
+                news=news,
+            ),
+        ))
         scores["event_safety"] = timed(
             "event_safety_seconds", lambda: self.event_safety(event))
         scores["market_alignment"] = self.market_alignment(market, setup)

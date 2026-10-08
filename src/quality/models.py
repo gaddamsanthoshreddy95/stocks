@@ -34,6 +34,20 @@ class FundamentalSnapshot:
     operating_cash_flow: float | None = None
     free_cash_flow: float | None = None
     promoter_pledge: float | None = None
+    pe_ratio: float | None = None
+    sector_pe: float | None = None
+    delivery_percent: float | None = None
+    monthly_delivery_percent: float | None = None
+    fii_holding_percent: float | None = None
+    dii_holding_percent: float | None = None
+    promoter_holding_percent: float | None = None
+    fii_holding_change_pct_points: float | None = None
+    dii_holding_change_pct_points: float | None = None
+    promoter_holding_change_pct_points: float | None = None
+    quarterly_revenue_growth_pct: tuple[float, ...] | None = None
+    quarterly_profit_growth_pct: tuple[float, ...] | None = None
+    commentary_strength: str | None = None
+    block_deal_price_impact: bool | None = None
     source: str = "UNKNOWN"
     as_of: str | None = None
 

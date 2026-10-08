@@ -110,12 +110,26 @@ def test_all_selected_and_rejected_assessments_are_explainable():
             assert all(result.hard_gate_failures)
 
 
+def test_unverified_stock_selection_requirements_fail_closed():
+    result = assessment()
+
+    assert result.composite_recommendation == "AVOID"
+    assert "VWAP_QUALITY" in result.hard_gate_failures
+    assert "VALUATION_QUALITY" in result.hard_gate_failures
+    assert "DELIVERY_QUALITY" in result.hard_gate_failures
+    assert "QUARTERLY_RESULTS_QUALITY" in result.hard_gate_failures
+    assert "RECENT_NEWS_QUALITY" in result.hard_gate_failures
+    assert "SECTOR_ONE_YEAR_QUALITY" in result.hard_gate_failures
+
+
 def test_quality_component_timings_are_exposed():
     result = assessment()
     for name in (
         "trend_quality_seconds", "momentum_quality_seconds",
         "directional_volume_seconds", "support_resistance_quality_seconds",
         "fundamental_quality_seconds", "event_safety_seconds",
+        "valuation_quality_seconds", "delivery_quality_seconds",
+        "stock_selection_quality_seconds", "vwap_quality_seconds",
         "multi_timeframe_seconds", "option_suitability_seconds",
         "quality_assessment_seconds",
     ):

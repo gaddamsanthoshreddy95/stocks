@@ -98,6 +98,30 @@ each request.
 This project is for research and paper trading. It does not constitute
 investment advice.
 
+## Strict futures stock-quality screening
+
+Daily-report candidates must pass verified quality checks before being
+recommended: stock P/E within 5% of sector P/E, delivery at or above its
+monthly average, zero debt-to-equity, ROE and ROCE of at least 15%, positive and stable or
+increasing FII/DII/promoter holdings, positive revenue and profit growth in
+each of the last three quarters, very strong management commentary, no
+material block-deal price impact, no recent negative news, positive one-year
+sector return, and stock outperformance versus its sector over one year.
+Price must also be above VWAP, with a sufficiently strong trend and stable
+price/volatility behaviour. Any negative aggregate or article-level news
+sentiment blocks selection. Incomplete or unavailable checks fail closed; they
+are not treated as passes.
+
+Configure the P/E band and return thresholds with `MAX_SECTOR_PE_DEVIATION`,
+`MIN_ROE_PERCENT`, and `MIN_ROCE_PERCENT`. The current NSE quote provider
+supplies only P/E and latest delivery data; it does not provide the monthly
+delivery baseline, ownership changes, quarterly results/commentary, or
+block-deal impact. Until those inputs are supplied by a verified data provider,
+the corresponding checks remain unavailable and candidates are not eligible.
+VWAP must likewise be present in the live market data or current-session
+recovery analysis; missing VWAP, weak trend, or unstable price behaviour blocks
+selection.
+
 ## Windows 10 local UI
 
 The local interface uses Streamlit and stores generated report snapshots in
