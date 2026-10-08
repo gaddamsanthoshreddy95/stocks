@@ -140,6 +140,9 @@ def test_futures_suggestions_preserve_full_pipeline_and_require_entry_approval(m
     assert called == [(10, 55)]
     assert [item["symbol"] for item in result["suggestions"]] == ["TCS"]
     assert result["filter_stages"] == [{"stage": "news"}]
+    assert result["catalyst_watchlist"] == []
+    assert all(item["catalyst_assessment"]["status"] == "NO_VERIFIED_UPCOMING_CATALYST"
+               for item in result["reviewed"])
     assert not platform.settings.quality_config.strict_futures_selection
 
 

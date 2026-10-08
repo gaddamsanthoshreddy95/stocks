@@ -40,6 +40,15 @@ class KiteProvider(BaseProvider):
 
         return self.kite.profile()
 
+    def request_historical_data(self, instrument_token, from_date, to_date, interval, **kwargs):
+        """Share historical API pacing across equity and exact-contract reads."""
+        with self._historical_lock:
+            remaining = self._historical_min_interval - (monotonic() - self._last_historical_request)
+            if remaining > 0:
+                sleep(remaining)
+            self._last_historical_request = monotonic()
+            return self.kite.historical_data(instrument_token, from_date, to_date, interval, **kwargs)
+
     # -----------------------------------------------------
 
     def get_ltp(self, symbol):
@@ -151,16 +160,9 @@ class KiteProvider(BaseProvider):
             # Pace the actual request rather than sleeping a fixed amount after
             # an entire symbol has completed. Slow requests therefore consume
             # their own rate-limit interval and add no unnecessary delay.
-            with self._historical_lock:
-                remaining = self._historical_min_interval - (
-                    monotonic() - self._last_historical_request
-                )
-                if remaining > 0:
-                    sleep(remaining)
-                self._last_historical_request = monotonic()
-                candles.extend(self.kite.historical_data(
-                    instrument_token, chunk_start, chunk_end, kite_interval,
-                ))
+            candles.extend(self.request_historical_data(
+                instrument_token, chunk_start, chunk_end, kite_interval,
+            ))
             chunk_start = chunk_end + timedelta(days=1)
         dataframe = pd.DataFrame(candles)
         if dataframe.empty:

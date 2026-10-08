@@ -1294,6 +1294,7 @@ class DailyTradingAssistant:
             entry_zone_below_atr=self.platform.settings.entry_zone_below_atr,
             entry_zone_above_atr=self.platform.settings.entry_zone_above_atr,
         )
+        trade["setup_entry_timing"] = entry_selection
         quality_daily = candidate.get("_quality_daily_data")
         latest_bar = (
             quality_daily.iloc[-1] if quality_daily is not None and not quality_daily.empty
@@ -2204,6 +2205,9 @@ class DailyTradingAssistant:
                  "selection_reason": item["selection_reason"],
                  "discovery_reason": next((candidate.get("reason") for candidate in candidates if candidate["symbol"] == item["symbol"]), None),
                  "technical": item["technical"], "news": item["news"],
+                 "event_risk": item.get("event_risk", {}),
+                 "entry_selection": item.get("entry_selection", {}),
+                 "setup_entry_timing": item.get("setup_entry_timing", {}),
                  "today_news_alignment": item.get("today_news_alignment"),
                  "levels": item["levels"], "quality_score": item["quality_score"],
                  "futures_selection": item.get("futures_selection")}

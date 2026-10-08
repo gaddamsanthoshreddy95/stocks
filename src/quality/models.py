@@ -13,7 +13,7 @@ class QualityScore:
     score: float | None
     status: str
     confidence: float = 100.0
-    factors: dict[str, float | None] = field(default_factory=dict)
+    factors: dict[str, Any] = field(default_factory=dict)
     reason_codes: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -31,6 +31,10 @@ class FundamentalSnapshot:
     roce: float | None = None
     debt_to_equity: float | None = None
     total_debt: float | None = None
+    previous_total_debt: float | None = None
+    previous_debt_to_equity: float | None = None
+    previous_roe: float | None = None
+    previous_roce: float | None = None
     interest_coverage: float | None = None
     operating_cash_flow: float | None = None
     free_cash_flow: float | None = None

@@ -67,11 +67,12 @@ class NewsAnalysisService:
                 analyzer: AISentimentAnalyzer | None = None, *, force_refresh: bool = False,
                 extra_articles: list[dict[str, Any]] | None = None,
                 excluded_titles: set[str] | None = None,
-                company_aliases: dict[str, set[str]] | None = None) -> dict[str, Any]:
+                company_aliases: dict[str, set[str]] | None = None,
+                collected_articles: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         """Return a bounded sentiment/event assessment for a stock symbol."""
         cache_key = symbol.strip().upper().removesuffix(".NS")
         max_age_hours = max(1, int(os.getenv("NEWS_MAX_AGE_HOURS", "72")))
-        if analyzer is None and not force_refresh and not extra_articles and not excluded_titles and not company_aliases:
+        if analyzer is None and collected_articles is None and not force_refresh and not extra_articles and not excluded_titles and not company_aliases:
             with cls._cache_lock:
                 cached = cls._cache.get(cache_key)
                 if cached and monotonic() - cached[0] < cls.cache_ttl_seconds:
@@ -82,9 +83,27 @@ class NewsAnalysisService:
             url += "&_=" + str(int(datetime.now(timezone.utc).timestamp() * 1000))
         network_started = perf_counter()
         try:
-            response = requests.get(url, timeout=timeout, headers={"User-Agent": "alphatrace/1.0"})
-            response.raise_for_status()
-            root = ElementTree.fromstring(response.content)
+            if collected_articles is None:
+                response = requests.get(url, timeout=timeout, headers={"User-Agent": "alphatrace/1.0"})
+                response.raise_for_status()
+                root = ElementTree.fromstring(response.content)
+            else:
+                # Feed already-collected facts through exactly the same relevance,
+                # age, deduplication and local semantic/event-analysis pipeline.
+                from email.utils import format_datetime
+                root = ElementTree.Element('rss')
+                channel = ElementTree.SubElement(root,'channel')
+                for article in collected_articles:
+                    node = ElementTree.SubElement(channel,'item')
+                    for field,key in [('title','title'),('description','description'),('source','source'),('link','url')]:
+                        ElementTree.SubElement(node,field).text = str(article.get(key) or '')
+                    try:
+                        stamp = datetime.fromisoformat(article.get('published',''))
+                        if stamp.tzinfo is None:
+                            continue
+                        ElementTree.SubElement(node,'pubDate').text = format_datetime(stamp)
+                    except (ValueError,TypeError):
+                        continue
         except (requests.RequestException, ElementTree.ParseError) as exc:
             return {
                 "available": False,
@@ -163,6 +182,8 @@ class NewsAnalysisService:
         articles = articles[:limit]
 
         count = len(articles)
+        from src.futures.live_news import article_fingerprint
+        articles_identity = article_fingerprint(articles)
         if not articles:
             return {"available": False, "score": 0, "sentiment": "UNAVAILABLE", "confidence": 0,
                     "article_count": 0, "events": [], "headlines": [], "materiality": "NONE",
@@ -173,7 +194,7 @@ class NewsAnalysisService:
                         f"No timestamped news newer than {max_age_hours} hours was available."
                     ],
                     "max_age_hours": max_age_hours,
-                    "checked_at": now.isoformat(),
+                    "checked_at": now.isoformat(), "articles_fingerprint": articles_identity,
                     "discarded_articles": discarded_articles,
                     "stale_article_count": stale_article_count,
                     "timings": {"network_seconds": round(network_seconds, 3),
@@ -194,6 +215,7 @@ class NewsAnalysisService:
                                 "model_load_seconds": 0, "inference_seconds": 0}}
         ai_timings = assessment.get("timings", {})
         result = {
+            "articles_fingerprint": articles_identity,
             "available": True,
             "requested": True, "collection_state": "FETCHED",
             "analysis_state": "ANALYZED", "news_state": "ANALYZED",
@@ -225,7 +247,7 @@ class NewsAnalysisService:
                 "inference_seconds": ai_timings.get("inference_seconds", 0),
             },
         }
-        if analyzer is None and not extra_articles and not excluded_titles and not company_aliases:
+        if analyzer is None and collected_articles is None and not extra_articles and not excluded_titles and not company_aliases:
             with cls._cache_lock:
                 cls._cache[cache_key] = (monotonic(), deepcopy(result))
         return result

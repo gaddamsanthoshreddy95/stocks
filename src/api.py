@@ -62,6 +62,11 @@ def daily_report(limit: int = 5, minimum_score: int = 40,
     return _call(lambda: platform.daily_report(limit, minimum_score, option_month))
 
 
+@app.get("/futures-opportunities")
+def futures_opportunities(limit: int = 5, include_backtest: bool = True, mode: str = 'LIVE_SCAN'):
+    return _call(lambda: platform.scan_futures_opportunities(limit, include_backtest, mode))
+
+
 @app.post("/backtest")
 def backtest(request: SymbolRequest):
     return _call(lambda: platform.backtest(request.symbol))

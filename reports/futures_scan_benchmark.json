@@ -1,0 +1,72 @@
+{
+  "benchmark_type": "DETERMINISTIC_SIMULATED_FEEDS_REAL_SCORING_AND_BACKTESTING",
+  "limits": "Kite pacing enforced; simulated 2ms API latency, warm news and complete prepared research. Real API performance not measured.",
+  "comparison": {
+    "universe": 12,
+    "reference_seconds": 34.767052795999916,
+    "prepared_live_seconds": 3.8238870599998336,
+    "speedup": 9.0920710393579,
+    "outputs_equal": true,
+    "request_counts": {
+      "quote": 1,
+      "history": 0,
+      "margin": 0
+    },
+    "baseline_backtests": 5,
+    "live_backtests": 0
+  },
+  "full_universe": [
+    {
+      "universe": 214,
+      "condition": "WARM_CACHE",
+      "seconds": 25.400617747998695,
+      "stage_times": {
+        "fresh_news_seconds": 0.10704924200035748,
+        "incremental_session_updates_seconds": 1.616467214000295,
+        "margin_validation_seconds": 0.9916973270010203,
+        "scanner_seconds": 21.20724326600066,
+        "scanner_discovery_seconds": 16.562749659000474,
+        "scanner_research_news_events_seconds": 3.4294407310007955,
+        "scanner_historical_validation_seconds": 0.061196943001050386,
+        "scanner_execution_validation_seconds": 0.7998500670000794,
+        "scanner_total_seconds": 20.853919632001634,
+        "total_seconds": 25.400617747998695
+      },
+      "requests": {
+        "quote": 1,
+        "history": 0,
+        "margin": 10
+      },
+      "source_failures": 0,
+      "both_directions_scanned": true,
+      "live_backtests": 0,
+      "mandatory_filters_preserved": true
+    },
+    {
+      "universe": 214,
+      "condition": "FIRST_INCREMENTAL_SCAN",
+      "seconds": 99.96867935000046,
+      "stage_times": {
+        "fresh_news_seconds": 0.10253005900085554,
+        "incremental_session_updates_seconds": 74.65334619900023,
+        "margin_validation_seconds": 0.9916434810002102,
+        "scanner_seconds": 22.730966417999298,
+        "scanner_discovery_seconds": 16.56045522000022,
+        "scanner_research_news_events_seconds": 3.6719183909990534,
+        "scanner_historical_validation_seconds": 1.4308313029996498,
+        "scanner_execution_validation_seconds": 0.7676777689994196,
+        "scanner_total_seconds": 22.431504815000153,
+        "total_seconds": 99.96867935000046
+      },
+      "requests": {
+        "quote": 1,
+        "history": 219,
+        "margin": 10
+      },
+      "source_failures": 0,
+      "both_directions_scanned": true,
+      "live_backtests": 0,
+      "mandatory_filters_preserved": true
+    }
+  ]
+}

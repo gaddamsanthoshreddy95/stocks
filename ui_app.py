@@ -29,6 +29,7 @@ from src.assistant import (CodexService, CodexUnavailableError, OpenAIAnalyst,
 from src.assistant.context_tools import UIContext
 from src.news.ai_sentiment import AISentimentAnalyzer
 from src.presenter.daily_report import DailyReportPresenter
+from src.presenter.futures_opportunities import FuturesOpportunitiesPresenter
 from src.ui.database import ReportDatabase
 from src.ui.live_prices import KiteLivePriceFeed
 from src.ui.stock_explainer import explain_stock_question
@@ -289,6 +290,7 @@ FEATURE_JOBS = {
     "market": ("Global market refresh", "global_market_result"),
     "bearish": ("Bearish options scan", "bearish_options"),
     "analysis": ("Stock analysis", "analysis_result"),
+    "futures_scan": ("Futures LONG / SHORT scan", "futures_scan_report"),
 }
 
 
@@ -318,6 +320,65 @@ def sync_feature_jobs() -> None:
 def feature_is_running(feature: str) -> bool:
     future = daily_report_jobs().future(st.session_state.get(f"{feature}_job_id"))
     return future is not None and not future.done()
+
+
+def futures_opportunities_page(platform: TradingPlatform) -> None:
+    st.subheader("Intraday futures · LONG and SHORT")
+    st.caption("Independent discovery across the configured futures stock universe. Target 0.3%, stop 0.2%; execution approval includes costs and event checks.")
+    limit = st.number_input("Candidates per report", min_value=1, max_value=50, value=5, key="futures_scan_limit")
+    mode = st.selectbox("Scan mode", ['LIVE_SCAN','DAILY_PREP','FULL_RESEARCH','AFTER_MARKET_RESEARCH'], key='futures_scan_mode')
+    st.caption({'LIVE_SCAN':'Use prepared research and statistics; refresh current market data.',
+                'DAILY_PREP':'After close: update changed data and prepare the next session.',
+                'FULL_RESEARCH':'Periodic complete-universe research and historical validation.',
+                'AFTER_MARKET_RESEARCH':'Completed-session analysis and cached research; no live trade approval.'}[mode])
+    future = daily_report_jobs().future(st.session_state.get("futures_scan_job_id"))
+    if future is not None and future.done() and st.session_state.get("futures_scan_synced_job_id") != st.session_state.get("futures_scan_job_id"):
+        st.session_state["futures_scan_synced_job_id"] = st.session_state["futures_scan_job_id"]
+        try:
+            st.session_state["futures_scan_report"] = future.result()
+            st.session_state["futures_scan_job_error"] = None
+        except Exception as exc:
+            st.session_state["futures_scan_job_error"] = str(exc)
+    running = feature_is_running("futures_scan")
+    if st.button("Scan LONG and SHORT opportunities", disabled=running, key="run_futures_scan"):
+        # Isolated provider prevents a concurrent report from sharing mutable live-refresh state.
+        start_feature_job("futures_scan", lambda: TradingPlatform(settings=platform.settings).scan_futures_opportunities(int(limit), mode=mode))
+        st.rerun()
+    if running:
+        st.info("Scanning and validating futures opportunities. Refresh the view to see the result.")
+        if st.button("Refresh scan status", key="refresh_futures_scan"):
+            st.rerun()
+    if st.session_state.get("futures_scan_job_error"):
+        st.error(st.session_state["futures_scan_job_error"])
+    report = st.session_state.get("futures_scan_report")
+    if not report:
+        return
+    st.caption(f"Scanned {report['universe_size']} stocks in each direction · {report['approved_count']} approved · {data_age(report['generated_at'])}")
+    st.caption(f"{report.get('scan_mode','REFERENCE')} · elapsed {report.get('timings',{}).get('total_seconds',0):.1f}s")
+    with st.expander('Stage timings and data freshness'):
+        st.json({'timings':report.get('timings',{}),'request_counts':report.get('request_counts',{}),'source_failures':report.get('source_failures',{})})
+    safety = report.get('execution_safety', {})
+    window = safety.get('entry_window', {})
+    if window:
+        st.info(f"Read-only scanner. Entry cutoff {window.get('entry_cutoff')}. {window.get('manual_exit_warning')}")
+        st.caption(f"Executed-entry reconciliation: {safety.get('reconciliation', {}).get('status', 'UNKNOWN')}; entries today: {safety.get('reconciliation', {}).get('executed_entries')} / 2.")
+        if window.get('manual_exit_warning_active'):
+            st.warning(window['manual_exit_warning'])
+    for tab, key in zip(st.tabs(["A · Bullish", "B · Bearish", "C · Combined approved"]), ('report_a', 'report_b', 'report_c')):
+        with tab:
+            if not report[key]:
+                st.info("No eligible opportunities in this report.")
+            for candidate in report[key]:
+                with st.expander(f"{candidate['symbol']} · {candidate['side']} · {candidate['final_decision']}"):
+                    st.markdown(FuturesOpportunitiesPresenter.candidate(candidate))
+    st.download_button("Download detailed reports", FuturesOpportunitiesPresenter.render(report), "futures_opportunities.md", "text/markdown")
+    st.download_button("Download complete universe audit", json.dumps(report, indent=2, default=str), "futures_opportunities.json", "application/json")
+    from src.futures.rejected_analysis import build_report_d, render_report_d
+    st.divider()
+    st.markdown(render_report_d(report.get("report_d") or build_report_d(report)))
+    from src.futures.report_e import build_report_e, render_report_e
+    st.divider()
+    st.markdown(render_report_e(report.get('report_e') or build_report_e(report)))
 
 
 def start_feature_job(feature: str, task) -> None:
@@ -3898,6 +3959,7 @@ def main() -> None:
             "Dashboard": "Dashboard", "Opportunities": "Opportunities",
             "Positions": "Positions", "Daily report": "Daily report",
             "Analyze stock": "Analyze", "Bearish options": "Bearish options",
+            "Futures LONG / SHORT": "Futures LONG / SHORT",
             "AI analyst": "AI Assistant", "Codex developer": "Codex",
             "Watchlists & alerts": "Watchlists", "Report history": "History",
             "System & diagnostics": "System",
@@ -3985,6 +4047,8 @@ def main() -> None:
         analyze_page(platform)
     elif page == "Bearish options":
         bearish_options_page(platform, database)
+    elif page == "Futures LONG / SHORT":
+        futures_opportunities_page(platform)
     elif page == "AI Assistant":
         ai_assistant_page(database)
     elif page == "Codex":

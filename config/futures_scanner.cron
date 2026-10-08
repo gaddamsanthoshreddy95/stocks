@@ -1,0 +1,5 @@
+# For a UTC cron host. IST times: Saturday 10:00, weekdays 18:10, 09:35/09:40/09:45.
+# Review/install on an always-running host; these jobs are not installed automatically.
+30 4 * * 6 cd /workspaces/stocks && .venv/bin/python scripts/run_futures_mode.py --mode FULL_RESEARCH >> reports/futures_weekly.log 2>&1
+40 12 * * 1-5 cd /workspaces/stocks && .venv/bin/python scripts/run_futures_mode.py --mode DAILY_PREP >> reports/futures_daily.log 2>&1
+5,10,15 4 * * 1-5 cd /workspaces/stocks && .venv/bin/python scripts/run_futures_mode.py --mode LIVE_SCAN >> reports/futures_live.log 2>&1

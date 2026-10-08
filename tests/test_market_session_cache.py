@@ -4,9 +4,7 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 import pytest
 from src.application.settings import PlatformSettings
-from src.application.errors import DataUnavailableError
 from src.application.market_session_cache import cached_command, live_session
-from src.presenter.futures_report import FuturesReportPresenter
 
 IST=ZoneInfo('Asia/Kolkata')
 def moment(value):
@@ -34,42 +32,39 @@ def test_ist_boundaries(when,expected,monkeypatch):
     assert live_session(moment(when))==expected
     assert live_session(moment(when).astimezone(ZoneInfo('UTC')))==expected
 
-def test_live_refresh_and_closed_cache_without_calls(tmp_path,monkeypatch):
-    monkeypatch.setenv('MARKET_REPORT_CACHE_DIR',str(tmp_path))
-    p=Platform()
-    with patch('src.application.market_session_cache.session_now',return_value=moment('2026-10-08T14:00')):
-        assert p.run()['data_cache']['source']=='LIVE'
-        p.run(limit=5,minimum_score=40)
-    assert len(p.calls)==2
-    with patch('src.application.market_session_cache.session_now',return_value=moment('2026-10-09T08:00')):
-        result=p.run()
-    assert len(p.calls)==2
-    assert result['data_cache']['source']=='CACHE'
-    assert result['data_cache']['execution_available'] is False
-    assert result['data_cache']['saved_at'].startswith('2026-10-08')
-    assert 'Cached historical snapshot' in FuturesReportPresenter.render(result)
+@pytest.mark.parametrize('when', [
+    '2026-10-08T08:00', '2026-10-08T09:14:59',
+    '2026-10-08T15:30', '2026-10-08T18:00', '2026-10-10T11:00',
+])
+@pytest.mark.parametrize('files', ['missing', 'existing', 'corrupt'])
+def test_commands_refresh_at_any_time(tmp_path, monkeypatch, when, files):
+    monkeypatch.setenv('MARKET_REPORT_CACHE_DIR', str(tmp_path))
+    monkeypatch.setenv('MARKET_HOLIDAYS_IST', '2026-10-08')
+    p = Platform()
+    if files != 'missing':
+        with patch('src.application.market_session_cache.session_now', return_value=moment('2026-10-08T14:00')):
+            p.run()
+        if files == 'corrupt':
+            next(tmp_path.glob('*.json')).write_text('broken')
+    before = len(p.calls)
+    with patch('src.application.market_session_cache.session_now', return_value=moment(when)):
+        result = p.run()
+    assert len(p.calls) == before + 1
+    assert result['suggestions'][0]['symbol'] == 'TEST'
+    assert result['data_cache']['source'] == 'LIVE'
+    assert result['data_cache']['historical_snapshot'] is False
 
-@pytest.mark.parametrize('files',['missing','corrupt'])
-def test_no_cache_never_falls_back_to_network(tmp_path,monkeypatch,files):
-    monkeypatch.setenv('MARKET_REPORT_CACHE_DIR',str(tmp_path))
-    p=Platform()
-    if files=='corrupt':
-        with patch('src.application.market_session_cache.session_now',return_value=moment('2026-10-08T14:00')): p.run()
-        next(tmp_path.glob('*.json')).write_text('broken')
-    before=len(p.calls)
-    with patch('src.application.market_session_cache.session_now',return_value=moment('2026-10-08T18:00')):
-        with pytest.raises(DataUnavailableError,match='no external data was fetched'): p.run()
-    assert len(p.calls)==before
 
-def test_parameter_and_settings_changes_do_not_reuse_wrong_result(tmp_path,monkeypatch):
-    monkeypatch.setenv('MARKET_REPORT_CACHE_DIR',str(tmp_path))
-    p=Platform()
-    with patch('src.application.market_session_cache.session_now',return_value=moment('2026-10-08T14:00')): p.run()
-    with patch('src.application.market_session_cache.session_now',return_value=moment('2026-10-08T18:00')):
-        with pytest.raises(DataUnavailableError): p.run(minimum_score=70)
-        p.settings=replace(p.settings,capital=p.settings.capital+1)
-        with pytest.raises(DataUnavailableError): p.run()
-    assert len(p.calls)==1
+def test_parameter_and_settings_changes_refresh_outside_hours(tmp_path, monkeypatch):
+    monkeypatch.setenv('MARKET_REPORT_CACHE_DIR', str(tmp_path))
+    p = Platform()
+    with patch('src.application.market_session_cache.session_now', return_value=moment('2026-10-08T18:00')):
+        p.run()
+        p.run(minimum_score=70)
+        p.settings = replace(p.settings, capital=p.settings.capital + 1)
+        p.run()
+    assert p.calls == [(5, 40), (5, 70), (5, 40)]
+    assert len(list(tmp_path.glob('*.json'))) == 3
 
 def test_live_pipeline_keeps_mode_across_worker_threads(tmp_path,monkeypatch):
     from concurrent.futures import ThreadPoolExecutor

@@ -1,0 +1,22 @@
+{
+  "title": "ADDITIONAL ANALYSIS \u2014 STOCKS REJECTED DUE TO FIXED TARGET / STOP-LOSS",
+  "status": "REJECTED / RESEARCH ONLY",
+  "generated_at": "2026-10-08T22:20:33.418940+05:30",
+  "source": "Completed scan retained records only; no additional market-data requests.",
+  "fixed_configuration": {
+    "target_fraction": 0.003,
+    "stop_fraction": 0.002
+  },
+  "summary": {
+    "TARGET_SL_ONLY": 0,
+    "TARGET_SL_PLUS_OTHER_FAILURES": 0,
+    "TARGET_SL_PLUS_UNKNOWN": 0
+  },
+  "candidates": [],
+  "unresolved_rejections": [],
+  "missing_information": [],
+  "saved_files": {
+    "json": "reports/prepared_scans/report_D_20261008T2220334189400530.json",
+    "md": "reports/prepared_scans/report_D_20261008T2220334189400530.md"
+  }
+}

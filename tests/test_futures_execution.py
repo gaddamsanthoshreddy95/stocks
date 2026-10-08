@@ -131,3 +131,174 @@ def test_provider_uses_exact_expiry_quotes_and_oi_candles_without_margin():
         assert call.kwargs=={'continuous':False,'oi':True}
     assert not kite.order_margins.called
     assert not kite.place_order.called
+    assert kite.method_calls[-1][0] == 'quote'
+
+
+def test_first_completed_bar_uses_prior_sessions_to_warm_indicators():
+    data = fixture()
+    early = NOW.normalize() + pd.Timedelta(hours=9, minutes=20)
+    data['quote']['timestamp'] = early
+    scores = assess_execution(data, now=early)
+    for key in ['futures_vwap_quality', 'futures_rvol_quality', 'futures_atr_quality',
+                'futures_rsi_quality', 'futures_adx_quality', 'futures_oi_quality',
+                'futures_spread_quality', 'futures_depth_quality']:
+        assert scores[key].status != 'UNKNOWN', key
+    assert scores['futures_rvol_quality'].factors['rvol'] == 2
+    assert scores['futures_vwap_quality'].factors['completed_session_bars'] == 1
+
+
+def test_missing_daily_does_not_suppress_vwap_rvol_or_intraday_indicators():
+    data = fixture()
+    data['daily'] = pd.DataFrame()
+    scores = assess(data)
+    assert scores['futures_atr_quality'].status == 'UNKNOWN'
+    assert scores['futures_oi_quality'].status == 'UNKNOWN'
+    for key in ['futures_vwap_quality', 'futures_rvol_quality', 'futures_rsi_quality',
+                'futures_adx_quality', 'futures_spread_quality', 'futures_depth_quality']:
+        assert scores[key].status != 'UNKNOWN'
+
+
+def test_missing_intraday_does_not_suppress_oi_or_order_book():
+    data = fixture()
+    data['intraday'] = pd.DataFrame()
+    scores = assess(data)
+    assert scores['futures_vwap_quality'].status == 'UNKNOWN'
+    assert scores['futures_oi_quality'].status == 'PASS'
+    assert scores['futures_depth_quality'].status == 'PASS'
+    assert scores['futures_spread_quality'].status == 'PASS'
+
+
+@pytest.mark.parametrize('seconds,expected', [(120, 'PASS'), (121, 'UNKNOWN'), (-1, 'UNKNOWN')])
+def test_quote_freshness_boundaries(seconds, expected):
+    data = fixture()
+    data['quote']['timestamp'] = NOW - pd.Timedelta(seconds=seconds)
+    assert assess(data)['futures_spread_quality'].status == expected
+
+
+def test_opening_bar_and_gaps_required_but_forming_candle_is_excluded():
+    data = fixture()
+    baseline = assess(data)['futures_rsi_quality'].factors['rsi_14']
+    data['intraday'].loc[NOW, ['Open', 'High', 'Low', 'Close']] = [999, 1000, 998, 999]
+    assert assess(data)['futures_rsi_quality'].factors['rsi_14'] == baseline
+    data['intraday'] = data['intraday'].drop(NOW.normalize() + pd.Timedelta(hours=10))
+    scores = assess(data)
+    assert scores['futures_vwap_quality'].status == 'UNKNOWN'
+    assert scores['futures_oi_quality'].status == 'PASS'
+
+
+def test_old_daily_oi_baseline_is_unavailable():
+    data = fixture()
+    data['daily'] = data['daily'].iloc[:-1]
+    scores = assess(data)
+    assert scores['futures_oi_quality'].status == 'UNKNOWN'
+    assert scores['futures_atr_quality'].status == 'UNKNOWN'
+    assert scores['futures_vwap_quality'].status != 'UNKNOWN'
+
+
+def test_contract_token_mismatch_cannot_approve():
+    data = fixture()
+    data['instrument_token'] = 42
+    data['quote']['instrument_token'] = 99
+    assert assess(data)['futures_spread_quality'].status == 'UNKNOWN'
+
+
+@pytest.mark.parametrize('price,quantity', [(float('nan'), 1000), (101, -1), (101, float('inf'))])
+def test_invalid_depth_is_not_silently_ignored(price, quantity):
+    data = fixture()
+    data['quote']['depth']['buy'].append({'price': price, 'quantity': quantity})
+    scores = assess(data)
+    assert scores['futures_depth_quality'].status == 'UNKNOWN'
+    assert scores['futures_oi_quality'].status == 'PASS'
+
+
+def test_lot_size_does_not_control_spread_availability():
+    data = fixture()
+    data['contract']['lot_size'] = 0
+    scores = assess(data)
+    assert scores['futures_spread_quality'].status == 'PASS'
+    assert scores['futures_depth_quality'].status == 'UNKNOWN'
+
+
+def test_flat_market_has_zero_adx_and_neutral_rsi():
+    data = fixture()
+    data['intraday'][['Open', 'High', 'Low', 'Close']] = 100
+    scores = assess(data)
+    assert scores['futures_adx_quality'].factors['adx_14'] == 0
+    assert scores['futures_adx_quality'].status == 'FAIL'
+    assert scores['futures_rsi_quality'].factors['rsi_14'] == 50
+
+
+def test_wilder_indicators_on_constant_range_rising_prices():
+    frame = candles(pd.date_range('2026-09-01', periods=40, freq='5min'),
+                    np.arange(100, 140, dtype=float))
+    atr, adx, rsi = indicators(frame)
+    assert atr.iloc[-1] == pytest.approx(2)
+    assert adx.iloc[-1] == pytest.approx(100)
+    assert rsi.iloc[-1] == pytest.approx(100)
+
+
+def test_after_hours_keeps_report_results_but_no_live_entry_approval():
+    data = fixture()
+    closed = NOW.normalize() + pd.Timedelta(hours=18)
+    data['quote']['timestamp'] = closed
+    scores = assess_execution(data, now=closed)
+    assert scores['futures_spread_quality'].status == 'UNKNOWN'
+    assert scores['futures_spread_quality'].reason_codes == ['FUTURES_MARKET_CLOSED']
+
+
+def test_configured_holiday_keeps_previous_session_oi_valid(monkeypatch):
+    monkeypatch.setenv('MARKET_HOLIDAYS_IST', '2026-10-07')
+    data = fixture()
+    data['daily'] = data['daily'].iloc[:-1]
+    assert assess(data)['futures_oi_quality'].status == 'PASS'
+
+
+def test_provider_keeps_quote_when_history_request_fails():
+    from src.data_provider.kite_data_provider import KiteDataProvider
+    from requests.exceptions import ConnectionError
+    provider = object.__new__(KiteDataProvider)
+    kite = Mock()
+    provider.provider = Mock(kite=kite)
+    provider.get_nfo_instruments = lambda: [{'tradingsymbol': 'TEST26OCTFUT',
+        'segment': 'NFO-FUT', 'instrument_token': 42}]
+    kite.historical_data.side_effect = [ConnectionError('unavailable'), []]
+    kite.quote.return_value = {'NFO:TEST26OCTFUT': {'last_price': 101, 'oi': 100}}
+    result = provider.get_futures_execution_data('TEST', {'tradingsymbol': 'TEST26OCTFUT'})
+    assert result['quote']['oi'] == 100
+    assert result['fetch_errors'] == {'daily': 'ConnectionError'}
+    assert kite.method_calls[-1][0] == 'quote'
+
+
+def test_exact_contract_history_shares_provider_rate_limit():
+    from threading import Lock
+    from unittest.mock import patch
+    from src.providers.kite_provider import KiteProvider
+    from src.data_provider.kite_data_provider import KiteDataProvider
+    raw = object.__new__(KiteProvider)
+    raw.kite = Mock()
+    raw._historical_lock = Lock()
+    raw._last_historical_request = 10
+    raw._historical_min_interval = .34
+    raw.kite.historical_data.return_value = []
+    raw.kite.quote.return_value = {}
+    provider = object.__new__(KiteDataProvider)
+    provider.provider = raw
+    provider.get_nfo_instruments = lambda: [{'tradingsymbol': 'TEST26OCTFUT',
+        'segment': 'NFO-FUT', 'instrument_token': 42}]
+    with patch('src.providers.kite_provider.monotonic', return_value=10.1), \
+            patch('src.providers.kite_provider.sleep') as pause:
+        provider.get_futures_execution_data('TEST', {'tradingsymbol': 'TEST26OCTFUT'})
+    assert pause.call_count == 2
+    assert pause.call_args_list[0].args[0] == pytest.approx(.24)
+    assert len(raw.kite.historical_data.call_args_list) == 2
+    assert raw.kite.method_calls[-1][0] == 'quote'
+
+
+def test_report_renders_freshness_and_contract_evidence():
+    from src.presenter.futures_report import FuturesReportPresenter
+    scores = assess(fixture())
+    output = FuturesReportPresenter.render({'reviewed': [{'symbol': 'TEST',
+        'futures_selection': {'checks': {key: value.to_dict() for key, value in scores.items()}}}]})
+    assert 'quote_timestamp: 2026-10-08' in output
+    assert 'checked_at: 2026-10-08' in output
+    assert 'candle_timestamp:' in output

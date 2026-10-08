@@ -1,12 +1,14 @@
 """Explainable intraday futures gates. No margin lookup or order submission."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from math import isfinite
 import os
 from zoneinfo import ZoneInfo
 import pandas as pd
+import numpy as np
 from src.quality.models import QualityScore
 from src.quality.futures_selection import session_vwap_quality
+from src.futures.sessions import normalise_candles, completed_session_check
 
 CHECKS = ('futures_atr_quality', 'futures_vwap_quality', 'futures_rvol_quality',
           'futures_oi_quality', 'futures_spread_quality', 'futures_depth_quality',
@@ -28,6 +30,8 @@ class FuturesExecutionConfig:
     maximum_gap_percent: float = 3
     minimum_volume_sessions: int = 5
     supertrend_multiplier: float = 3
+    maximum_quote_age_seconds: float = 120
+    maximum_candle_age_seconds: float = 600
 
     def __post_init__(self):
         for name, value in self.__dict__.items():
@@ -58,15 +62,17 @@ def check(passed, factors, reason):
 def wilder(series, period=14):
     """Arithmetic seed followed by Wilder's recursive smoothing."""
     valid = series.dropna()
-    out = pd.Series(float('nan'), index=series.index)
+    values = np.full(len(series), float('nan'))
+    out = pd.Series(values, index=series.index)
     if len(valid) < period:
         return out
     value = float(valid.iloc[:period].mean())
-    out.loc[valid.index[period-1]] = value
-    for stamp, number in valid.iloc[period:].items():
+    positions = np.flatnonzero(series.notna().to_numpy())
+    values[positions[period-1]] = value
+    for position, number in zip(positions[period:], valid.to_numpy()[period:]):
         value = (value * (period - 1) + float(number)) / period
-        out.loc[stamp] = value
-    return out
+        values[position] = value
+    return pd.Series(values, index=series.index)
 
 
 def indicators(frame):
@@ -77,7 +83,9 @@ def indicators(frame):
     up, down = frame.High.diff(), -frame.Low.diff()
     plus = wilder(up.where((up > down) & (up > 0), 0)) / atr * 100
     minus = wilder(down.where((down > up) & (down > 0), 0)) / atr * 100
-    dx = (plus-minus).abs() / (plus+minus) * 100
+    plus, minus = plus.mask(atr == 0, 0), minus.mask(atr == 0, 0)
+    total = plus + minus
+    dx = ((plus-minus).abs() / total * 100).mask(total == 0, 0)
     adx = wilder(dx)
     delta = frame.Close.diff()
     gain, loss = wilder(delta.clip(lower=0)), wilder(-delta.clip(upper=0))
@@ -139,7 +147,7 @@ def assess_execution(data, *, stock_history=None, sector_history=None, levels=No
         return result
     levels, event = levels or {}, event or {}
     try:
-        stock, sector = clean(stock_history), clean(sector_history)
+        stock, sector = clean(normalise_candles(stock_history, 'day')), clean(normalise_candles(sector_history, 'day'))
         aligned = pd.concat([stock.Close.rename('stock'), sector.Close.rename('sector')], axis=1).dropna()
         aligned = aligned.loc[aligned.index.date < now.date()]
         if len(aligned) >= 21 and (now.date()-aligned.index[-1].date()).days <= 7:
@@ -163,83 +171,213 @@ def assess_execution(data, *, stock_history=None, sector_history=None, levels=No
     if not data:
         return result
     quote = data.get('quote') or {}
+    quote_checks = set(CHECKS) - {'futures_event_quality', 'futures_sector_strength_quality'}
+    def unavailable(keys, reason):
+        for key in keys:
+            result[key] = unknown(reason)
+
+    def finish():
+        evidence = {'quote_timestamp': str(quote.get('timestamp', 'Not available')),
+                    'checked_at': now.isoformat(),
+                    'fetched_at': data.get('fetched_at', 'Not available'),
+                    'contract': (data.get('contract') or {}).get('tradingsymbol', 'Not available')}
+        for key in quote_checks:
+            result[key] = replace(result[key], factors={**result[key].factors, **evidence})
+        return result
+
     try:
         stamp = pd.Timestamp(quote['timestamp'])
         stamp = stamp.tz_localize('Asia/Kolkata') if stamp.tz is None else stamp.tz_convert('Asia/Kolkata')
         price = float(quote['last_price'])
-        if not isfinite(price) or price <= 0 or not 0 <= (now-stamp).total_seconds() <= 300 or stamp.date() != now.date():
+        age = (now-stamp).total_seconds()
+        if (pd.isna(stamp) or not isfinite(price) or price <= 0
+                or not 0 <= age <= config.maximum_quote_age_seconds or stamp.date() != now.date()):
             raise ValueError('Stale quote')
-        if not (9,15) <= (now.hour,now.minute) <= (15,30):
-            raise ValueError('Market closed')
-    except (KeyError,TypeError,ValueError):
-        return {**result, **{k:unknown('FUTURES_QUOTE_STALE_OR_INVALID') for k in CHECKS if k not in {'futures_event_quality','futures_sector_strength_quality'}}}
+        if (data.get('instrument_token') is not None and quote.get('instrument_token') is not None
+                and int(data['instrument_token']) != int(quote['instrument_token'])):
+            raise ValueError('Wrong contract quote')
+    except (KeyError, TypeError, ValueError, OverflowError):
+        unavailable(quote_checks, 'FUTURES_QUOTE_STALE_OR_INVALID')
+        return finish()
+    # Reports may run at any time; after-hours quotes cannot approve a live entry.
+    holidays = {value.strip() for value in os.getenv('MARKET_HOLIDAYS_IST', '').split(',')}
+    if (now.weekday() >= 5 or now.date().isoformat() in holidays
+            or not (9, 15) <= (now.hour, now.minute) < (15, 30)):
+        unavailable(quote_checks, 'FUTURES_MARKET_CLOSED')
+        return finish()
+
+    depth_keys = ['futures_spread_quality', 'futures_depth_quality', 'futures_target_space_quality']
     try:
         depth = quote['depth']
-        bids = [x for x in depth['buy'] if float(x['price']) > 0 and float(x['quantity']) > 0]
-        asks = [x for x in depth['sell'] if float(x['price']) > 0 and float(x['quantity']) > 0]
-        bid, ask = max(float(x['price']) for x in bids), min(float(x['price']) for x in asks)
-        lot = int(data['contract']['lot_size'])
-        if lot <= 0 or ask < bid or not all(isfinite(float(x[k])) for x in bids+asks for k in ['price','quantity']):
-            raise ValueError('Invalid depth')
+        def side(rows):
+            valid = []
+            for row in rows:
+                value, quantity = float(row['price']), float(row['quantity'])
+                if not isfinite(value) or not isfinite(quantity) or value < 0 or quantity < 0:
+                    raise ValueError('Invalid depth')
+                if value > 0 and quantity > 0:
+                    valid.append((value, quantity))
+            if not valid or len({value for value, _ in valid}) != len(valid):
+                raise ValueError('Missing or duplicated depth levels')
+            return valid
+        bids, asks = side(depth['buy']), side(depth['sell'])
+        bid, ask = max(value for value, _ in bids), min(value for value, _ in asks)
+        if ask < bid:
+            raise ValueError('Crossed order book')
         spread = (ask-bid)/((ask+bid)/2)*100
-        buy_lots, sell_lots = sum(float(x['quantity']) for x in bids)/lot, sum(float(x['quantity']) for x in asks)/lot
-        result['futures_spread_quality'] = check(spread <= config.maximum_spread_percent, {'spread_percent':spread,'maximum':config.maximum_spread_percent,'bid':bid,'ask':ask}, 'TIGHT_FUTURES_SPREAD_REQUIRED')
-        result['futures_depth_quality'] = check(min(buy_lots,sell_lots) >= config.minimum_depth_lots, {'bid_lots':buy_lots,'ask_lots':sell_lots,'minimum_each_side':config.minimum_depth_lots}, 'TWO_SIDED_FUTURES_DEPTH_REQUIRED')
-        # Underlying levels must not be compared directly with futures prices.
-        spot = float(data['spot_price'])
-        obstacle = float(levels['resistance' if bullish else 'support'])
-        if not isfinite(spot) or not isfinite(obstacle) or spot <= 0 or obstacle <= 0:
-            raise ValueError('Invalid underlying price or level')
-        space = (obstacle/spot-1)*100 if bullish else (1-obstacle/spot)*100
-        result['futures_target_space_quality'] = check(space >= config.target_percent+spread, {'underlying_space_percent':space,'target_percent':config.target_percent,'spread_percent':spread}, 'UNDERLYING_TARGET_SPACE_PROXY_AFTER_FUTURES_SPREAD')
-    except (KeyError,TypeError,ValueError,ZeroDivisionError):
-        pass
-    try:
-        daily = clean(data.get('daily'))
-        daily = daily.loc[daily.index.date < now.date()]
-        if len(daily) < 28 or (now.date()-daily.index[-1].date()).days > 7:
-            raise ValueError('Daily history missing/stale')
-        intra = clean(data.get('intraday'))
-        intra = intra.loc[(intra.index+pd.Timedelta(minutes=5) <= now) & (intra.index.time >= datetime.strptime('09:15','%H:%M').time()) & (intra.index.time < datetime.strptime('15:30','%H:%M').time())]
-        session = intra.loc[intra.index.date == now.date()]
-        if len(session) < 28 or (session.index[0].hour, session.index[0].minute) != (9,15) or (now-session.index[-1]).total_seconds() > 600 or (session.index.to_series().diff().dropna() != pd.Timedelta(minutes=5)).any():
-            raise ValueError('Five-minute history missing/stale/incomplete')
-        da, _, _ = indicators(daily)
-        ia, adx, rsi = indicators(intra)
-        dp, ip = float(da.iloc[-1])/price*100, float(ia.iloc[-1])/price*100
-        result['futures_atr_quality'] = check(config.minimum_daily_atr_percent <= dp <= config.maximum_daily_atr_percent and config.minimum_five_minute_atr_percent <= ip <= config.maximum_five_minute_atr_percent, {'daily_atr_14':float(da.iloc[-1]),'daily_atr_percent':dp,'five_minute_atr_14':float(ia.iloc[-1]),'five_minute_atr_percent':ip,'minimum_daily_atr_percent':config.minimum_daily_atr_percent,'maximum_daily_atr_percent':config.maximum_daily_atr_percent,'minimum_five_minute_atr_percent':config.minimum_five_minute_atr_percent,'maximum_five_minute_atr_percent':config.maximum_five_minute_atr_percent}, 'ATR_WITHIN_CONFIGURED_VOLATILITY_BANDS')
-        vwap = session_vwap_quality(session, price, now=now.to_pydatetime())
-        if not bullish and vwap.status != 'UNKNOWN':
-            vwap = check(price <= vwap.factors['vwap'], vwap.factors, 'PRICE_AT_OR_BELOW_FUTURES_VWAP')
-        result['futures_vwap_quality'] = vwap
-        cutoff = session.index[-1].time()
-        baseline = intra.loc[(intra.index.date < now.date()) & (intra.index.time <= cutoff)]
-        # Require complete matched clock-time buckets, not full-day averages.
-        expected = list(session.index.strftime('%H:%M'))
-        groups = [g for _,g in baseline.groupby(baseline.index.date) if list(g.index.strftime('%H:%M')) == expected]
-        totals = [float(g.Volume.sum()) for g in groups[-20:]]
-        if len(totals) >= config.minimum_volume_sessions and sum(totals) > 0:
-            avg = sum(totals)/len(totals); rv = float(session.Volume.sum())/avg
-            result['futures_rvol_quality'] = check(rv >= config.minimum_rvol, {'rvol':rv,'matched_average_volume':avg,'current_completed_volume':float(session.Volume.sum()),'baseline_sessions':len(totals)}, 'MATCHED_TIME_FUTURES_RVOL')
-        av, rv = float(adx.iloc[-1]), float(rsi.iloc[-1])
-        if isfinite(av): result['futures_adx_quality'] = check(av > config.minimum_adx, {'adx_14':av,'minimum_exclusive':config.minimum_adx}, 'ADX_TREND_STRENGTH')
-        if isfinite(rv): result['futures_rsi_quality'] = check(50 < rv < 70 if bullish else 30 < rv < 50, {'rsi_14':rv}, 'DIRECTIONAL_RSI_WITHOUT_EXTREME')
-        e9, e21 = float(intra.Close.ewm(span=9,adjust=False).mean().iloc[-1]), float(intra.Close.ewm(span=21,adjust=False).mean().iloc[-1])
-        result['futures_ema_quality'] = check(price > e9 > e21 if bullish else price < e9 < e21, {'ema_9':e9,'ema_21':e21,'price':price}, 'FIVE_MINUTE_EMA_DIRECTION')
-        side, line = supertrend(intra, ia, config.supertrend_multiplier)
-        result['futures_supertrend_quality'] = check(side == (1 if bullish else -1), {'supertrend':line,'direction':side,'atr_period':14,'multiplier':config.supertrend_multiplier}, 'FIVE_MINUTE_SUPERTREND_CONFIRMATION')
-        prev = float(daily.Close.iloc[-1])
-        opening = float(session.Open.iloc[0]); gap = (opening/prev-1)*100
-        follow = price >= opening if bullish else price <= opening
-        result['futures_gap_quality'] = check(abs(gap) <= config.maximum_gap_percent and follow, {'opening_gap_percent':gap,'opening_price':opening,'current_price':price,'maximum_gap_percent':config.maximum_gap_percent}, 'GAP_SIZE_AND_DIRECTIONAL_FOLLOW_THROUGH')
+        result['futures_spread_quality'] = check(spread <= config.maximum_spread_percent,
+            {'spread_percent': spread, 'maximum': config.maximum_spread_percent, 'bid': bid, 'ask': ask,
+             'quote_age_seconds': age}, 'TIGHT_FUTURES_SPREAD_REQUIRED')
         try:
-            oi, prior_oi = float(quote['oi']), float(daily.iloc[-1]['OI'])
-            prev = float(daily.Close.iloc[-1]); pc, oc = (price/prev-1)*100, (oi/prior_oi-1)*100
-            if all(isfinite(v) for v in [oi,prior_oi,pc,oc]) and oi > 0 and prior_oi > 0:
-                regime = 'LONG_BUILDUP' if pc > 0 and oc > 0 else 'SHORT_BUILDUP' if pc < 0 and oc > 0 else 'SHORT_COVERING' if pc > 0 and oc < 0 else 'LONG_UNWINDING' if pc < 0 and oc < 0 else 'UNCHANGED'
-                result['futures_oi_quality'] = check((pc > 0 if bullish else pc < 0) and oc > 0, {'price_change_percent':pc,'oi_change_percent':oc,'current_oi':oi,'previous_session_oi':prior_oi}, regime)
-        except (ValueError, TypeError, KeyError, ZeroDivisionError):
-            pass
-    except (ValueError,TypeError,KeyError,ZeroDivisionError,IndexError):
-        pass
-    return result
+            lot_value = float(data['contract']['lot_size'])
+            if not isfinite(lot_value) or lot_value <= 0 or not lot_value.is_integer():
+                raise ValueError('Invalid lot size')
+            buy_lots, sell_lots = sum(q for _, q in bids)/lot_value, sum(q for _, q in asks)/lot_value
+            result['futures_depth_quality'] = check(min(buy_lots, sell_lots) >= config.minimum_depth_lots,
+                {'bid_lots': buy_lots, 'ask_lots': sell_lots, 'minimum_each_side': config.minimum_depth_lots,
+                 'bid_quantity': sum(q for _, q in bids), 'ask_quantity': sum(q for _, q in asks),
+                 'bid_levels': len(bids), 'ask_levels': len(asks), 'quote_age_seconds': age},
+                'TWO_SIDED_FUTURES_DEPTH_REQUIRED')
+        except (KeyError, TypeError, ValueError, OverflowError):
+            unavailable(['futures_depth_quality'], 'FUTURES_LOT_SIZE_INVALID')
+        try:
+            spot = float(data['spot_price'])
+            obstacle = float(levels['resistance' if bullish else 'support'])
+            if not isfinite(spot) or not isfinite(obstacle) or spot <= 0 or obstacle <= 0:
+                raise ValueError('Invalid underlying price or level')
+            space = (obstacle/spot-1)*100 if bullish else (1-obstacle/spot)*100
+            result['futures_target_space_quality'] = check(space >= config.target_percent+spread,
+                {'underlying_space_percent': space, 'target_percent': config.target_percent,
+                 'spread_percent': spread}, 'UNDERLYING_TARGET_SPACE_PROXY_AFTER_FUTURES_SPREAD')
+        except (KeyError, TypeError, ValueError, ZeroDivisionError):
+            unavailable(['futures_target_space_quality'], 'UNDERLYING_TARGET_LEVELS_MISSING_OR_INVALID')
+    except (KeyError, TypeError, ValueError):
+        unavailable(depth_keys, 'FUTURES_DEPTH_MISSING_OR_INVALID')
+
+    daily = None
+    try:
+        daily = clean(normalise_candles(data.get('daily'), 'day', now))
+        daily = daily.loc[daily.index.date < now.date()]
+        previous_session = now.normalize() - pd.Timedelta(days=1)
+        while previous_session.weekday() >= 5 or previous_session.date().isoformat() in holidays:
+            previous_session -= pd.Timedelta(days=1)
+        if daily.empty or daily.index[-1].date() != previous_session.date():
+            raise ValueError('Daily history missing/stale')
+    except (ValueError, TypeError, KeyError, IndexError):
+        daily = None
+
+    # OI requires only a fresh quote and the previous completed daily OI/close.
+    # Missing intraday history or too few ATR candles must not suppress it.
+    try:
+        if daily is None:
+            raise ValueError('No OI baseline')
+        oi, prior_oi = float(quote['oi']), float(daily.iloc[-1]['OI'])
+        prev = float(daily.Close.iloc[-1])
+        if not all(isfinite(v) and v > 0 for v in [oi, prior_oi, prev]):
+            raise ValueError('Invalid OI baseline')
+        pc, oc = (price/prev-1)*100, (oi/prior_oi-1)*100
+        regime = ('LONG_BUILDUP' if pc > 0 and oc > 0 else
+                  'SHORT_BUILDUP' if pc < 0 and oc > 0 else
+                  'SHORT_COVERING' if pc > 0 and oc < 0 else
+                  'LONG_UNWINDING' if pc < 0 and oc < 0 else 'UNCHANGED')
+        result['futures_oi_quality'] = check((pc > 0 if bullish else pc < 0) and oc > 0,
+            {'price_change_percent': pc, 'oi_change_percent': oc, 'current_oi': oi,
+             'previous_session_oi': prior_oi, 'previous_session_close': prev,
+             'baseline_timestamp': daily.index[-1].isoformat(), 'quote_age_seconds': age}, regime)
+    except (ValueError, TypeError, KeyError, IndexError, ZeroDivisionError):
+        unavailable(['futures_oi_quality'], 'FUTURES_OI_BASELINE_MISSING_OR_INVALID')
+
+    intra_keys = ['futures_atr_quality', 'futures_vwap_quality', 'futures_rvol_quality',
+                  'futures_adx_quality', 'futures_rsi_quality', 'futures_ema_quality',
+                  'futures_supertrend_quality', 'futures_gap_quality']
+    try:
+        intra = clean(normalise_candles(data.get('intraday'), '5minute', now))
+        # Use only fully completed bars. Never use the still-forming candle.
+        intra = intra.loc[(intra.index+pd.Timedelta(minutes=5) <= now)
+                          & (intra.index.time >= datetime.strptime('09:15', '%H:%M').time())
+                          & (intra.index.time < datetime.strptime('15:30', '%H:%M').time())]
+        session = intra.loc[intra.index.date == now.date()]
+        if session.empty:
+            raise ValueError('No completed session candles')
+        expected = pd.date_range(now.normalize()+pd.Timedelta(hours=9, minutes=15),
+                                 session.index[-1], freq='5min')
+        if (completed_session_check(intra, now)['status'] != 'PASS' or not session.index.equals(expected)
+                or (now-session.index[-1]-pd.Timedelta(minutes=5)).total_seconds() > config.maximum_candle_age_seconds):
+            raise ValueError('Stale or incomplete session candles')
+    except (ValueError, TypeError, KeyError, IndexError):
+        unavailable(intra_keys, 'FUTURES_INTRADAY_MISSING_STALE_OR_INCOMPLETE')
+        return finish()
+
+    bar_evidence = {'candle_timestamp': session.index[-1].isoformat(),
+                    'completed_session_bars': len(session)}
+    vwap = session_vwap_quality(session, price, now=now.to_pydatetime())
+    if vwap.status != 'UNKNOWN':
+        vwap = check(price >= vwap.factors['vwap'] if bullish else price <= vwap.factors['vwap'],
+                     {**vwap.factors, **bar_evidence},
+                     'PRICE_AT_OR_ABOVE_FUTURES_VWAP' if bullish else 'PRICE_AT_OR_BELOW_FUTURES_VWAP')
+        vwap = replace(vwap, warnings=['VWAP is estimated from completed futures five-minute HLC3 candles.'])
+    result['futures_vwap_quality'] = vwap
+
+    cutoff = session.index[-1].time()
+    baseline = intra.loc[(intra.index.date < now.date()) & (intra.index.time <= cutoff)]
+    expected_times = list(session.index.strftime('%H:%M'))
+    groups = [g for _, g in baseline.groupby(baseline.index.date)
+              if list(g.index.strftime('%H:%M')) == expected_times]
+    totals = [float(g.Volume.sum()) for g in groups[-20:]]
+    if len(totals) >= config.minimum_volume_sessions and sum(totals) > 0:
+        avg = sum(totals)/len(totals)
+        rv = float(session.Volume.sum())/avg
+        result['futures_rvol_quality'] = check(rv >= config.minimum_rvol,
+            {'rvol': rv, 'minimum': config.minimum_rvol, 'matched_average_volume': avg,
+             'current_completed_volume': float(session.Volume.sum()), 'baseline_sessions': len(totals),
+             **bar_evidence}, 'MATCHED_TIME_FUTURES_RVOL')
+    else:
+        unavailable(['futures_rvol_quality'], 'FUTURES_MATCHED_VOLUME_BASELINE_INSUFFICIENT')
+
+    ia, adx, rsi = indicators(intra)
+    if daily is not None and len(daily) >= 14 and isfinite(float(ia.iloc[-1])):
+        da, _, _ = indicators(daily)
+        dp, ip = float(da.iloc[-1])/price*100, float(ia.iloc[-1])/price*100
+        result['futures_atr_quality'] = check(
+            config.minimum_daily_atr_percent <= dp <= config.maximum_daily_atr_percent
+            and config.minimum_five_minute_atr_percent <= ip <= config.maximum_five_minute_atr_percent,
+            {'daily_atr_14': float(da.iloc[-1]), 'daily_atr_percent': dp,
+             'five_minute_atr_14': float(ia.iloc[-1]), 'five_minute_atr_percent': ip,
+             'minimum_daily_atr_percent': config.minimum_daily_atr_percent,
+             'maximum_daily_atr_percent': config.maximum_daily_atr_percent,
+             'minimum_five_minute_atr_percent': config.minimum_five_minute_atr_percent,
+             'maximum_five_minute_atr_percent': config.maximum_five_minute_atr_percent,
+             'daily_candle_timestamp': daily.index[-1].isoformat(), **bar_evidence},
+            'ATR_WITHIN_CONFIGURED_VOLATILITY_BANDS')
+    else:
+        unavailable(['futures_atr_quality'], 'FUTURES_ATR_HISTORY_INSUFFICIENT_OR_STALE')
+    av, rv = float(adx.iloc[-1]), float(rsi.iloc[-1])
+    if isfinite(av):
+        result['futures_adx_quality'] = check(av > config.minimum_adx,
+            {'adx_14': av, 'minimum_exclusive': config.minimum_adx, **bar_evidence}, 'ADX_TREND_STRENGTH')
+    else:
+        unavailable(['futures_adx_quality'], 'FUTURES_ADX_HISTORY_INSUFFICIENT')
+    if isfinite(rv):
+        result['futures_rsi_quality'] = check(50 < rv < 70 if bullish else 30 < rv < 50,
+            {'rsi_14': rv, 'minimum_exclusive': 50 if bullish else 30,
+             'maximum_exclusive': 70 if bullish else 50, **bar_evidence}, 'DIRECTIONAL_RSI_WITHOUT_EXTREME')
+    else:
+        unavailable(['futures_rsi_quality'], 'FUTURES_RSI_HISTORY_INSUFFICIENT')
+    if len(intra) >= 21:
+        e9, e21 = float(intra.Close.ewm(span=9, adjust=False).mean().iloc[-1]), float(intra.Close.ewm(span=21, adjust=False).mean().iloc[-1])
+        result['futures_ema_quality'] = check(price > e9 > e21 if bullish else price < e9 < e21,
+            {'ema_9': e9, 'ema_21': e21, 'price': price, **bar_evidence}, 'FIVE_MINUTE_EMA_DIRECTION')
+    side, line = supertrend(intra, ia, config.supertrend_multiplier)
+    if line is not None and isfinite(line):
+        result['futures_supertrend_quality'] = check(side == (1 if bullish else -1),
+            {'supertrend': line, 'direction': side, 'atr_period': 14,
+             'multiplier': config.supertrend_multiplier, **bar_evidence}, 'FIVE_MINUTE_SUPERTREND_CONFIRMATION')
+    if daily is not None:
+        prev = float(daily.Close.iloc[-1])
+        opening = float(session.Open.iloc[0])
+        gap = (opening/prev-1)*100
+        follow = price >= opening if bullish else price <= opening
+        result['futures_gap_quality'] = check(abs(gap) <= config.maximum_gap_percent and follow,
+            {'opening_gap_percent': gap, 'opening_price': opening, 'current_price': price,
+             'maximum_gap_percent': config.maximum_gap_percent}, 'GAP_SIZE_AND_DIRECTIONAL_FOLLOW_THROUGH')
+    return finish()

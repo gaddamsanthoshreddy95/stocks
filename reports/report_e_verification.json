@@ -1,0 +1,79 @@
+{
+  "baseline_tests": {
+    "total": 721,
+    "passed": 721,
+    "failed": 0,
+    "skipped": 0,
+    "errors": 0
+  },
+  "focused_tests": {
+    "total": 85,
+    "passed": 85,
+    "failed": 0,
+    "skipped": 0,
+    "errors": 0
+  },
+  "full_tests": {
+    "total": 766,
+    "passed": 766,
+    "failed": 0,
+    "skipped": 0,
+    "errors": 0
+  },
+  "command": ".venv/bin/python main.py futures-scan --mode AFTER_MARKET_RESEARCH --limit 5 --json",
+  "generated_at": "2026-10-09T00:02:11.375104+05:30",
+  "completed_session": "2026-10-08T15:30:00+05:30",
+  "scanner_seconds": 217.86164863799786,
+  "report_e_seconds": 0.5106678519987327,
+  "universe": 214,
+  "long_discovery": 214,
+  "short_discovery": 214,
+  "rankable_long": 213,
+  "rankable_short": 213,
+  "approved_trades": 0,
+  "report_d": {
+    "TARGET_SL_ONLY": 0,
+    "TARGET_SL_PLUS_OTHER_FAILURES": 0,
+    "TARGET_SL_PLUS_UNKNOWN": 83
+  },
+  "report_e": {
+    "long_candidates": 213,
+    "short_candidates": 213,
+    "report_d_records": 83,
+    "high_quality_report_d_records": 0,
+    "ready_count": 0,
+    "historically_sufficient_candidates": 0
+  },
+  "request_counts": {
+    "quote": 1,
+    "history": 213,
+    "margin": 10
+  },
+  "files_changed": [
+    "src/futures/report_e.py",
+    "src/futures/report_e_config.py",
+    "src/futures/report_e_history.py",
+    "src/futures/scanner.py",
+    "src/futures/preparation.py",
+    "src/application/platform.py",
+    "src/presenter/futures_opportunities.py",
+    "ui_app.py",
+    "scripts/run_futures_mode.py",
+    "tests/test_report_e.py",
+    "tests/test_fixed_target_stop_report.py",
+    "tests/test_prepared_futures_modes.py",
+    "tests/fixtures/report_e_before.json",
+    "tests/fixtures/report_e_before.md",
+    "README.md",
+    ".env.example"
+  ],
+  "verified_order": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E"
+  ],
+  "historical_probabilities": "UNKNOWN: no valid Report E timing-matched cached OOS evidence",
+  "status": "IMPLEMENTATION COMPLETE; no failing tests; data limitations remain explicit"
+}

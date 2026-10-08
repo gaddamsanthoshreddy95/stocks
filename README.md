@@ -579,24 +579,388 @@ Kite quote and historical formats follow the official
 [market quotes](https://kite.trade/docs/connect/v3/market-quotes/) and
 [historical candles](https://kite.trade/docs/connect/v3/historical/) documentation.
 
-## Market-hours command cache
+## Command snapshots
+
+### Independent intraday LONG/SHORT futures scanner
+
+The CLI, REST API and Streamlit page now default to **LIVE_SCAN**. Prepare data
+first; a cold or expired preparation cache produces UNKNOWN research/history,
+never an automatic full research/backtest run during live scanning.
+
+```bash
+.venv/bin/python main.py futures-scan --mode FULL_RESEARCH --limit 5
+.venv/bin/python main.py futures-scan --mode DAILY_PREP --limit 5
+.venv/bin/python main.py futures-scan --mode LIVE_SCAN --limit 5
+```
+
+FULL_RESEARCH prepares the entire configured universe and independently
+backtests both sides, storing company facts, dated market fields, candles,
+news semantics and historical results in SQLite under `.cache/futures_prepared`.
+DAILY_PREP overlaps the last available candle period, merges revisions and new
+bars, refreshes news/events/sectors and market-sensitive company fields, and
+recomputes backtests only when their candle/config/cost inputs change or expire.
+Financial-cache expiry is not extended by daily market-field updates. Financial
+facts expire weekly or are invalidated by changed material news. Delivery can
+include the just-completed session during after-close preparation. Market-field
+caches expire at the next trading session's close, accounting for configured
+holidays/weekends.
+
+LIVE_SCAN keeps every configured symbol eligible in both directions. It reads
+prepared facts/statistics, batches underlying/futures/index quotes, updates only
+needed candle ranges, refreshes news collection within a bounded budget, and
+reuses semantic analysis only when the complete article fingerprint matches.
+New/changed unchecked stories produce UNKNOWN and a pending-news cache entry;
+they are not treated as neutral or safe. Daily/full preparation performs that
+semantic analysis. Events are reassessed from the existing event/news sources
+with original coverage and freshness rules. All original company thresholds,
+LONG/SHORT filters, VWAP/volume/volatility/liquidity gates, and report formats
+remain. Prepared modes add mandatory fresh read-only margin/funds validation.
+The margin calculation endpoint does not submit an order.
+
+The latest movement requirement is explicit: 0.3% target and 0.2% stop are based
+on the **underlying price**, while entry, costs and P&L use actual futures
+prices. Displayed futures target/stop proxies assume a fixed futures/spot basis,
+and both futures and underlying target clearance are checked. Underlying-bar
+backtests use aligned underlying/futures bars, retain stop-first ambiguity,
+and use conservative actual futures OHLC bounds for fills. Missing aligned
+underlying data is not replaced with a futures-movement hit rate. The legacy
+futures-percentage strategy remains available with
+`FUTURES_RUNTIME_MOVEMENT_BASIS=FUTURES`. Historical rates are explicitly empirical
+frequencies, not guaranteed future probabilities.
+
+Kite requests have bounded timeouts/retries, quote pacing >=1 second and
+historical pacing >=1/3 second. Live requests stop starting when their deadline
+cannot accommodate the timeout. Source failures preserve UNKNOWN rather than
+blocking other symbols. Reports retain A/B/C and add stage durations, request
+counts, cache/quote/news timestamps, sample size and net expectancy. Operational
+settings use `FUTURES_RUNTIME_*` in `.env.example`; trading thresholds are separate.
+
+The measured simulated-feed benchmark scanned 214 symbols in 25.40 seconds
+with warm candles and 99.97 seconds with incremental updates. In the 12-symbol
+same-input reference comparison, ranked decisions and historical rates matched,
+with 34.77 seconds versus 3.82 seconds. Live backtests were zero. These figures
+are not a real-market SLA. Details and limitations are in
+[`reports/futures_scan_performance.md`](reports/futures_scan_performance.md).
+
+[`config/futures_scanner.cron`](config/futures_scanner.cron) contains a UTC-host
+schedule corresponding to Saturday 10:00 IST full research, weekdays 18:10 IST
+daily preparation and 09:35/09:40/09:45 IST live scans. The report-writing runner
+is `scripts/run_futures_mode.py`. The schedule is supplied for installation on
+an always-running host; it is not installed automatically. Valid Kite access
+and successful preparation are prerequisites for an actionable morning report.
+Direct `scanner.scan(mode=None)` remains the reference path for backward
+compatibility and controlled comparisons; operational callers should select a
+prepared mode.
+
+```bash
+.venv/bin/python main.py futures-scan --limit 5
+.venv/bin/python main.py futures-scan --limit 5 --json
+.venv/bin/python main.py futures-backtest --candles contract_5minute.csv --lot-size 500
+```
+
+The Streamlit **Futures LONG / SHORT** page exposes the same scanner in a
+background job, with separate bullish, bearish and combined-approved tabs plus
+Markdown and full-universe JSON downloads. The REST endpoint is
+`GET /futures-opportunities?limit=5&include_backtest=true`. Existing `suggest`,
+`daily-report`, bullish engines, and their report formats remain available.
+
+Discovery evaluates every configured equity symbol independently in both
+directions; index futures are excluded. It never consumes the bullish
+shortlist. Each direction has its own configurable execution-review budget
+(20 by default); the JSON audit retains every discovered symbol and explains
+which candidates were outside that budget. Daily discovery includes EMA9/21/
+50/200 alignment, Wilder RSI/ADX/DI/ATR, MACD, directional volume, higher/lower
+structure, breakdown/breakout, rejection/reversal patterns and Nifty/sector
+relative performance. Missing relevant sector indices remain unavailable;
+they are not replaced with invented sector strength. Futures-candle setup
+scores are recomputed for reviewed contracts before ranking Reports A/B/C.
+Historical simulation finishes before final execution validation. Approvals
+whose quote expires before report completion are changed to UNKNOWN and
+excluded from the combined eligible report.
+Directional volume uses down/up-candle volume as a pressure proxy, not verified
+trade-aggressor order flow. Target obstacles use confirmed swing highs/lows
+with two later completed candles; an arbitrary preceding wick is not treated
+as a major level. Unverified next support/resistance blocks live approval.
+
+SHORT hypotheses initially weight trend 25%, momentum 20%, volume/pressure
+15%, structure 15%, sector weakness 10%, and remaining opportunity 15%.
+LONG and SHORT scores are computed independently; neither is `100 - other`.
+The weights and thresholds use `FUTURES_SCAN_*` environment variables.
+Components with missing optional context are renormalized, with score coverage
+reported. Weights are not empirically validated simply because tests pass.
+
+Both directions now reuse `CandidateQualityEngine` and
+`PublicFundamentalProvider` for complete company research. Every discovered
+stock receives company and news research, including candidates outside the
+execution-review budget; shared snapshots avoid duplicate LONG/SHORT fetches.
+All original valuation, debt, ROE/ROCE, holdings, delivery, quarterly growth,
+commentary, block-deal, recent-news, annual-sector, leadership and underlying
+VWAP checks retain their configured thresholds and PASS/FAIL/UNKNOWN statuses.
+Fundamental assessment, directional technical scores and futures execution
+checks are displayed separately. Missing research blocks approval. Failed
+research blocks approval too; incompatible SHORT rules are flagged for policy
+review and remain in force, rather than being inverted or waived automatically.
+
+Reports show exact company values, sources/periods, unchanged rule results,
+and separate SHORT-supporting/contradicting interpretations. Prior borrowings
+and leverage come from the preceding reported balance-sheet period. Previous
+ROE/ROCE are used only if published comparable ratio-table data is available;
+unavailable trends remain UNKNOWN. High debt alone does not mean rising debt,
+and slowing positive growth is distinguished from negative YoY growth.
+Banks and identified NBFCs receive lending-business context and explicit
+zero-debt/ROCE policy-review flags without changing those rules. Unclassified
+financial-services subtypes and unavailable asset-quality metrics are not
+inferred. Delivery and candle volume are reported without claiming verified
+trade-aggressor selling. Live daily volume reuses the existing elapsed-session
+volume calculation so morning scans are not compared with full-day volume.
+
+SHORT review prioritizes fresh breakdowns, confirmed recovery/rejection and
+early continuation. A new support cross must be recent (two bars by default);
+repeated lower closes do not reset a running breakdown's age. Pullback
+rejection requires observed recovery before rejection. RSI below 30 is TOO
+LATE by default, configurable via `FUTURES_SCAN_SHORT_OVERSOLD_RSI`. The report
+separates a bearish context from the executable entry state and shows the
+exact futures trigger, order-book entry, target, stop, invalidation and
+remaining downside. Approval requires the trigger to trade, entry within
+0.1% below the trigger by default, at least 0.3% target space after the
+execution buffer, and a 0.2% stop covering setup invalidation. Costs and all
+research/execution gates remain mandatory. SHORT backtests enforce trigger
+touch/gaps and stop coverage too, resolving intrabar ambiguity conservatively.
+
+Support breakdown, bearish continuation, pullback rejection, bearish reversal
+and sector selling pressure are distinct setup labels. Extension from EMA21/
+VWAP, today's move, daily ATR consumption, nearby support, candle exhaustion,
+RSI divergence and short covering can defer or block an entry. A large fall is
+not itself approval. Futures OI classification is recorded; verified falling
+price with declining OI (long unwinding) is not rejected solely for failing
+the short-buildup hypothesis. Other verified OI regimes remain evidence rather
+than standalone rejection rules. Sudden rising price with falling intraday OI
+defers SHORT entry pending renewed rejection confirmation. Missing mandatory execution evidence returns
+UNKNOWN, even when the technical score is high.
+
+Plans use the selected futures contract's order-book entry, not spot. SHORT
+target/stop are entry × 0.997 and entry × 1.002; LONG mirrors them. Lot sizing
+uses the configured loss budget after estimated costs, with a one-lot default
+cap. Displayed per-lot economics remain available when the budget fits zero
+lots, explicitly with quantity zero. Available depth, participation and modeled
+fill/slippage are checked. Margin is shown only if supplied; no margin API or
+order API is called. Affordability is unverified when margin is unavailable.
+
+Cost estimates itemize brokerage, sell-side STT, GST, exchange/SEBI/IPFT fees,
+buy-side stamp duty and slippage. Defaults reflect the
+[Zerodha charges schedule](https://zerodha.com/charges), with STT changing from
+0.02% to 0.05% on 1 April 2026 as documented by
+[NSE](https://www.nseindia.com/static/products-services/equity-derivatives-securities-transaction-tax).
+Other fee assumptions are configurable with `FUTURES_COST_*` and held constant
+in each experiment; use the appropriate historical assumptions when testing.
+The date-aware STT model supports dates from 1 October 2024. Default minimum
+net reward/risk is 1:1: current costs may make a 0.3% target / 0.2% stop
+uneconomic, correctly resulting in REJECT rather than a forced recommendation.
+
+Backtests consume exact-contract five-minute OHLCV CSVs with `timestamp`,
+`Open`, `High`, `Low`, `Close`, `Volume` columns and the historical lot size.
+Optional `--daily-candles` supplies completed daily ATR; optional
+`--benchmark-candles` supplies historical Nifty regime classification. Without
+these, ATR is an intraday proxy and market regime remains UNKNOWN. Signal
+generation uses only prefixes, entries use the next bar's open, positions do
+not overlap within a direction, ambiguous bars resolve stop-first, stop gaps
+receive worse fills, and open positions exit at 15:20 IST by default. Missing
+bars/incomplete sessions do not invent outcomes. Intrabar time is approximated
+by exit-bar end; MAE/MFE conservatively include the whole exit bar.
+
+Reports include target-first/stop-first/neither rates, time to target, MAE/MFE,
+net P&L, profit factor, drawdown, direction/setup/time/regime groups and a
+chronological 30% holdout. Candidate historical rates use only matching
+direction/setup holdout trades and remain unavailable below 30 signals.
+Historical news, depth and execution gates are not reconstructed from OHLCV;
+these results evaluate technical hypotheses, not the full live strategy.
+`--skip-backtest` leaves historical rates unavailable. Historical results are
+not forecasts, and short expiry histories may provide insufficient validation.
+
+Futures execution reads fresh data for the exact selected expiry with OI enabled
+and continuous-contract history disabled. Historical requests share the Kite
+provider's request pacing. Quotes are fetched after history so OI, spread and
+depth do not age during historical downloads. Quote freshness defaults to 120
+seconds (`FUTURES_MAXIMUM_QUOTE_AGE_SECONDS`); completed-candle freshness defaults
+to 600 seconds (`FUTURES_MAXIMUM_CANDLE_AGE_SECONDS`, measured from candle end).
+
+VWAP uses completed current-session five-minute futures HLC3 candles; it is an
+estimate, not trade-level VWAP. RVOL compares cumulative completed volume with
+the same clock-time buckets from up to 20 prior sessions, requiring at least
+five complete baseline sessions. ATR(14), RSI(14) and ADX(14) use Wilder smoothing
+and prior-session futures candles for warmup, so no 28-bar wait is imposed on
+the current session. Daily ATR and OI require the previous completed trading
+session (weekends and configured `MARKET_HOLIDAYS_IST` dates are skipped).
+Missing daily history does not suppress VWAP, RVOL, RSI or ADX; missing intraday
+history does not suppress valid OI, spread or depth. Stale, future-dated, missing
+or mismatched quotes cannot approve execution. Reports include timestamps,
+contract identity, measured values, thresholds and reason codes. Off-hours
+commands still run, but closed markets cannot supply fresh live entry approval.
+
+Futures suggestion reports also show a separate upcoming-catalyst watchlist.
+It considers confirmed, sourced scheduled events within the next seven days
+among the stocks reviewed by the existing technical pipeline. Candidates with
+late or extended entries are excluded from this watchlist. It is not a scan of
+every upcoming event in the market, and a scheduled event does not predict the
+direction of a move or override mandatory event-risk checks.
+
+Each reviewed stock includes corresponding headlines, source links, publication
+times in IST, catalyst evidence, setup timing, conditional trade levels, and
+execution-check results. Session price change is shown separately from news
+reaction: without timestamped prices before and after publication, the reaction
+is explicitly unknown. Missing catalyst evidence is not replaced with a claim
+that a high-scoring stock is about to move. Futures margin remains excluded.
 
 With `MARKET_DATA_SOURCE=kite`, `suggest`, `suggest --technical-only`,
-`daily-report`, `analyze` and `backtest` fetch live inputs only on weekdays
-from **09:15 inclusive to 15:30 exclusive, Asia/Kolkata**. Outside that window,
-they return the last complete saved result for the same command, arguments and
-settings without refreshing quotes, news, fundamentals, instruments or model
-inputs. A live run already in progress finishes using its starting mode.
+`daily-report`, `analyze` and `backtest` refresh inputs whenever they are run,
+including before 09:15, after 15:30, weekends and holidays. Results use the
+latest data available from the provider; closed markets do not produce new
+trading ticks. No previously saved report is required to run a command.
 
 Complete snapshots are written atomically to `.cache/market_reports` after a
-successful live run. Off-hours results show their saved timestamp and are
-labelled historical snapshots; an old approval is not a current entry approval.
-A missing, corrupt or incompatible snapshot produces a clear cache-unavailable
-message and never triggers an off-hours network fallback. Existing report
-exports made before this feature are not automatically treated as compatible
-snapshots. Run each desired command during market hours once to seed its cache.
+successful run. `MARKET_REPORT_CACHE_DIR` can change the storage directory.
 
-`MARKET_REPORT_CACHE_DIR` can change the storage directory.
-`MARKET_HOLIDAYS_IST` accepts a comma-separated list of closed dates in
-`YYYY-MM-DD` format. No external calendar is fetched. Normal weekends are
-closed; special exchange sessions are not automatically detected.
+Report D is appended automatically after Reports A/B/C for `futures-scan`, the
+Futures opportunities dashboard, and `/futures-opportunities` (`report_d`, the
+last additional response field). It examines every retained candidate from the
+same completed scan, without fetching data or rerunning research/backtests.
+All entries remain **REJECTED / RESEARCH ONLY**; no score, threshold or trading
+decision changes. Missing mandatory evidence prevents a Target/SL-only label.
+Combined economics/risk failures are attributed only when retained net profit
+or net reward/risk proves a fixed-plan economics failure. Unverifiable
+attribution and missing structure-based stops are reported explicitly.
+Standalone JSON and Markdown artifacts are saved under `reports/prepared_scans`
+(or `FUTURES_REPORT_DIRECTORY`). Structure/invalidation references are research
+information, not approved alternative stops. Classification gives UNKNOWN
+precedence when both unknown checks and additional failures exist; both remain
+visible. Candidates are ranked by existing strong research evidence, technical
+score and fundamental assessment score, without replacing those scores.
+
+`futures-scan --mode AFTER_MARKET_RESEARCH --limit 5` analyses completed-session
+candles and dated company facts without granting live trade approval. Reports
+A/B contain scored research candidates (including explicit timing/rejection
+flags); Report C stays empty, and Report D remains last. After-market research
+ranking uses the existing technical scores; live ranking and approval gates
+remain unchanged. Daily and futures five-minute score bases are displayed.
+
+Preparation now bridges the existing Kite daily/annual/intraday Parquet caches,
+parsed company snapshots, and dated raw fundamental facts retained by previous
+Futures reports into the prepared SQLite cache. It recomputes scores and checks;
+it never imports old scores, PASS/FAIL decisions, plans, or quotes as current
+signals. Original source dates/expiry are retained. Relative cache locations
+resolve against the repository, so changing the shell working directory cannot
+silently select a new preparation database. Newly fetched session/exact-contract
+candles and parsed fundamentals are persisted for subsequent executions.
+
+Missing five-minute data is fetched through the existing paced Kite gateway.
+Existing data gets incremental overlap updates; same-session after-market gaps
+request only the missing tail plus one overlapping candle. Historical candle
+availability is reported separately from live quote freshness. Missing bars,
+fields, token mappings, DNS/transport failures and semantic-analysis deadlines
+remain explicit UNKNOWN conditions. A failed refresh never relabels old candles
+as fresh. AFTER_MARKET_RESEARCH refreshes news within its own budgets and feeds
+changed collected articles through the existing semantic/event analysis without
+a second RSS fetch. LIVE_SCAN continues to require prepared semantic analysis.
+
+In restricted execution environments, DNS may be unavailable even when normal
+terminal networking works. Such failures are recorded with the hostname/error;
+run the same read-only command with permitted network access to refresh feeds.
+No scanner setting bypasses these network restrictions or mandatory risk checks.
+
+### Additive Report E
+
+Every normal `futures-scan` execution now appends **REPORT E — QUALITY + ENTRY
+TIMING + COST-ADJUSTED PROBABILITY**, after the complete existing A–D output.
+CLI, JSON/API (`report_e`, last field), Streamlit and the scheduled writer use
+the same completed snapshot. E1/E2 analyse all retained scored LONG/SHORT
+candidates independently, displaying five by default; complete results are in
+JSON. E3 retains every Report D record, preserves its classification/reasons,
+and labels it REJECTED / RESEARCH ONLY. A “high-quality” heading does not imply
+that every retained rejection has strong evidence or passed mandatory checks.
+
+Report E uses new fields and private retention of already-computed completed
+Futures bars. It does not change candidate objects, A–D scores/rankings,
+strategy thresholds, approval decisions, targets, stops or cost estimates.
+Data acquisition, company research, news and market validation are not repeated
+for this additional report. Its own computation duration is recorded separately.
+Standalone Report E JSON/Markdown is saved alongside Report D.
+
+Stock quality is an independent weighted evidence score. Default LONG weights:
+technical 35%, volume 15%, company fundamentals 25%, Futures execution evidence
+15%, sector/news/events 10%. Default SHORT weights: 40%, 15%, 20%, 15%, 10%.
+These are configurable hypotheses, not fitted or predictive relationships.
+Features within each group have equal shares. Full feature denominators are
+retained: UNKNOWN features contribute no points and lower reported coverage;
+weights are never redistributed to make missing data favorable. Original
+technical/fundamental scores and research PASS/FAIL/UNKNOWN statuses are shown
+separately. The quality/entry ranking uses 60% quality + 40% readiness, then
+coverage and original technical score as tie breakers; this only ranks Report E.
+Candidates without raw evidence for a new quality score are not an alphabetical
+fallback shortlist. Strong evidence requires score >=70 and coverage >=80%.
+
+LONG fundamental evidence retains the original valuation, returns, leverage,
+growth and ownership checks. SHORT evidence uses the existing explicit
+supports/contradicts interpretations of valuation, debt trends, profitability,
+quarterly earnings, FII/DII and promoter changes; it does not invert the LONG
+score. Banks/NBFCs/financial businesses require debt/ROCE interpretation review;
+known insurance symbols are explicitly identified and missing solvency/claims/
+embedded-value metrics disclosed. These interpretations never waive original
+fundamental gates. Quality measurements include the actual retained facts,
+source evidence, technical indicators, OI/volume, delivery, news and event data.
+
+Entry readiness uses retained completed Futures candles, RSI direction,
+EMA9/21, MACD, ADX, RVOL, VWAP, trigger crossing, target clearance, OI,
+spread/depth, ATR, sector confirmation and extension/exhaustion. Its equal-weight
+score also retains full denominators and reports coverage. READY requires an
+original APPROVED decision, current valid quotes and candles, no missing
+mandatory checks, every original required research/execution gate PASS and all
+additional timing conditions confirmed. It is not a new approval engine.
+Rejected records cannot become READY. After-market execution is NOT LIVE,
+readiness is UNKNOWN and any exhausted/rejected conditional setup is flagged.
+Structure/invalidation references never replace the original fixed stop.
+
+**Policy conflict is explicit:** the current prepared scanner can use
+UNDERLYING movement references. Report E requests Futures-entry percentages.
+Existing plans/backtests are not silently converted. Report E's entry/target/
+stop/RR remain UNKNOWN unless an actual validated Futures entry and an existing
+compatible 0.3%/0.2% Futures plan are retained. Incompatible policies are flagged
+for review. Equity prices never substitute for Futures entry prices.
+
+Historical evidence is prepared in FULL_RESEARCH/DAILY_PREP using the separately
+cached ReportEBacktester; LIVE_SCAN and AFTER_MARKET_RESEARCH never run it.
+The original backtester, trades and metrics remain unchanged. Historical signals
+use the same completed-prefix core READY setup and the reconstructible Report E
+RSI/EMA/MACD/ADX/VWAP/ATR/volume/candle timing conditions. Matched-time volume uses
+only prior sessions. Execution occurs on the next bar, within trading hours;
+positions exit intraday and ambiguous target/stop bars remain STOP_FIRST.
+Point-in-time filings, news, institutional/delivery data, order books and
+unavailable sector-relative inputs are explicitly excluded from historical
+claims. Historical Futures OI is used when available in the closed-bar and
+prior-day histories; missing OI is disclosed rather than supplied from current quotes. An observed technical-setup frequency is not a probability that the
+full live mandatory approval strategy will succeed. Legacy backtests that did
+not validate Report E timing never supply Report E probabilities.
+
+Cache identity includes algorithm/entry version, exact instrument/expiry/lot
+size, strategy/execution configuration, trading calendar, candle/daily/benchmark
+periods and fingerprints, and the cost/spread assumptions. Preparation updates
+only expired/changed evidence. Live reads verify the original historical window:
+appended new candles do not invalidate an unchanged historical period, while
+revisions do. Missing evidence never triggers a live historical backfill.
+
+Probability is UNKNOWN below the existing configured sample threshold (default
+30). Only chronological out-of-sample matched direction/setup evidence supplies
+observed target-first/stop-first/time-exit rates and Wilson 95% intervals.
+Duplicate trades and inconsistent holdout partitions are rejected. Confidence
+intervals describe sampling uncertainty, assume independent outcomes, and are
+not calibrated future forecasts. Historical sample count is UNKNOWN when no
+backtest is available, rather than an invented zero.
+
+The existing date-aware brokerage/tax/exchange/GST/stamp/SEBI/IPFT/slippage model
+is reused once per trade. Historical spread is unavailable by default. An
+explicit spread hypothesis charges half-spread on each leg once; it is never
+added again to data already containing a spread charge. Net expectancy uses
+signed target/stop/time-exit outcome means and observed frequencies. The
+break-even target-first rate includes the time-exit bucket; it may be
+unattainable. Net R:R, cost totals, average wins/losses, drawdown and intervals
+are separately reported. Without broker-fill/contract-note calibration, costs
+and net expectancy are **PROVISIONAL**, not validated profit forecasts.

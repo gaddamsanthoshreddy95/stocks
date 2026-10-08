@@ -83,11 +83,14 @@ class PublicFundamentalProvider:
     """Combine reachable public sources with bounded requests and dated caching."""
 
     def __init__(self, *, timeout=10, cache_directory=".cache/public_fundamentals",
-                 today=None, fetcher=None):
+                 today=None, fetcher=None, include_current_session=False):
         self.timeout = timeout
         self.root = Path(cache_directory)
+        if not self.root.is_absolute():
+            self.root = Path(__file__).resolve().parents[2] / self.root
         self.today = today or datetime.now(ZoneInfo("Asia/Kolkata")).date()
         self.fetcher = fetcher
+        self.include_current_session = include_current_session
         self._lock = RLock()
         self._archive_lock = RLock()
         self._snapshots = {}
@@ -180,6 +183,16 @@ class PublicFundamentalProvider:
                 put("total_debt", debt, stamp, "Reported borrowings, INR crore; includes reported lease liabilities")
                 put("debt_to_equity", debt / equity if debt is not None and equity and equity > 0 else None,
                     stamp, "Borrowings / (equity capital + reserves), consolidated")
+                if last >= 1:
+                    previous_stamp = period_date(balance_periods[last-1])
+                    prior_debt = (balance.get("Borrowings") or balance.get("Borrowing") or [None]*(last+1))[last-1]
+                    prior_capital = (balance.get("Equity Capital") or [None]*(last+1))[last-1]
+                    prior_reserves = (balance.get("Reserves") or [None]*(last+1))[last-1]
+                    prior_equity = prior_capital+prior_reserves if prior_capital is not None and prior_reserves is not None else None
+                    if previous_stamp and previous_stamp < stamp:
+                        put("previous_total_debt", prior_debt, previous_stamp, "Prior reported borrowings, INR crore; same reporting basis")
+                        put("previous_debt_to_equity", prior_debt/prior_equity if prior_debt is not None and prior_equity and prior_equity > 0 else None,
+                            previous_stamp, "Prior borrowings / equity; same reporting basis")
         if quarterly_periods:
             latest = period_date(quarterly_periods[-1])
             if latest and 0 <= (today - latest).days <= 150:
@@ -206,6 +219,14 @@ class PublicFundamentalProvider:
         cash_date = period_date(cash_periods[-1]) if cash_periods else None
         if cash_date and 0 <= (today - cash_date).days <= 450 and cash.get("Cash from Operating Activity"):
             put("operating_cash_flow", cash["Cash from Operating Activity"][-1], cash_periods[-1], "INR crore")
+        ratio_periods, ratio_rows = table(soup.find(id="ratios"))
+        if len(ratio_periods) >= 2:
+            last_stamp, previous_stamp = period_date(ratio_periods[-1]), period_date(ratio_periods[-2])
+            if annual_current and last_stamp and previous_stamp and last_stamp == balance_date and previous_stamp < last_stamp:
+                for field, labels in (("previous_roe", ("ROE %", "ROE")), ("previous_roce", ("ROCE %", "ROCE"))):
+                    values = next((ratio_rows[label] for label in labels if label in ratio_rows), [])
+                    if len(values) == len(ratio_periods):
+                        put(field, values[-2], previous_stamp, f"Prior published {reporting_basis} ratio percent; same ratio table")
         return FundamentalSnapshot(symbol=symbol, source="Screener", as_of=today.isoformat(),
                                    evidence=evidence, **data), soup
 
@@ -249,7 +270,7 @@ class PublicFundamentalProvider:
         with self._archive_lock:
             if self._archives is not None:
                 return self._archives
-            candidates = [self.today - timedelta(days=i) for i in range(1, 46)
+            candidates = [self.today - timedelta(days=i) for i in range(0 if self.include_current_session else 1, 46)
                           if (self.today - timedelta(days=i)).weekday() < 5]
 
             def load(stamp):
@@ -357,6 +378,19 @@ class PublicFundamentalProvider:
             return strength, {**details, "url": url, "period": stamp.isoformat()}
         return None
 
+    def read_cached_snapshot(self, symbol, *, max_age_seconds=3600):
+        """Read dated parsed facts without issuing a request or extending their age."""
+        path = self.root / f'snapshot_{symbol}.json'
+        try:
+            data = json.loads(path.read_text())
+            stamp = datetime.fromisoformat(data['saved_at'])
+            age = (datetime.now(ZoneInfo('Asia/Kolkata')) - stamp).total_seconds()
+            if not 0 <= age < max_age_seconds or data['payload']['symbol'] != symbol:
+                return None
+            return {**data, 'source': str(path.resolve())}
+        except (OSError, ValueError, TypeError, KeyError):
+            return None
+
     def get_fundamentals(self, symbol):
         symbol = str(symbol).strip().upper().removesuffix(".NS")
         if not re.fullmatch(r"[A-Z0-9.&-]{1,30}", symbol):
@@ -364,6 +398,12 @@ class PublicFundamentalProvider:
         with self._lock:
             if symbol in self._snapshots:
                 return self._snapshots[symbol]
+        disk = self.read_cached_snapshot(symbol)
+        if disk:
+            snapshot = FundamentalSnapshot(**disk['payload'])
+            with self._lock:
+                self._snapshots[symbol] = snapshot
+            return snapshot
         screener_url = f"https://www.screener.in/company/{quote(symbol)}/consolidated/"
         parsed = self._attempt(symbol, "Screener", lambda: self.parse_screener(
             symbol, self._fetch(screener_url, ttl=3600), today=self.today))
@@ -431,8 +471,23 @@ class PublicFundamentalProvider:
                            source="Screener / Moneycontrol / NSE / company filings", as_of=self.today.isoformat())
         with self._lock:
             self._snapshots[symbol] = snapshot
+        if not self.fetcher:
+            try:
+                from dataclasses import asdict
+                self.root.mkdir(parents=True, exist_ok=True)
+                path = self.root / f'snapshot_{symbol}.json'
+                temporary = path.with_suffix(f'.{uuid4().hex}.tmp')
+                temporary.write_text(json.dumps({'saved_at': datetime.now(ZoneInfo('Asia/Kolkata')).isoformat(),
+                                                 'payload': asdict(snapshot)}, default=str))
+                temporary.replace(path)
+            except OSError:
+                pass  # Persistence cannot erase successfully fetched facts.
         return snapshot
 
     def prefetch(self, symbols):
         with ThreadPoolExecutor(max_workers=4) as pool:
             list(pool.map(self.get_fundamentals, symbols))
+
+    def invalidate_snapshot(self, symbol):
+        with self._lock:
+            self._snapshots.pop(symbol, None)

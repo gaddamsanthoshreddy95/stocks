@@ -44,12 +44,30 @@ class FuturesReportPresenter:
         technical = item.get("technical") or {}
         rows.append("Why reviewed: " + (item.get("discovery_reason") or "Technical/discovery shortlist; this does not mean all futures requirements passed.") )
         rows.append("Final decision: " + item.get("selection_reason", item.get("final_action", "Not verified")))
+        from src.news.catalyst_watchlist import assess_catalyst, ist_time
+        catalyst = item.get("catalyst_assessment") or assess_catalyst(item)
+        rows.append(f"Catalyst assessment: {catalyst['status']}. {catalyst['note']}")
+        for event in catalyst['upcoming_events']:
+            sources = ", ".join(f"[Source]({url})" if str(url).startswith(('https://', 'http://')) else str(url)
+                                for url in event['sources'])
+            rows.append(f"Upcoming catalyst: {event['title']}; {event['time_ist']}; "
+                        f"category: {event['category']}; expected direction: {event['expected_direction']}; {sources}.")
+        timing = catalyst['entry_timing']
+        rows.append(f"Setup timing: {timing.get('status', 'Not verified')}; "
+                    f"trigger: ₹{n(timing.get('trigger_price'))}; {timing.get('reason', 'Not verified')}.")
+        rows.append(f"News reaction: {catalyst['reaction_status']}. {catalyst['reaction_reason']} "
+                    f"Session price change: {n(catalyst['session_price_change_percent'], '%')}.")
+        rows.append(f"Event risk: {catalyst['event_risk_level']}; coverage: {catalyst['event_coverage']}; "
+                    f"hard block: {catalyst['event_hard_block']}.")
+        rows.append(f"Current price: ₹{n(item.get('current_price'))}. "
+                    f"Trade approval: {'APPROVED' if catalyst['trade_approved'] else 'NOT APPROVED'}.")
         contract = selection.get("execution_contract") or {}
         if contract:
             rows.append(f"Execution contract: {contract.get('tradingsymbol')}; expiry {contract.get('expiry')}; lot size {contract.get('lot_size')}.")
         for key, value in checks.items():
             if key.startswith("futures_"):
-                values = ", ".join(f"{name}: {n(number)}" for name, number in value.get("factors", {}).items())
+                values = ", ".join(f"{name}: {n(number) if isinstance(number, (int, float)) and not isinstance(number, bool) else number}"
+                                   for name, number in value.get("factors", {}).items())
                 rows.append(f"{key.removeprefix('futures_').replace('_', ' ').title()}: {value.get('status', 'UNKNOWN')}. "
                             f"{values}. Reason: {', '.join(value.get('reason_codes', []))}.")
         rows.append(f"Trend: {technical.get('trend', 'Not verified')}; momentum: {technical.get('momentum', 'Not verified')}; "
@@ -63,6 +81,9 @@ class FuturesReportPresenter:
                     f"missing confirmation: {', '.join((setup.get('stage_2') or {}).get('missing', [])) or 'see entry evidence'}.")
         levels = item.get("levels") or {}
         rows.append(f"Support / resistance: ₹{n(levels.get('support'))} / ₹{n(levels.get('resistance'))}; reward/risk: {n(levels.get('risk_reward'), ':1')}.")
+        rows.append(f"Conditional plan (requires approval and confirmation): entry ₹{n(levels.get('entry'))}; "
+                    f"stop-loss ₹{n(levels.get('stop_loss'))}; targets ₹{n(levels.get('target_1'))}, "
+                    f"₹{n(levels.get('target_2'))}, ₹{n(levels.get('target_3'))}.")
         friendly = {"valuation_quality": "PE range", "delivery_quality": "delivery versus monthly baseline",
                     "roe_quality": "ROE", "roce_quality": "ROCE", "quarterly_results_quality": "three-quarter growth",
                     "institutional_holding_quality": "FII/DII holdings", "promoter_holding_quality": "promoter holding",
@@ -129,9 +150,19 @@ class FuturesReportPresenter:
                         "A model sentiment flag alone does not establish an adverse event; unresolved items require review.")
         news_context = item.get("news") or {}
         rows.append(f"News check: {news_context.get('news_state', 'Not verified')}; model sentiment: {news_context.get('sentiment', 'Not verified')}; checked at {news_context.get('checked_at', 'Not verified')}.")
-        for article in news_context.get("headlines", [])[:5]:
-            rows.append(f"Latest collected headline ({article.get('published', 'date unavailable')}, {article.get('source', 'source unavailable')}): "
-                        f"[{article.get('title', 'Headline')}]({article.get('url', '')}). A collected headline is not an independently verified catalyst.")
+        articles = news_context.get("article_assessments", []) + news_context.get("headlines", [])
+        seen = set()
+        for article in articles:
+            identity = (article.get('title'), article.get('url'))
+            if identity in seen:
+                continue
+            seen.add(identity)
+            rows.append(f"Corresponding news ({ist_time(article.get('published'))}, {article.get('source', 'source unavailable')}): "
+                        f"[{article.get('title', 'Headline')}]({article.get('url', '')}); "
+                        f"model sentiment: {article.get('sentiment', 'Not verified')}. "
+                        "Direction and materiality require confirmation; publication alone does not establish an upcoming catalyst.")
+        if not articles:
+            rows.append("Corresponding news: no stock-specific headlines available in this run.")
         return rows
 
     @classmethod
@@ -142,6 +173,14 @@ class FuturesReportPresenter:
                  f"Approved: {len(report.get('suggestions', []))}.", "",
                  "Company strengths and trade approval are separate. Each failed rule and unverified check is shown below.", ""]
         market_pe = report.get("market_pe") or {}
+        watchlist = report.get("catalyst_watchlist", [])
+        lines.extend(["Upcoming-catalyst watchlist: " +
+                      (", ".join(item['symbol'] for item in watchlist) if watchlist else
+                       "No verified upcoming catalysts with a usable setup among reviewed stocks."),
+                      "Watchlist candidates are separate from approved trades; price reaction may remain unknown.", ""])
+        if watchlist:
+            symbols = {item['symbol'] for item in watchlist}
+            items = watchlist + [item for item in items if item['symbol'] not in symbols]
         cache = report.get("data_cache") or {}
         if cache.get("source") == "CACHE":
             lines.extend([f"Cached historical snapshot saved at {cache.get('saved_at')}; "

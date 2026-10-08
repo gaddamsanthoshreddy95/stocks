@@ -7,6 +7,7 @@ from src.application.errors import PlatformError
 from src.application.platform import TradingPlatform
 from src.presenter.daily_report import DailyReportPresenter
 from src.presenter.futures_report import FuturesReportPresenter
+from src.presenter.futures_opportunities import FuturesOpportunitiesPresenter
 
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -47,6 +48,17 @@ def main():
     suggest.add_argument("--technical-only", action="store_true",
                          help="show preliminary technical candidates without futures research approval")
     suggest.add_argument("--json", action="store_true", help="emit machine-readable JSON instead of detailed explanations")
+    directional = subcommands.add_parser("futures-scan", help="scan the full stock universe independently for LONG and SHORT setups")
+    directional.add_argument("--limit", type=int, default=5)
+    directional.add_argument("--mode", choices=('FULL_RESEARCH','DAILY_PREP','LIVE_SCAN','AFTER_MARKET_RESEARCH'), default='LIVE_SCAN')
+    directional.add_argument("--skip-backtest", action="store_true", help="leave historical rates unavailable instead of simulating current-contract history")
+    directional.add_argument("--json", action="store_true")
+    historical = subcommands.add_parser("futures-backtest", help="backtest LONG and SHORT setups from exact-contract five-minute CSV candles")
+    historical.add_argument("--candles", required=True, help="CSV with timestamp, Open, High, Low, Close, Volume")
+    historical.add_argument("--lot-size", required=True, type=int, help="historical lot size of this exact contract")
+    historical.add_argument("--daily-candles", help="optional daily futures CSV for completed daily ATR")
+    historical.add_argument("--benchmark-candles", help="optional daily Nifty CSV for historical market regimes")
+    historical.add_argument("--underlying-candles", help="underlying five-minute CSV for the 0.3%%/0.2%% underlying-movement strategy")
     daily = subcommands.add_parser("daily-report", help="generate the final daily trading report")
     daily.add_argument("--limit", type=int, default=5, help="maximum final trades; top 20 are risk-reviewed")
     daily.add_argument("--minimum-score", type=int, default=40)
@@ -74,7 +86,23 @@ def main():
         parser.error(str(exc))
     platform = TradingPlatform()
     try:
-        if args.command == "analyze":
+        if args.command == "futures-backtest":
+            import pandas as pd
+            from src.futures.backtest import FuturesIntradayBacktester
+            def read_candles(path):
+                frame = pd.read_csv(path)
+                frame.index = pd.DatetimeIndex(pd.to_datetime(frame.pop("timestamp")))
+                return frame
+            try:
+                result = FuturesIntradayBacktester().run(read_candles(args.candles), args.lot_size,
+                    daily_history=read_candles(args.daily_candles) if args.daily_candles else None,
+                    benchmark_history=read_candles(args.benchmark_candles) if args.benchmark_candles else None,
+                    underlying_candles=read_candles(args.underlying_candles) if args.underlying_candles else None)
+            except (ValueError, KeyError, OSError) as exc:
+                parser.error(str(exc))
+        elif args.command == "futures-scan":
+            result = platform.scan_futures_opportunities(args.limit, include_backtest=not args.skip_backtest, mode=args.mode)
+        elif args.command == "analyze":
             result = platform.analyze(args.symbol)
         elif args.command == "backtest":
             result = platform.backtest(args.symbol)
@@ -95,7 +123,9 @@ def main():
             result = platform.portfolio()
     except PlatformError as exc:
         parser.error(str(exc))
-    if args.command == "daily-report" and not args.json:
+    if args.command == "futures-scan" and not args.json:
+        output = FuturesOpportunitiesPresenter.render(result)
+    elif args.command == "daily-report" and not args.json:
         output = DailyReportPresenter.render(result)
     elif args.command == "suggest" and not args.technical_only and not args.json:
         output = FuturesReportPresenter.render(result)

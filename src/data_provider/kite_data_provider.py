@@ -34,10 +34,14 @@ class KiteDataProvider:
         self.provider = provider or KiteProvider()
         self._history_cache = {}
         self._long_history_cache = {}
-        self._long_history_cache_directory = Path(long_history_cache_directory)
-        self._history_cache_directory = Path(history_cache_directory)
-        self._instrument_cache_directory = Path(instrument_cache_directory)
-        self._intraday_cache_directory = Path(intraday_cache_directory)
+        project_root = Path(__file__).resolve().parents[2]
+        def cache_path(value):
+            path = Path(value).expanduser()
+            return path if path.is_absolute() else project_root / path
+        self._long_history_cache_directory = cache_path(long_history_cache_directory)
+        self._history_cache_directory = cache_path(history_cache_directory)
+        self._instrument_cache_directory = cache_path(instrument_cache_directory)
+        self._intraday_cache_directory = cache_path(intraday_cache_directory)
         self._intraday_cache: dict[tuple[str, str, str], pd.DataFrame] = {}
         self._history_cache_ttl_seconds = history_cache_ttl_seconds
         self._max_stale_history_days = max_stale_history_days
@@ -47,6 +51,7 @@ class KiteDataProvider:
         self._history_cache_session_date = datetime.now(
             ZoneInfo("Asia/Kolkata")).date()
         self._nfo_instruments = None
+        self._nfo_instruments_date = None
         self._live_refresh = False
         self._live_candles: dict[str, dict] = {}
         self._live_candles_prefetched = False
@@ -287,8 +292,26 @@ class KiteDataProvider:
     def get_session_intraday(self, symbol: str) -> pd.DataFrame:
         """Fetch fresh five-minute bars for today's NSE session for VWAP checks."""
         today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
-        return self.provider.get_historical_data(
+        frame = self.provider.get_historical_data(
             symbol.upper().removesuffix(".NS"), interval="5minute", from_date=today)
+        self._persist_intraday(f"{symbol.upper().removesuffix('.NS')}_45d_5minute.parquet", frame)
+        return frame
+
+    def _persist_intraday(self, filename, frame):
+        if frame is None or frame.empty or not hasattr(self, '_intraday_cache_directory'):
+            return
+        try:
+            from uuid import uuid4
+            path = self._intraday_cache_directory / filename
+            path.parent.mkdir(parents=True, exist_ok=True)
+            cached = pd.read_parquet(path) if path.exists() else None
+            merged = self._merge_history(cached, frame)
+            temporary = path.with_suffix(f'.{uuid4().hex}.tmp')
+            merged.to_parquet(temporary)
+            temporary.replace(path)
+        except Exception:
+            # A cache/serialization failure must not discard fetched market data.
+            logger.warning('Unable to persist intraday candles for %s', filename)
 
     def get_futures_execution_data(self, symbol: str, contract: dict) -> dict:
         """Fresh quotes and OI candles for the exact selected expiry; no margins/orders."""
@@ -301,9 +324,11 @@ class KiteDataProvider:
             return {}
         kite = self.provider.kite
         key, spot_key = "NFO:" + contract["tradingsymbol"], "NSE:" + symbol
-        quotes = kite.quote([key, spot_key])
+        errors = {}
         def history(interval, days):
-            rows = kite.historical_data(master["instrument_token"],
+            request = (self.provider.request_historical_data
+                       if isinstance(self.provider, KiteProvider) else kite.historical_data)
+            rows = request(master["instrument_token"],
                                         now - timedelta(days=days), now,
                                         interval, continuous=False, oi=True)
             if not rows:
@@ -311,9 +336,29 @@ class KiteDataProvider:
             return pd.DataFrame(rows).set_index("date").rename(columns={
                 "open": "Open", "high": "High", "low": "Low",
                 "close": "Close", "volume": "Volume", "oi": "OI"})
+        # Fetch history first so quote/OI/depth timestamps are fresh at evaluation.
+        histories = {}
+        for label, interval, days in [('daily', 'day', 120), ('intraday', '5minute', 45)]:
+            try:
+                histories[label] = history(interval, days)
+                self._persist_intraday(f"{contract['tradingsymbol']}_futures_{interval}.parquet", histories[label])
+            except Exception as exc:
+                logger.warning('Futures %s unavailable for %s: %s', label, key, type(exc).__name__)
+                histories[label] = pd.DataFrame()
+                errors[label] = type(exc).__name__
+        try:
+            quotes = kite.quote([key, spot_key])
+            if not isinstance(quotes, dict):
+                raise ValueError('Invalid quote response')
+        except Exception as exc:
+            logger.warning('Futures quote unavailable for %s: %s', key, type(exc).__name__)
+            quotes = {}
+            errors['quote'] = type(exc).__name__
         return {"contract": contract, "quote": quotes.get(key, {}),
                 "spot_price": quotes.get(spot_key, {}).get("last_price"),
-                "daily": history("day", 120), "intraday": history("5minute", 45)}
+                **histories, 'fetch_errors': errors,
+                'fetched_at': datetime.now(ZoneInfo('Asia/Kolkata')).isoformat(),
+                'instrument_token': master['instrument_token']}
 
     def get_intraday_history(self, symbol: str, period: str = "6mo",
                              interval: str = "15minute") -> pd.DataFrame:
@@ -353,9 +398,10 @@ class KiteDataProvider:
 
     def get_nfo_instruments(self):
         """Share one daily NFO instrument master with universe/options code."""
-        if self._nfo_instruments is not None:
+        india_day = datetime.now(ZoneInfo('Asia/Kolkata')).date()
+        if self._nfo_instruments is not None and getattr(self, '_nfo_instruments_date', india_day) == india_day:
             return self._nfo_instruments
-        path = self._instrument_cache_directory / f"nfo_{date.today().isoformat()}.parquet"
+        path = self._instrument_cache_directory / f"nfo_{india_day.isoformat()}.parquet"
         if path.exists():
             try:
                 frame = pd.read_parquet(path)
@@ -364,10 +410,12 @@ class KiteDataProvider:
                         lambda value: value.date() if isinstance(value, pd.Timestamp) else value
                     )
                 self._nfo_instruments = frame.to_dict("records")
+                self._nfo_instruments_date = india_day
                 return self._nfo_instruments
             except (OSError, ValueError):
                 pass
         self._nfo_instruments = self.provider.kite.instruments("NFO")
+        self._nfo_instruments_date = india_day
         if self._nfo_instruments:
             path.parent.mkdir(parents=True, exist_ok=True)
             pd.DataFrame(self._nfo_instruments).to_parquet(path)

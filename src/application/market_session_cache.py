@@ -1,4 +1,4 @@
-"""Persist complete command snapshots; closed sessions never refresh external data."""
+"""Refresh command results at any time and persist complete snapshots."""
 from copy import copy
 from dataclasses import asdict
 from datetime import datetime, time
@@ -12,7 +12,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from zoneinfo import ZoneInfo
 
-from src.application.errors import DataUnavailableError, ValidationError
+from src.application.errors import ValidationError
 
 LOGGER = logging.getLogger(__name__)
 CACHE_VERSION = 1
@@ -43,7 +43,7 @@ def cached_command(name):
         def wrapped(self, *args, **kwargs):
             if self.settings.market_data_source != 'kite':
                 return function(self, *args, **kwargs)
-            # An in-progress live pipeline retains its starting snapshot mode.
+            # Nested commands share the refresh already in progress.
             if getattr(self, '_market_live_run', False):
                 return function(self, *args, **kwargs)
             now = session_now()
@@ -63,22 +63,6 @@ def cached_command(name):
             key = hashlib.sha256(identity.encode()).hexdigest()
             root = Path(os.getenv('MARKET_REPORT_CACHE_DIR', '.cache/market_reports'))
             path = root / f'{name}_{key}.json'
-            if not live_session(now):
-                try:
-                    saved = json.loads(path.read_text())
-                    if saved.get('version') != CACHE_VERSION or saved.get('key') != key or not isinstance(saved.get('result'),dict):
-                        raise ValueError('Incompatible snapshot')
-                    result = saved['result']
-                except (OSError,ValueError,TypeError) as exc:
-                    raise DataUnavailableError(
-                        f'Market is outside the live IST window. No compatible cached {name} result exists; '
-                        'no external data was fetched. Run this command once during the live window to populate its cache.'
-                    ) from exc
-                result['data_cache'] = {'source':'CACHE','saved_at':saved['saved_at'],
-                    'served_at':now.isoformat(),'historical_snapshot':True,
-                    'execution_available':False,'reason':'Outside the configured live IST window'}
-                LOGGER.info('Serving cached %s snapshot saved at %s; no refresh', name, saved['saved_at'])
-                return result
             runner = copy(self)
             runner._market_live_run = True
             refresh = False

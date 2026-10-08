@@ -750,6 +750,25 @@ class TradingPlatform:
             if refresh_started and end_live_refresh is not None:
                 end_live_refresh()
 
+    def scan_futures_opportunities(self, limit: int = 5, include_backtest: bool = True, mode: str | None = None) -> dict[str, Any]:
+        """Independent full-universe LONG/SHORT intraday research; never submits orders."""
+        from src.futures.scanner import FuturesOpportunityScanner
+        try:
+            scanner = FuturesOpportunityScanner(self)
+        except ValueError as exc:
+            raise ValidationError(f'Invalid futures scan configuration: {exc}') from exc
+        options = {'include_backtest':include_backtest}
+        if mode is not None:
+            options['mode']=mode
+        from src.futures.rejected_analysis import save_report_d
+        report = self._serialize(scanner.scan(limit, **options))
+        save_report_d(report)
+        from src.futures.report_e import append_report_e, save_report_e
+        if 'report_e' not in report:
+            append_report_e(report,limit=limit)
+        save_report_e(report)
+        return report
+
     @cached_command("futures_suggest")
     def suggest_futures(self, limit: int = 5, minimum_score: int = 40,
                         fundamental_provider=None) -> dict[str, Any]:
@@ -766,6 +785,12 @@ class TradingPlatform:
                   runner.daily_report(limit, minimum_score,
                                       fundamental_provider=fundamental_provider))
         reviewed = report.get("futures_review", [])
+        from src.news.catalyst_watchlist import assess_catalyst
+        for item in reviewed:
+            item["catalyst_assessment"] = assess_catalyst(item)
+        catalyst_watchlist = sorted(
+            [item for item in reviewed if item["catalyst_assessment"]["status"] == "UPCOMING_CATALYST_WATCHLIST"],
+            key=lambda item: (-item.get("technical_score", 0), item["symbol"]))[:limit]
         qualified = [
             item for item in report.get("trades", [])
             if item.get("futures_selection", {}).get("eligible")
@@ -777,6 +802,8 @@ class TradingPlatform:
             "universe_size": report.get("summary", {}).get("stocks_scanned", 0),
             "reviewed_count": len(reviewed), "suggestions": qualified[:limit],
             "reviewed": reviewed, "watchlist": report.get("watchlist", []),
+            "catalyst_watchlist": catalyst_watchlist,
+            "catalyst_scope": "Confirmed scheduled events within seven days among reviewed stocks; news reaction remains unverified without timestamped price evidence.",
             "today_news": report.get("today_news"),
             "filter_stages": report.get("filter_stages", []),
             "rankings": {"ranking_mode": report.get("ranking_mode"),
