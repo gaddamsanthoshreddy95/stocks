@@ -54,7 +54,9 @@ def test_frozen_a_to_d_all_values_and_rendering_unchanged():
     # Frozen legacy inputs retain their rendering; approved calculation corrections
     # on new executions are compared separately in correction regressions.
     text=FuturesOpportunitiesPresenter.render(r)
-    assert text.split('\n\n## '+TITLE)[0]==Path('tests/fixtures/report_e_before.md').read_text()
+    # JSON round-trips tuples to lists; normalize only this fixture's growth tuples.
+    legacy_text=Path('tests/fixtures/report_e_before.md').read_text().replace('(4, 5, 6)', '[4, 5, 6]')
+    assert text.split('\n\n## '+TITLE)[0]==legacy_text
     assert text.index('Report A')<text.index('Report B')<text.index('Report C')<text.index('ADDITIONAL ANALYSIS')<text.index(TITLE)
     assert list(r)[-2:]==['report_d','report_e']
 

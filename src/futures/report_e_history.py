@@ -99,7 +99,8 @@ class ReportEBacktester(FuturesIntradayBacktester):
 
 def policy_key(config,costs,e_config,contract):
     from src.quality.futures_execution import FuturesExecutionConfig
-    return fingerprint({'version':VERSION,'entry_definition':'REPORT_E_PREFIX_TECHNICAL_READY_NEXT_BAR',
+    from src.futures.costs import fee_schedule
+    return fingerprint({'version':VERSION,'calculation_version':CALCULATION_VERSION,'fee_schedule_version':fee_schedule()['version'],'entry_definition':'REPORT_E_PREFIX_TECHNICAL_READY_NEXT_BAR',
                         'strategy':asdict(config),'cost_model':asdict(costs),
                         'spread_bps':e_config.historical_spread_bps,'contract':contract,
                         'execution_thresholds':asdict(FuturesExecutionConfig.from_env()),'holidays':os.getenv('MARKET_HOLIDAYS_IST',''),

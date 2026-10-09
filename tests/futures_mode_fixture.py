@@ -142,3 +142,12 @@ def seed(scanner,directory,*,stale_sessions=False):
     scanner.company_research.engine.fundamental_provider.get_fundamentals.reset_mock()
     scanner.news_provider.reset_mock()
     return runtime,cache
+
+
+class SyntheticNoCostModel(__import__('src.futures.costs', fromlist=['FuturesCosts']).FuturesCosts):
+    """Isolate setup-gate tests; never used by application or calibration."""
+    def round_trip(self, *args, **kwargs):
+        result = super().round_trip(*args, **kwargs)
+        result['cost_breakdown'] = {key: 0 for key in result['cost_breakdown']}
+        result.update(total_costs=0, net_pnl=result['gross_pnl'])
+        return result

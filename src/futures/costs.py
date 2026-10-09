@@ -106,9 +106,13 @@ def trade_plan(entry, lot_size, side, *, config, costs, risk_budget, trade_date,
     if not isfinite(lot_size) or lot_size <= 0 or int(lot_size) != lot_size:
         raise ValueError('Valid contract lot size required')
     sign = 1 if side == 'LONG' else -1
-    reference = None if movement_reference_price is None else float(movement_reference_price)
-    if reference is not None and (not isfinite(reference) or reference <= 0):
-        raise ValueError('Valid underlying movement reference required')
+    # Equity context cannot affect executable Futures prices, including when invalid.
+    try:
+        reference = float(movement_reference_price)
+        if not isfinite(reference) or reference <= 0:
+            reference = None
+    except (ValueError, TypeError):
+        reference = None
     target, stop = entry + sign*entry*config.target_fraction, entry - sign*entry*config.stop_fraction
     def economics(exit_price, quantity):
         return costs.round_trip(entry, exit_price, quantity, side, trade_date, extra_slippage_bps,
@@ -127,7 +131,7 @@ def trade_plan(entry, lot_size, side, *, config, costs, risk_budget, trade_date,
     return {'entry': entry, 'target': target, 'stop_loss': stop, 'lot_size': lot_size,
             'movement_basis': 'FUTURES',
             'entry_price_kind': 'MODELED_FUTURES_EXECUTION_REFERENCE_NOT_BROKER_FILL',
-            'underlying_entry': movement_reference_price,
+            'underlying_entry': reference,
             'underlying_target': None,
             'underlying_stop_loss': None,
             'underlying_context': {'reference_price': reference, 'purpose': 'RESEARCH_ONLY_NOT_EXECUTION_LEVELS'},

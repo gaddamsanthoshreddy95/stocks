@@ -10,6 +10,7 @@ import pandas as pd
 from src.application.errors import DataUnavailableError, ValidationError
 from src.event_risk.service import EventRiskService
 from src.futures.backtest import FuturesIntradayBacktester
+from src.futures.costs import fee_schedule
 from src.futures.cache import PreparationCache, fingerprint, candle_fingerprint
 from src.futures.gateway import KiteGateway
 from src.futures.data_recovery import recover_existing_data, source_failure, completed_frame, completed_session_cutoff
@@ -217,7 +218,7 @@ class PreparedScanner:
 
     def backtest_policy(self):
         return fingerprint({'config': asdict(self.scanner.config), 'costs': asdict(self.scanner.costs),
-                            'movement_basis': self.runtime.movement_basis, 'algorithm_version': CALCULATION_VERSION})
+                            'movement_basis': self.runtime.movement_basis, 'algorithm_version': CALCULATION_VERSION, 'fee_schedule_version': fee_schedule()['version']})
 
     def run(self, mode, limit, now=None):
         if mode not in MODES:
@@ -380,7 +381,9 @@ class PreparedScanner:
                         self.scanner._report_e_history[contract['tradingsymbol']]={**record['payload'],'saved_at':record['saved_at'],'expires_at':record['expires_at']}
         except (ValueError,TypeError,KeyError):
             pass
+        initial_reconciliation = report.get('execution_safety',{}).get('initial_reconciliation')
         finalize(report, runner._final_frames, runner._reconciliation, self.clock(), self.scanner.config, self.runtime.reconciliation_max_age_seconds)
+        report['execution_safety']['initial_reconciliation'] = initial_reconciliation
         return report
 
     def update_candles(self, identity, live=False):

@@ -18,6 +18,7 @@ name=report['generated_at'].replace(':','-').replace('+','_')
 folder=ROOT/'reports'/'prepared_scans';folder.mkdir(parents=True,exist_ok=True)
 (folder/f'{args.mode}_{name}.json').write_text(json.dumps(report,indent=2,default=str))
 (folder/f'{args.mode}_{name}.md').write_text(FuturesOpportunitiesPresenter.render(report))
+print(json.dumps({'mode':args.mode,'seconds':report['timings']['total_seconds'],'approved':report['approved_count'],'report_directory':str(folder)}))
 print(FuturesOpportunitiesPresenter.render(report))
 # The complete presenter includes A–E and the manual exit warning in order.
-# Summary is saved in the JSON report rather than appended after Report E.
+# The compatible scheduled JSON summary precedes all report sections.

@@ -180,7 +180,8 @@ def test_long_unwinding_and_each_mandatory_execution_gate(gate, status):
     scanner, _ = scanner_fixture()
     # Zero-cost synthetic model isolates mandatory gate decisions; production
     # remains at net R:R >=1 and the real tariff is covered by cost regressions.
-    scanner.costs = FuturesCosts(**{k:0 for k in FuturesCosts().__dict__})
+    from futures_mode_fixture import SyntheticNoCostModel
+    scanner.costs = SyntheticNoCostModel()
     item = {'symbol': 'DOWN', 'side': 'SHORT', 'technical_score': 90, 'setup_type': 'BEARISH_TREND_CONTINUATION',
             'reason_codes': [], 'company_research': {'unavailable_checks': [], 'failed_checks': [], 'policy_review_required': False}}
     passed = {key: check(True, {}, 'TEST') for key in CHECKS}

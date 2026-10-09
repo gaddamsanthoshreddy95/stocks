@@ -92,7 +92,7 @@ def test_underlying_movement_keeps_execution_prices_and_costs():
     assert plan['target']==pytest.approx(204.385)
     assert plan['stop_loss']==pytest.approx(205.41)
     assert plan['underlying_target'] is None
-    assert plan['underlying_stop_loss']==pytest.approx(200.4)
+    assert plan['underlying_stop_loss'] is None
     assert plan['movement_basis']=='FUTURES'
     assert plan['net_profit_at_target']<plan['gross_profit_at_target']
 
@@ -149,17 +149,20 @@ def test_live_margin_calculation_is_read_only_and_missing_margin_blocks(tmp_path
     assert any('FUTURES_MARGIN_OR_AVAILABLE_FUNDS_UNVERIFIED' in i.get('reason_codes',[]) for i in result['reviewed'] if i['execution_reviewed'])
 
 
-def test_underlying_target_stop_ambiguity_is_stop_first_using_futures_pnl():
+def test_underlying_candles_cannot_drive_futures_barriers_or_outcomes():
     from src.futures.backtest import FuturesIntradayBacktester
     scanner,provider=fixture(['SBIN'])
     future=provider.intraday.iloc[-75:].copy()
     spot=future.copy();spot[['Open','High','Low','Close']]=100.
     spot.iloc[1,spot.columns.get_loc('High')]=101
     spot.iloc[1,spot.columns.get_loc('Low')]=99
-    result=FuturesIntradayBacktester().simulate(future,1,'LONG','TEST',100,underlying=spot)
-    assert result['outcome']=='STOP_FIRST'
-    assert result['target']==pytest.approx(100.3)
-    assert result['stop_loss']==pytest.approx(99.8)
-    assert result['movement_basis']=='UNDERLYING'
-    assert result['entry']!=100
-    assert result['exit']==future.iloc[1].Low
+    engine=FuturesIntradayBacktester()
+    result=engine.simulate(future,1,'LONG','TEST',100,underlying=spot)
+    assert result==engine.simulate(future,1,'LONG','TEST',100)
+    assert result['target']==pytest.approx(result['entry']*1.003)
+    assert result['stop_loss']==pytest.approx(result['entry']*.998)
+    assert result['movement_basis']=='FUTURES'
+    # Ambiguity still uses stop-first, but it must occur in the FUTURES candle.
+    future.iloc[1,future.columns.get_loc('High')]=result['target']+1
+    future.iloc[1,future.columns.get_loc('Low')]=result['stop_loss']-1
+    assert engine.simulate(future,1,'LONG','TEST',100,underlying=spot)['outcome']=='STOP_FIRST'

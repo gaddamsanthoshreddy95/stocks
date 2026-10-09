@@ -1,0 +1,353 @@
+{
+  "scope": "DETERMINISTIC SYNTHETIC FEEDS ONLY; no broker or external requests; not stock recommendations",
+  "as_of": "2026-10-08T09:40:00+05:30",
+  "baseline_file": "tests/fixtures/futures_correction_before.json",
+  "baseline_sha256": "14c9b572cf1fc18a656416bec3a5236cd51a8db68712966e2957100be2448c23",
+  "before_approved": 0,
+  "after_approved": 0,
+  "before_report_c": [],
+  "after_report_c": [],
+  "rows": [
+    {
+      "symbol": "AXISBANK",
+      "side": "LONG",
+      "changes": {
+        "plan.net_risk_reward": {
+          "before": 0.3242935700916731,
+          "after": 0.34209607630898464
+        },
+        "plan.target_costs": {
+          "before": {
+            "brokerage": 12.01298126070854,
+            "stt": 10.025811453229046,
+            "gst": 2.3014541577152987,
+            "exchange_fees": 0.732791856903221,
+            "sebi_fees": 0.040043270869028466,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 4.0043270869028476e-05,
+            "slippage": 10.011754370656108
+          },
+          "after": {
+            "brokerage": 12.01298126070854,
+            "stt": 10.025811453229046,
+            "gst": 2.3014469499265426,
+            "exchange_fees": 0.7327518136323521,
+            "sebi_fees": 0.040043270869028466,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 4.0043270869028476e-05,
+            "slippage": 8.008654173805693,
+            "spread": 1.003050173460292
+          }
+        },
+        "plan.stop_costs": {
+          "before": {
+            "brokerage": 11.982993788764684,
+            "stt": 9.97583233332262,
+            "gst": 2.2957091398478116,
+            "exchange_fees": 0.7309626211146459,
+            "sebi_fees": 0.03994331262921562,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 3.994331262921563e-05,
+            "slippage": 9.986762472576586
+          },
+          "after": {
+            "brokerage": 11.982993788764684,
+            "stt": 9.97583233332262,
+            "gst": 2.295701950051538,
+            "exchange_fees": 0.7309226778020168,
+            "sebi_fees": 0.03994331262921562,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 3.994331262921563e-05,
+            "slippage": 7.988662525843124,
+            "spread": 0.9980499233433414
+          }
+        }
+      },
+      "daily_discovery_score_unchanged": true,
+      "technical_score_unchanged": true,
+      "company_thresholds_unchanged": true
+    },
+    {
+      "symbol": "AXISBANK",
+      "side": "SHORT",
+      "changes": {
+        "reason_codes": {
+          "before": [
+            "NEXT_PRICE_OBSTACLE_UNVERIFIED",
+            "SETUP_CONFIRMATION_PENDING",
+            "LOW_DIRECTIONAL_SCORE"
+          ],
+          "after": [
+            "NEXT_PRICE_OBSTACLE_UNVERIFIED",
+            "SETUP_CONFIRMATION_PENDING",
+            "LOW_DIRECTIONAL_SCORE",
+            "CANDLES_MISSING",
+            "QUOTE_EXPIRED_OR_UNVERIFIED_AT_FINAL_REPORT"
+          ]
+        }
+      },
+      "daily_discovery_score_unchanged": true,
+      "technical_score_unchanged": true,
+      "company_thresholds_unchanged": true
+    },
+    {
+      "symbol": "FEDERALBNK",
+      "side": "LONG",
+      "changes": {
+        "plan.net_risk_reward": {
+          "before": 0.3242935700916731,
+          "after": 0.34209607630898464
+        },
+        "plan.target_costs": {
+          "before": {
+            "brokerage": 12.01298126070854,
+            "stt": 10.025811453229046,
+            "gst": 2.3014541577152987,
+            "exchange_fees": 0.732791856903221,
+            "sebi_fees": 0.040043270869028466,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 4.0043270869028476e-05,
+            "slippage": 10.011754370656108
+          },
+          "after": {
+            "brokerage": 12.01298126070854,
+            "stt": 10.025811453229046,
+            "gst": 2.3014469499265426,
+            "exchange_fees": 0.7327518136323521,
+            "sebi_fees": 0.040043270869028466,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 4.0043270869028476e-05,
+            "slippage": 8.008654173805693,
+            "spread": 1.003050173460292
+          }
+        },
+        "plan.stop_costs": {
+          "before": {
+            "brokerage": 11.982993788764684,
+            "stt": 9.97583233332262,
+            "gst": 2.2957091398478116,
+            "exchange_fees": 0.7309626211146459,
+            "sebi_fees": 0.03994331262921562,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 3.994331262921563e-05,
+            "slippage": 9.986762472576586
+          },
+          "after": {
+            "brokerage": 11.982993788764684,
+            "stt": 9.97583233332262,
+            "gst": 2.295701950051538,
+            "exchange_fees": 0.7309226778020168,
+            "sebi_fees": 0.03994331262921562,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 3.994331262921563e-05,
+            "slippage": 7.988662525843124,
+            "spread": 0.9980499233433414
+          }
+        }
+      },
+      "daily_discovery_score_unchanged": true,
+      "technical_score_unchanged": true,
+      "company_thresholds_unchanged": true
+    },
+    {
+      "symbol": "FEDERALBNK",
+      "side": "SHORT",
+      "changes": {
+        "reason_codes": {
+          "before": [
+            "NEXT_PRICE_OBSTACLE_UNVERIFIED",
+            "SETUP_CONFIRMATION_PENDING",
+            "LOW_DIRECTIONAL_SCORE"
+          ],
+          "after": [
+            "NEXT_PRICE_OBSTACLE_UNVERIFIED",
+            "SETUP_CONFIRMATION_PENDING",
+            "LOW_DIRECTIONAL_SCORE",
+            "CANDLES_MISSING",
+            "QUOTE_EXPIRED_OR_UNVERIFIED_AT_FINAL_REPORT"
+          ]
+        }
+      },
+      "daily_discovery_score_unchanged": true,
+      "technical_score_unchanged": true,
+      "company_thresholds_unchanged": true
+    },
+    {
+      "symbol": "PNB",
+      "side": "LONG",
+      "changes": {
+        "plan.net_risk_reward": {
+          "before": 0.3242935700916731,
+          "after": 0.34209607630898464
+        },
+        "plan.target_costs": {
+          "before": {
+            "brokerage": 12.01298126070854,
+            "stt": 10.025811453229046,
+            "gst": 2.3014541577152987,
+            "exchange_fees": 0.732791856903221,
+            "sebi_fees": 0.040043270869028466,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 4.0043270869028476e-05,
+            "slippage": 10.011754370656108
+          },
+          "after": {
+            "brokerage": 12.01298126070854,
+            "stt": 10.025811453229046,
+            "gst": 2.3014469499265426,
+            "exchange_fees": 0.7327518136323521,
+            "sebi_fees": 0.040043270869028466,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 4.0043270869028476e-05,
+            "slippage": 8.008654173805693,
+            "spread": 1.003050173460292
+          }
+        },
+        "plan.stop_costs": {
+          "before": {
+            "brokerage": 11.982993788764684,
+            "stt": 9.97583233332262,
+            "gst": 2.2957091398478116,
+            "exchange_fees": 0.7309626211146459,
+            "sebi_fees": 0.03994331262921562,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 3.994331262921563e-05,
+            "slippage": 9.986762472576586
+          },
+          "after": {
+            "brokerage": 11.982993788764684,
+            "stt": 9.97583233332262,
+            "gst": 2.295701950051538,
+            "exchange_fees": 0.7309226778020168,
+            "sebi_fees": 0.03994331262921562,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 3.994331262921563e-05,
+            "slippage": 7.988662525843124,
+            "spread": 0.9980499233433414
+          }
+        }
+      },
+      "daily_discovery_score_unchanged": true,
+      "technical_score_unchanged": true,
+      "company_thresholds_unchanged": true
+    },
+    {
+      "symbol": "PNB",
+      "side": "SHORT",
+      "changes": {
+        "reason_codes": {
+          "before": [
+            "NEXT_PRICE_OBSTACLE_UNVERIFIED",
+            "SETUP_CONFIRMATION_PENDING",
+            "LOW_DIRECTIONAL_SCORE"
+          ],
+          "after": [
+            "NEXT_PRICE_OBSTACLE_UNVERIFIED",
+            "SETUP_CONFIRMATION_PENDING",
+            "LOW_DIRECTIONAL_SCORE",
+            "CANDLES_MISSING",
+            "QUOTE_EXPIRED_OR_UNVERIFIED_AT_FINAL_REPORT"
+          ]
+        }
+      },
+      "daily_discovery_score_unchanged": true,
+      "technical_score_unchanged": true,
+      "company_thresholds_unchanged": true
+    },
+    {
+      "symbol": "SBIN",
+      "side": "LONG",
+      "changes": {
+        "plan.net_risk_reward": {
+          "before": 0.3242935700916731,
+          "after": 0.34209607630898464
+        },
+        "plan.target_costs": {
+          "before": {
+            "brokerage": 12.01298126070854,
+            "stt": 10.025811453229046,
+            "gst": 2.3014541577152987,
+            "exchange_fees": 0.732791856903221,
+            "sebi_fees": 0.040043270869028466,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 4.0043270869028476e-05,
+            "slippage": 10.011754370656108
+          },
+          "after": {
+            "brokerage": 12.01298126070854,
+            "stt": 10.025811453229046,
+            "gst": 2.3014469499265426,
+            "exchange_fees": 0.7327518136323521,
+            "sebi_fees": 0.040043270869028466,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 4.0043270869028476e-05,
+            "slippage": 8.008654173805693,
+            "spread": 1.003050173460292
+          }
+        },
+        "plan.stop_costs": {
+          "before": {
+            "brokerage": 11.982993788764684,
+            "stt": 9.97583233332262,
+            "gst": 2.2957091398478116,
+            "exchange_fees": 0.7309626211146459,
+            "sebi_fees": 0.03994331262921562,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 3.994331262921563e-05,
+            "slippage": 9.986762472576586
+          },
+          "after": {
+            "brokerage": 11.982993788764684,
+            "stt": 9.97583233332262,
+            "gst": 2.295701950051538,
+            "exchange_fees": 0.7309226778020168,
+            "sebi_fees": 0.03994331262921562,
+            "stamp_duty": 0.3998329592514076,
+            "ipft": 3.994331262921563e-05,
+            "slippage": 7.988662525843124,
+            "spread": 0.9980499233433414
+          }
+        }
+      },
+      "daily_discovery_score_unchanged": true,
+      "technical_score_unchanged": true,
+      "company_thresholds_unchanged": true
+    },
+    {
+      "symbol": "SBIN",
+      "side": "SHORT",
+      "changes": {
+        "reason_codes": {
+          "before": [
+            "NEXT_PRICE_OBSTACLE_UNVERIFIED",
+            "SETUP_CONFIRMATION_PENDING",
+            "LOW_DIRECTIONAL_SCORE"
+          ],
+          "after": [
+            "NEXT_PRICE_OBSTACLE_UNVERIFIED",
+            "SETUP_CONFIRMATION_PENDING",
+            "LOW_DIRECTIONAL_SCORE",
+            "CANDLES_MISSING",
+            "QUOTE_EXPIRED_OR_UNVERIFIED_AT_FINAL_REPORT"
+          ]
+        }
+      },
+      "daily_discovery_score_unchanged": true,
+      "technical_score_unchanged": true,
+      "company_thresholds_unchanged": true
+    }
+  ],
+  "global_executed_entries": 0,
+  "new_safety_gates": [
+    "directional_consistency",
+    "executed_entry_budget",
+    "final_futures_quote_freshness",
+    "fixed_strategy_policy",
+    "intraday_entry_window",
+    "latest_completed_futures_candle"
+  ],
+  "cost_interpretation": "IPFT double-charge removed; quoted-depth entry spread already embedded, exit half-spread charged once. Original fixed levels and netRR minimum are unchanged.",
+  "all_daily_scores_unchanged": true,
+  "all_technical_scores_unchanged": true,
+  "all_company_thresholds_unchanged": true
+}

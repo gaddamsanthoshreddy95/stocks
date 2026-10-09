@@ -110,6 +110,16 @@ class FuturesOpportunityScanner:
             return report
         return append_report_e(report,contexts=self._report_e_inputs,histories=self._report_e_history,limit=limit)
 
+    def _read_execution_budget(self, instruments):
+        try:
+            from src.futures.gateway import KiteGateway
+            gateway = getattr(self, 'account_gateway', None) or KiteGateway(self.provider, self.runtime)
+            snapshot = gateway.account_snapshot(self._clock() if self._fixed_clock else None)
+            return FuturesTradeLedger(self.runtime.ledger_path, self.config.maximum_daily_entries,
+                self.runtime.reconciliation_max_age_seconds).reconcile(snapshot, self._clock(), instruments)
+        except Exception as exc:
+            return unknown('BROKER_RECONCILIATION_FAILED:'+type(exc).__name__, self._clock())
+
     def _scan(self, symbols, limit, now, include_backtest):
         total_started = perf_counter()
         stage_started = total_started
@@ -131,7 +141,7 @@ class FuturesOpportunityScanner:
             histories[symbol] = (history, sector_history)
             for side, item in both.items():
                 item['daily_discovery'] = {**deepcopy(item), 'basis': 'DAILY_UNDERLYING_RESEARCH',
-                    'provisional_daily_candle': bool(history is not None and not history.empty and history.iloc[-1].get('IS_LIVE_CANDLE', False)),
+                    'provisional_daily_candle': bool(history is not None and not history.empty and pd.notna(history.iloc[-1].get('IS_LIVE_CANDLE')) and history.iloc[-1].get('IS_LIVE_CANDLE', False)),
                     'execution_confirmation': False}
                 item['legacy_field_provenance'] = {'confirmed': 'DAILY_DISCOVERY', 'timing': 'DAILY_DISCOVERY', 'evidence': 'DAILY_DISCOVERY',
                     'technical_score': 'FUTURES_5_MINUTE_WHEN_REVIEWED_OTHERWISE_DAILY', 'BULLISH_SCORE': 'DAILY_DISCOVERY', 'BEARISH_SCORE': 'DAILY_DISCOVERY'}
@@ -165,6 +175,7 @@ class FuturesOpportunityScanner:
             instruments = self.provider.get_nfo_instruments()
         except Exception:
             instruments = None
+        initial_reconciliation = self._read_execution_budget(instruments)
         service, context = None, None
         if self.event_provider is None:
             try:
@@ -212,8 +223,16 @@ class FuturesOpportunityScanner:
                     stock_vwap = session_vwap_quality(bars, item.get('evidence', {}).get('price'), now=getattr(self,'research_as_of',now).to_pydatetime())
                 except Exception:
                     stock_vwap = None
-                stock = normalise_candles(stock, 'day', getattr(self, 'research_as_of', now), allow_live_daily=True) if stock is not None and not stock.empty else stock
-                sector_history = normalise_candles(sector_history, 'day', getattr(self, 'research_as_of', now), allow_live_daily=True) if sector_history is not None and not sector_history.empty else sector_history
+                try:
+                    stock = normalise_candles(stock, 'day', getattr(self, 'research_as_of', now), allow_live_daily=True) if stock is not None and not stock.empty else stock
+                except (ValueError, TypeError, AttributeError) as exc:
+                    stock = None
+                    failures.append({'symbol': symbol, 'source': 'annual_equity_history', 'detail': str(exc)})
+                try:
+                    sector_history = normalise_candles(sector_history, 'day', getattr(self, 'research_as_of', now), allow_live_daily=True) if sector_history is not None and not sector_history.empty else sector_history
+                except (ValueError, TypeError, AttributeError) as exc:
+                    sector_history = None
+                    failures.append({'symbol': symbol, 'source': 'annual_sector_history', 'detail': str(exc)})
                 research_inputs[symbol] = (stock, sector_history, stock_vwap)
             stock, sector_history, stock_vwap = research_inputs[symbol]
             item['news'] = news_cache[symbol]
@@ -272,7 +291,7 @@ class FuturesOpportunityScanner:
                     data = {}
             evaluation_now = self._clock()
             try:
-                session_bars = normalise_candles(self.provider.get_session_intraday(symbol), '5minute', getattr(self, 'research_as_of', now))
+                session_bars = normalise_candles(self.provider.get_session_intraday(symbol), '5minute', getattr(self, 'research_as_of', evaluation_now))
                 reference_price = data.get('spot_price')
                 if getattr(self,'research_as_of',None) is not None:
                     reference_history = self.provider.get_data(symbol)
@@ -308,18 +327,12 @@ class FuturesOpportunityScanner:
                 if item.get('short_entry'):
                     item['short_entry'].update(state='UNVERIFIED', execution_approved=False)
         stage_started = perf_counter()
-        try:
-            from src.futures.gateway import KiteGateway
-            gateway = getattr(self, 'account_gateway', None) or KiteGateway(self.provider, self.runtime)
-            snapshot = gateway.account_snapshot(now if getattr(self, '_fixed_clock', False) else None)
-            reconciliation = FuturesTradeLedger(self.runtime.ledger_path, self.config.maximum_daily_entries,
-                self.runtime.reconciliation_max_age_seconds).reconcile(snapshot, self._clock(), instruments)
-        except Exception as exc:
-            reconciliation = unknown('BROKER_RECONCILIATION_FAILED:'+type(exc).__name__, self._clock())
+        reconciliation = self._read_execution_budget(instruments)
         self._reconciliation = reconciliation
         temporary = {'reviewed': all_items, 'report_c': []}
         finalize(temporary, self._final_frames, reconciliation, self._clock(), self.config, self.runtime.reconciliation_max_age_seconds)
         self._execution_safety = temporary['execution_safety']
+        self._execution_safety['initial_reconciliation'] = initial_reconciliation
         timings['read_only_reconciliation_and_final_safety_seconds'] = perf_counter()-stage_started
         served_at = self._clock()
         long_items = sorted((item for item in all_items if item['side'] == 'LONG' and item.get('technical_score') is not None), key=rank_key, reverse=True)
@@ -365,7 +378,7 @@ class FuturesOpportunityScanner:
             daily = daily.loc[daily.index.date < now.date()]
             daily_atr = float(daily.ATR.iloc[-1])
             normalized = normalise_candles(data.get('intraday'), '5minute', now)
-            self._final_frames[item['symbol']] = normalized
+            self._final_frames[item['symbol']+':'+item['side']] = normalized
             frame = prepare(normalized)
             frame = frame.loc[frame.index+pd.Timedelta(minutes=5) <= now]
             future_setup = directional_setup(frame, item['side'], config=self.config, daily_atr=daily_atr, prepared=True)
@@ -430,6 +443,9 @@ class FuturesOpportunityScanner:
         missing = [key for key in REQUIRED_EXECUTION if checks[key].status == 'UNKNOWN']
         failed = [key for key in REQUIRED_EXECUTION if checks[key].status == 'FAIL']
         reasons = [*item['reason_codes'], *missing, *failed]
+        if self.config.target_fraction != .003 or self.config.stop_fraction != .002 or self.config.minimum_net_rr < 1:
+            failed.append('UNAPPROVED_STRATEGY_CONFIGURATION')
+            reasons.append('UNAPPROVED_STRATEGY_CONFIGURATION')
         margin = data.get('margin_by_side', {}).get(item['side'], data.get('margin_per_lot'))
         available_capital = data.get('available_capital', self.platform.settings.capital)
         if data.get('require_margin'):

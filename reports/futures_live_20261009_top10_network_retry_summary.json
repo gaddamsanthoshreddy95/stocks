@@ -1,0 +1,2634 @@
+{
+  "source_report": "reports/futures_live_20261009_top10_network_retry.json",
+  "generated_at": "2026-10-09T14:41:06.742951+05:30",
+  "universe_size": 214,
+  "timings": {
+    "cache_recovery_seconds": 1.2757309879998502,
+    "fresh_news_seconds": 13.625100937999377,
+    "incremental_session_updates_seconds": 76.69962898500034,
+    "margin_validation_seconds": 1.0307826589996694,
+    "scanner_seconds": 47.15720848300043,
+    "scanner_discovery_seconds": 23.56356725600017,
+    "scanner_research_news_events_seconds": 10.574453017999986,
+    "scanner_historical_validation_seconds": 2.5113607029998093,
+    "scanner_execution_validation_seconds": 9.467657012000018,
+    "scanner_read_only_reconciliation_and_final_safety_seconds": 0.8829107810006462,
+    "scanner_total_seconds": 47.00112856099986,
+    "total_seconds": 143.12610152599973
+  },
+  "request_counts": {
+    "quote": 1,
+    "history": 213,
+    "margin": 10,
+    "account": 0
+  },
+  "execution_safety": {
+    "reconciliation": {
+      "status": "UNKNOWN",
+      "executed_entries": null,
+      "remaining_entries": null,
+      "reasons": [
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+      ],
+      "checked_at": "2026-10-09T14:41:04.456694+05:30",
+      "entries": [],
+      "pending_orders": [],
+      "overnight_positions": [],
+      "read_only": true
+    },
+    "entry_window": {
+      "status": "PASS",
+      "reason_codes": [
+        "INTRADAY_ENTRY_WINDOW_OPEN"
+      ],
+      "entry_cutoff": "2026-10-09T15:15:00+05:30",
+      "manual_exit_deadline": "2026-10-09T15:20:00+05:30",
+      "manual_exit_warning_active": false,
+      "manual_exit_warning": "Manually close intraday Futures in Zerodha Kite before 15:20 IST. This scanner never places, modifies, cancels, converts or squares off orders.",
+      "automatic_square_off": false
+    },
+    "contradictory_symbols": [],
+    "broker_actions": "READ_ONLY",
+    "calculation_version": "FUTURES_ENTRY_SESSION_V2",
+    "final_checked_at": "2026-10-09T14:41:06.742951+05:30",
+    "discovery_basis": "DAILY_UNDERLYING_RESEARCH",
+    "execution_basis": "COMPLETED_FUTURES_5_MINUTE_AND_FRESH_DEPTH",
+    "initial_reconciliation": {
+      "status": "UNKNOWN",
+      "executed_entries": null,
+      "remaining_entries": null,
+      "reasons": [
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+      ],
+      "checked_at": "2026-10-09T14:40:41.902848+05:30",
+      "entries": [],
+      "pending_orders": [],
+      "overnight_positions": [],
+      "read_only": true
+    }
+  },
+  "approved_count": 0,
+  "report_d_summary": {
+    "TARGET_SL_ONLY": 0,
+    "TARGET_SL_PLUS_OTHER_FAILURES": 0,
+    "TARGET_SL_PLUS_UNKNOWN": 96
+  },
+  "report_e_summary": {
+    "long_candidates": 213,
+    "short_candidates": 213,
+    "report_d_records": 96,
+    "high_quality_report_d_records": 0,
+    "ready_count": 0,
+    "historically_sufficient_candidates": 0
+  },
+  "ranking": "Existing Report E quality/readiness rank score, then coverage/technical tie-breakers; one highest-ranked direction per unique stock. No new scoring or market requests.",
+  "candidates": [
+    {
+      "rank": 1,
+      "symbol": "MOTHERSON",
+      "direction": "SHORT",
+      "technical_score": 72.13,
+      "technical_basis": "COMPLETED_FUTURES_5_MINUTE",
+      "quality_score": 56.95,
+      "report_e_rank_score": 54.17,
+      "quality_coverage_percent": 77.5,
+      "decision": "UNKNOWN",
+      "report_e_entry_status": "REJECT",
+      "research_status": "UNKNOWN",
+      "research_assessment": {
+        "score": 81.17,
+        "status": "PASS",
+        "confidence": 71.43,
+        "factors": {
+          "roe": 72.4,
+          "roce": 76.8,
+          "revenue_growth": null,
+          "profit_growth": null,
+          "debt_to_equity": 83.63,
+          "operating_cash_flow": 80,
+          "promoter_pledge": 93.01
+        },
+        "reason_codes": [],
+        "warnings": [
+          "OPTIONAL_DATA_MISSING"
+        ]
+      },
+      "quote": {
+        "last_price": 153.54,
+        "timestamp": "2026-10-09 14:40:17",
+        "oi": 134660400,
+        "volume": 13806750
+      },
+      "evidence_timestamp": "2026-10-08T15:25:00+05:30",
+      "research_reference_price": 154.23,
+      "setup_type": "BEARISH_TREND_CONTINUATION",
+      "setup_timing": "TOO LATE",
+      "rsi": 39.333967080648705,
+      "adx": 51.278617726747996,
+      "rvol": 1.127251597908193,
+      "vwap": 155.78080414255254,
+      "atr": 4.064524255539134,
+      "support": 154.12,
+      "resistance": 154.76,
+      "plan": {},
+      "fundamentals": {
+        "pe_ratio": 36.89,
+        "sector_pe": 86.62,
+        "total_debt": 19170.0,
+        "debt_to_equity": 0.46780058078528025,
+        "roe": 11.2,
+        "roce": 13.4,
+        "fii_holding_percent": 12.87,
+        "dii_holding_percent": 20.59,
+        "fii_holding_change_pct_points": 0.41999999999999993,
+        "dii_holding_change_pct_points": -0.48999999999999844,
+        "promoter_holding_percent": 48.6,
+        "delivery_percent": 46.71861548981405,
+        "quarterly_revenue_growth_pct": [
+          13.5292,
+          17.0277,
+          16.6556
+        ],
+        "quarterly_profit_growth_pct": [
+          8.9431,
+          40.0897,
+          77.5578
+        ]
+      },
+      "news_state": "FETCH_FAILED",
+      "news_at": "2026-10-09T14:39:00.430095+05:30",
+      "news_headlines": [
+        {
+          "title": "Motherson stock gained 2.24 percent as Q1 profit rose significantly - AD HOC NEWS",
+          "description": "Motherson stock gained 2.24 percent as Q1 profit rose significantly AD HOC NEWS",
+          "source": "AD HOC NEWS",
+          "published": "2026-10-06T23:14:35+00:00",
+          "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxQRFIzdnZmTzNIMlAzS0ZvOXhPTTRPSzMzTVEyX3kzNDlwSWJ4SkJ0QlV1Q3FfMF95eG4zODJBNEdlOC0xb0dIVnJ6Q2JDTmJZY0FDZEZEYkJNRlNuU1lnTzhzTHlzdWdkSWx4MXBRNWRGd2YyaE1WQm1MT3dOTFJRMWRFWGxxMWp1VWhidmxJZkh3NUt2ZktYXzdZMjVPVExwRTl3S1BISFBpN3psb3BQY2RGaXlJczIzcEdzTGdncHNkSVd2?oc=5"
+        },
+        {
+          "title": "Motherson Sumi Wiring India (NSEI:MSUMI) Stock Forecast & Analyst Predictions - Simply Wall Street",
+          "description": "Motherson Sumi Wiring India (NSEI:MSUMI) Stock Forecast & Analyst Predictions Simply Wall Street",
+          "source": "Simply Wall Street",
+          "published": "2026-10-06T07:00:00+00:00",
+          "url": "https://news.google.com/rss/articles/CBMimwFBVV95cUxObkF2a1FidENjRGdibXdiUjVFYWF2UDFURW5vMVJSTmRmSlE4SXlhTk12V3FaWHljVkQzbU1xRDZlVWZhanJYcG5OLWRERHJXaWo3aUUtWVF6SXZOM3VOV1BzbHdJcWlEdVc4QXhqaUNaeG4wdnIxdjNFZWYwWkIzT1g0bzdqZm12MXpCczVJb091SUtkU2pac0lHUQ?oc=5"
+        }
+      ],
+      "missing": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "FUTURES_MARGIN_OR_AVAILABLE_FUNDS_UNVERIFIED",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "NEWS_UNVERIFIED",
+        "EXECUTION_PLAN_UNVERIFIED"
+      ],
+      "failed": [],
+      "research_failed": [
+        "valuation_quality",
+        "delivery_quality",
+        "debt_free_quality",
+        "roe_quality",
+        "roce_quality",
+        "institutional_holding_quality",
+        "promoter_holding_quality",
+        "commentary_quality",
+        "sector_one_year_quality"
+      ],
+      "research_unknown": [
+        "recent_news_quality"
+      ],
+      "safety_checks": {
+        "executed_entry_budget": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+          ],
+          "executed_entries": null,
+          "remaining_entries": null,
+          "checked_at": "2026-10-09T14:41:04.456694+05:30"
+        },
+        "intraday_entry_window": {
+          "status": "PASS",
+          "reason_codes": [
+            "INTRADAY_ENTRY_WINDOW_OPEN"
+          ],
+          "entry_cutoff": "2026-10-09T15:15:00+05:30",
+          "manual_exit_deadline": "2026-10-09T15:20:00+05:30",
+          "manual_exit_warning_active": false,
+          "manual_exit_warning": "Manually close intraday Futures in Zerodha Kite before 15:20 IST. This scanner never places, modifies, cancels, converts or squares off orders.",
+          "automatic_square_off": false
+        },
+        "latest_completed_futures_candle": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+          ],
+          "expected_latest": "2026-10-09T14:35:00+05:30",
+          "candle_timestamp": null,
+          "missing_candles": [
+            "2026-10-09T09:15:00+05:30",
+            "2026-10-09T09:20:00+05:30",
+            "2026-10-09T09:25:00+05:30",
+            "2026-10-09T09:30:00+05:30",
+            "2026-10-09T09:35:00+05:30",
+            "2026-10-09T09:40:00+05:30",
+            "2026-10-09T09:45:00+05:30",
+            "2026-10-09T09:50:00+05:30",
+            "2026-10-09T09:55:00+05:30",
+            "2026-10-09T10:00:00+05:30",
+            "2026-10-09T10:05:00+05:30",
+            "2026-10-09T10:10:00+05:30",
+            "2026-10-09T10:15:00+05:30",
+            "2026-10-09T10:20:00+05:30",
+            "2026-10-09T10:25:00+05:30",
+            "2026-10-09T10:30:00+05:30",
+            "2026-10-09T10:35:00+05:30",
+            "2026-10-09T10:40:00+05:30",
+            "2026-10-09T10:45:00+05:30",
+            "2026-10-09T10:50:00+05:30",
+            "2026-10-09T10:55:00+05:30",
+            "2026-10-09T11:00:00+05:30",
+            "2026-10-09T11:05:00+05:30",
+            "2026-10-09T11:10:00+05:30",
+            "2026-10-09T11:15:00+05:30",
+            "2026-10-09T11:20:00+05:30",
+            "2026-10-09T11:25:00+05:30",
+            "2026-10-09T11:30:00+05:30",
+            "2026-10-09T11:35:00+05:30",
+            "2026-10-09T11:40:00+05:30",
+            "2026-10-09T11:45:00+05:30",
+            "2026-10-09T11:50:00+05:30",
+            "2026-10-09T11:55:00+05:30",
+            "2026-10-09T12:00:00+05:30",
+            "2026-10-09T12:05:00+05:30",
+            "2026-10-09T12:10:00+05:30",
+            "2026-10-09T12:15:00+05:30",
+            "2026-10-09T12:20:00+05:30",
+            "2026-10-09T12:25:00+05:30",
+            "2026-10-09T12:30:00+05:30",
+            "2026-10-09T12:35:00+05:30",
+            "2026-10-09T12:40:00+05:30",
+            "2026-10-09T12:45:00+05:30",
+            "2026-10-09T12:50:00+05:30",
+            "2026-10-09T12:55:00+05:30",
+            "2026-10-09T13:00:00+05:30",
+            "2026-10-09T13:05:00+05:30",
+            "2026-10-09T13:10:00+05:30",
+            "2026-10-09T13:15:00+05:30",
+            "2026-10-09T13:20:00+05:30",
+            "2026-10-09T13:25:00+05:30",
+            "2026-10-09T13:30:00+05:30",
+            "2026-10-09T13:35:00+05:30",
+            "2026-10-09T13:40:00+05:30",
+            "2026-10-09T13:45:00+05:30",
+            "2026-10-09T13:50:00+05:30",
+            "2026-10-09T13:55:00+05:30",
+            "2026-10-09T14:00:00+05:30",
+            "2026-10-09T14:05:00+05:30",
+            "2026-10-09T14:10:00+05:30",
+            "2026-10-09T14:15:00+05:30",
+            "2026-10-09T14:20:00+05:30",
+            "2026-10-09T14:25:00+05:30",
+            "2026-10-09T14:30:00+05:30",
+            "2026-10-09T14:35:00+05:30"
+          ]
+        },
+        "final_futures_quote_freshness": {
+          "status": "PASS",
+          "reason_codes": [
+            "FINAL_FUTURES_QUOTE_FRESH"
+          ],
+          "checked_at": "2026-10-09T14:41:06.742951+05:30"
+        },
+        "directional_consistency": {
+          "status": "PASS",
+          "reason_codes": [
+            "NO_CONTRADICTORY_CONFIRMED_FUTURES_DIRECTIONS"
+          ]
+        },
+        "fixed_strategy_policy": {
+          "status": "PASS",
+          "reason_codes": [
+            "FIXED_FUTURES_STRATEGY_VERIFIED"
+          ]
+        }
+      },
+      "reasons": [
+        "EXHAUSTION_OR_COUNTERTREND_DIVERGENCE",
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "FUTURES_MARGIN_OR_AVAILABLE_FUNDS_UNVERIFIED",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_FAIL:valuation_quality",
+        "RESEARCH_FAIL:delivery_quality",
+        "RESEARCH_FAIL:debt_free_quality",
+        "RESEARCH_FAIL:roe_quality",
+        "RESEARCH_FAIL:roce_quality",
+        "RESEARCH_FAIL:institutional_holding_quality",
+        "RESEARCH_FAIL:promoter_holding_quality",
+        "RESEARCH_FAIL:commentary_quality",
+        "RESEARCH_FAIL:sector_one_year_quality",
+        "RESEARCH_POLICY_REVIEW_REQUIRED_NO_AUTOMATIC_WAIVER",
+        "MOVE_OR_ATR_ALREADY_CONSUMED",
+        "INSUFFICIENT_REMAINING_TARGET_SPACE",
+        "TODAY_NEWS_CHECK_INCOMPLETE",
+        "EXECUTION_PLAN_UNVERIFIED",
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']",
+        "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+      ]
+    },
+    {
+      "rank": 2,
+      "symbol": "ICICIBANK",
+      "direction": "LONG",
+      "technical_score": 76.0,
+      "technical_basis": "COMPLETED_FUTURES_5_MINUTE",
+      "quality_score": 38.25,
+      "report_e_rank_score": 52.95,
+      "quality_coverage_percent": 67.41,
+      "decision": "UNKNOWN",
+      "report_e_entry_status": "REJECT",
+      "research_status": "UNKNOWN",
+      "research_assessment": {
+        "score": 80.99,
+        "status": "PASS",
+        "confidence": 71.43,
+        "factors": {
+          "roe": 81.8,
+          "roce": 64.36,
+          "revenue_growth": null,
+          "profit_growth": null,
+          "debt_to_equity": 78.77,
+          "operating_cash_flow": 80,
+          "promoter_pledge": 100.0
+        },
+        "reason_codes": [],
+        "warnings": [
+          "OPTIONAL_DATA_MISSING"
+        ]
+      },
+      "quote": {
+        "last_price": 1358.3,
+        "timestamp": "2026-10-09 14:40:17",
+        "oi": 116027100,
+        "volume": 5128200
+      },
+      "evidence_timestamp": "2026-10-08T15:25:00+05:30",
+      "research_reference_price": 1355.0,
+      "setup_type": "PULLBACK_REJECTION",
+      "setup_timing": "TOO LATE",
+      "rsi": 62.93419096586615,
+      "adx": 29.212567650949048,
+      "rvol": 1.2551352882844595,
+      "vwap": 1355.8559592623178,
+      "atr": 20.719260568671924,
+      "support": 1354.3,
+      "resistance": 1357.0,
+      "plan": {},
+      "fundamentals": {
+        "pe_ratio": 17.27,
+        "sector_pe": 18.23,
+        "total_debt": 220264.0,
+        "debt_to_equity": 0.6066875998457555,
+        "roe": 15.9,
+        "roce": 7.18,
+        "fii_holding_percent": 33.79,
+        "dii_holding_percent": 42.32,
+        "fii_holding_change_pct_points": -0.6899999999999977,
+        "dii_holding_change_pct_points": 2.3800000000000026,
+        "promoter_holding_percent": null,
+        "delivery_percent": 60.39960685309129,
+        "quarterly_revenue_growth_pct": [
+          2.8212,
+          2.4945,
+          6.4405
+        ],
+        "quarterly_profit_growth_pct": [
+          -2.6432,
+          9.2448,
+          12.5899
+        ]
+      },
+      "news_state": "UNANALYSED_NEW_HEADLINES",
+      "news_at": "2026-10-09T14:38:57.685960+05:30",
+      "news_headlines": [
+        {
+          "title": "ICICI Bank Stock Update: Share Price Dips Intraday After RBI Rate Hike - LatestLY",
+          "description": "ICICI Bank Stock Update: Share Price Dips Intraday After RBI Rate Hike LatestLY",
+          "source": "LatestLY",
+          "published": "2026-10-09T03:48:41+00:00",
+          "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxOc1d0bFFoSzh3QlpzY0g3T05SSjIzWnZsT1ZHME9ybEpzVHZFS3l1NEh3T0J0Z2NaSDJ6dzh4dGtSTloxWGRsNjNjdkNYbUgtVU04Y0hIa0FhR1pKQUxaT1I3dGswZ0hnZ3lDUGswckRRa0VCWkdLTmxsV1FuWFllQUwyUFNzQzF1NDZ0WC04WXl1YWI1UzVxU29vT0xpMjlxMEV2OVJWTHBMclBhcjdHRFZMeW03NGtwMmfSAb8BQVVfeXFMUElaeTNrb1pua3VPU2dwWlQwTElLdmtiQjBnYmNmQ2ctbW1HdmlsNkh2MDlMUVdhSExWb1dpS1JwSGI5MzZxYkdmQ013TEw4aTI0ZkVjZHRjVzIydzdpdTJySXozZHl3OW1lWW1ZZFpwRTNpSXdmVUd5VWlFbkduTnNNbS16alZIY3ZtZkllZHdGTk9Mc2pycjVyY3BCTXNsMnRyaUFVZTN5cTV0WnNGQ1h5LVhHamtDNFA4WlZ1QzQ?oc=5"
+        },
+        {
+          "title": "ICICI Bank - Negative Breakout: These 8 stocks cross below their 200 DMAs - The Economic Times",
+          "description": "ICICI Bank - Negative Breakout: These 8 stocks cross below their 200 DMAs The Economic Times",
+          "source": "The Economic Times",
+          "published": "2026-10-09T02:34:31+00:00",
+          "url": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxQLUhXNUF4bldiRjVGdTJaNklWSGdLZEprUm1LZ0hjYi1QUzhRNFBNaWMtanVfTkFEWERFR3NpUHNaNWEtc0pxUzkwLXlwb1oyelNEbWNNRzUyX3dLYUhGVkZrS0pDbHhQbEg0RFc2R2p4MnhSeXNkMGRKZlFOcnlFS21jcGl6Ry1UUHQ3cHBCZHphdEFqdVY5MGo4SFlRUEFaVGtvdGExZXdZaXY5QVN0VzRWc0lOTnRCTWZtMXBYUTRtWXVsWUtCVnNIVHhuekJYZ1RBTy1WU2R6dw?oc=5"
+        },
+        {
+          "title": "ICICI Bank Allots 80,255 Shares under ESUS-2022 - PSU Connect",
+          "description": "ICICI Bank Allots 80,255 Shares under ESUS-2022 PSU Connect",
+          "source": "PSU Connect",
+          "published": "2026-10-08T12:29:00+00:00",
+          "url": "https://news.google.com/rss/articles/CBMiiwFBVV95cUxPaDFmNlc1QlN2N2NYdUI4TUc0YW5kYlBsbVBSRG1CS21rdGpocTR1MWVicGdSbDVIbzg3aFM1OHkzRU1la3Z0RkV3T0wzRHRXN0h2QWRrcjVVaERRTW9vTnVmSWotVDhLNE1qSVZvR0syMGhERFBsYXk4d0l5bW9ocTRhQ09sZ1k0UGRj?oc=5"
+        }
+      ],
+      "missing": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "RESEARCH_UNKNOWN:promoter_holding_quality",
+        "RESEARCH_UNKNOWN:commentary_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "NEWS_UNVERIFIED",
+        "EXECUTION_PLAN_UNVERIFIED"
+      ],
+      "failed": [],
+      "research_failed": [
+        "valuation_quality",
+        "delivery_quality",
+        "debt_free_quality",
+        "roce_quality",
+        "institutional_holding_quality",
+        "quarterly_results_quality",
+        "sector_leadership_quality"
+      ],
+      "research_unknown": [
+        "promoter_holding_quality",
+        "commentary_quality",
+        "recent_news_quality"
+      ],
+      "safety_checks": {
+        "executed_entry_budget": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+          ],
+          "executed_entries": null,
+          "remaining_entries": null,
+          "checked_at": "2026-10-09T14:41:04.456694+05:30"
+        },
+        "intraday_entry_window": {
+          "status": "PASS",
+          "reason_codes": [
+            "INTRADAY_ENTRY_WINDOW_OPEN"
+          ],
+          "entry_cutoff": "2026-10-09T15:15:00+05:30",
+          "manual_exit_deadline": "2026-10-09T15:20:00+05:30",
+          "manual_exit_warning_active": false,
+          "manual_exit_warning": "Manually close intraday Futures in Zerodha Kite before 15:20 IST. This scanner never places, modifies, cancels, converts or squares off orders.",
+          "automatic_square_off": false
+        },
+        "latest_completed_futures_candle": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+          ],
+          "expected_latest": "2026-10-09T14:35:00+05:30",
+          "candle_timestamp": null,
+          "missing_candles": [
+            "2026-10-09T09:15:00+05:30",
+            "2026-10-09T09:20:00+05:30",
+            "2026-10-09T09:25:00+05:30",
+            "2026-10-09T09:30:00+05:30",
+            "2026-10-09T09:35:00+05:30",
+            "2026-10-09T09:40:00+05:30",
+            "2026-10-09T09:45:00+05:30",
+            "2026-10-09T09:50:00+05:30",
+            "2026-10-09T09:55:00+05:30",
+            "2026-10-09T10:00:00+05:30",
+            "2026-10-09T10:05:00+05:30",
+            "2026-10-09T10:10:00+05:30",
+            "2026-10-09T10:15:00+05:30",
+            "2026-10-09T10:20:00+05:30",
+            "2026-10-09T10:25:00+05:30",
+            "2026-10-09T10:30:00+05:30",
+            "2026-10-09T10:35:00+05:30",
+            "2026-10-09T10:40:00+05:30",
+            "2026-10-09T10:45:00+05:30",
+            "2026-10-09T10:50:00+05:30",
+            "2026-10-09T10:55:00+05:30",
+            "2026-10-09T11:00:00+05:30",
+            "2026-10-09T11:05:00+05:30",
+            "2026-10-09T11:10:00+05:30",
+            "2026-10-09T11:15:00+05:30",
+            "2026-10-09T11:20:00+05:30",
+            "2026-10-09T11:25:00+05:30",
+            "2026-10-09T11:30:00+05:30",
+            "2026-10-09T11:35:00+05:30",
+            "2026-10-09T11:40:00+05:30",
+            "2026-10-09T11:45:00+05:30",
+            "2026-10-09T11:50:00+05:30",
+            "2026-10-09T11:55:00+05:30",
+            "2026-10-09T12:00:00+05:30",
+            "2026-10-09T12:05:00+05:30",
+            "2026-10-09T12:10:00+05:30",
+            "2026-10-09T12:15:00+05:30",
+            "2026-10-09T12:20:00+05:30",
+            "2026-10-09T12:25:00+05:30",
+            "2026-10-09T12:30:00+05:30",
+            "2026-10-09T12:35:00+05:30",
+            "2026-10-09T12:40:00+05:30",
+            "2026-10-09T12:45:00+05:30",
+            "2026-10-09T12:50:00+05:30",
+            "2026-10-09T12:55:00+05:30",
+            "2026-10-09T13:00:00+05:30",
+            "2026-10-09T13:05:00+05:30",
+            "2026-10-09T13:10:00+05:30",
+            "2026-10-09T13:15:00+05:30",
+            "2026-10-09T13:20:00+05:30",
+            "2026-10-09T13:25:00+05:30",
+            "2026-10-09T13:30:00+05:30",
+            "2026-10-09T13:35:00+05:30",
+            "2026-10-09T13:40:00+05:30",
+            "2026-10-09T13:45:00+05:30",
+            "2026-10-09T13:50:00+05:30",
+            "2026-10-09T13:55:00+05:30",
+            "2026-10-09T14:00:00+05:30",
+            "2026-10-09T14:05:00+05:30",
+            "2026-10-09T14:10:00+05:30",
+            "2026-10-09T14:15:00+05:30",
+            "2026-10-09T14:20:00+05:30",
+            "2026-10-09T14:25:00+05:30",
+            "2026-10-09T14:30:00+05:30",
+            "2026-10-09T14:35:00+05:30"
+          ]
+        },
+        "final_futures_quote_freshness": {
+          "status": "PASS",
+          "reason_codes": [
+            "FINAL_FUTURES_QUOTE_FRESH"
+          ],
+          "checked_at": "2026-10-09T14:41:06.742951+05:30"
+        },
+        "directional_consistency": {
+          "status": "PASS",
+          "reason_codes": [
+            "NO_CONTRADICTORY_CONFIRMED_FUTURES_DIRECTIONS"
+          ]
+        },
+        "fixed_strategy_policy": {
+          "status": "PASS",
+          "reason_codes": [
+            "FIXED_FUTURES_STRATEGY_VERIFIED"
+          ]
+        }
+      },
+      "reasons": [
+        "SETUP_CONFIRMATION_PENDING",
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "RESEARCH_UNKNOWN:promoter_holding_quality",
+        "RESEARCH_UNKNOWN:commentary_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_FAIL:valuation_quality",
+        "RESEARCH_FAIL:delivery_quality",
+        "RESEARCH_FAIL:debt_free_quality",
+        "RESEARCH_FAIL:roce_quality",
+        "RESEARCH_FAIL:institutional_holding_quality",
+        "RESEARCH_FAIL:quarterly_results_quality",
+        "RESEARCH_FAIL:sector_leadership_quality",
+        "RESEARCH_POLICY_REVIEW_REQUIRED_NO_AUTOMATIC_WAIVER",
+        "MOVE_OR_ATR_ALREADY_CONSUMED",
+        "INSUFFICIENT_REMAINING_TARGET_SPACE",
+        "TODAY_NEWS_CHECK_INCOMPLETE",
+        "EXECUTION_PLAN_UNVERIFIED",
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']",
+        "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+      ]
+    },
+    {
+      "rank": 3,
+      "symbol": "SOLARINDS",
+      "direction": "LONG",
+      "technical_score": 65.32,
+      "technical_basis": "COMPLETED_FUTURES_5_MINUTE",
+      "quality_score": 45.41,
+      "report_e_rank_score": 52.25,
+      "quality_coverage_percent": 78.12,
+      "decision": "UNKNOWN",
+      "report_e_entry_status": "UNKNOWN",
+      "research_status": "UNKNOWN",
+      "research_assessment": {
+        "score": 92.94,
+        "status": "PASS",
+        "confidence": 71.43,
+        "factors": {
+          "roe": 100.0,
+          "roce": 100.0,
+          "revenue_growth": null,
+          "profit_growth": null,
+          "debt_to_equity": 91.5,
+          "operating_cash_flow": 80,
+          "promoter_pledge": 93.19
+        },
+        "reason_codes": [],
+        "warnings": [
+          "OPTIONAL_DATA_MISSING"
+        ]
+      },
+      "quote": {
+        "last_price": 19980,
+        "timestamp": "2026-10-09 14:40:01",
+        "oi": 882400,
+        "volume": 68650
+      },
+      "evidence_timestamp": "2026-10-08T15:25:00+05:30",
+      "research_reference_price": 19861.0,
+      "setup_type": "PULLBACK_REJECTION",
+      "setup_timing": "WAIT FOR PULLBACK",
+      "rsi": 56.04175783495709,
+      "adx": 13.66876504786114,
+      "rvol": 1.492921492921493,
+      "vwap": 19884.148995148993,
+      "atr": 628.0697199195554,
+      "support": 19837.0,
+      "resistance": 19874.0,
+      "plan": {},
+      "fundamentals": {
+        "pe_ratio": 90.29,
+        "sector_pe": 68.57,
+        "total_debt": 1524.0,
+        "debt_to_equity": 0.2427911422654134,
+        "roe": 32.6,
+        "roce": 38.1,
+        "fii_holding_percent": 6.39,
+        "dii_holding_percent": 13.36,
+        "fii_holding_change_pct_points": -0.20000000000000018,
+        "dii_holding_change_pct_points": 0.46999999999999886,
+        "promoter_holding_percent": 73.15,
+        "delivery_percent": 42.35344713092204,
+        "quarterly_revenue_growth_pct": [
+          29.1434,
+          40.886,
+          70.2878
+        ],
+        "quarterly_profit_growth_pct": [
+          38.1657,
+          60.6936,
+          88.6686
+        ]
+      },
+      "news_state": "FETCH_FAILED",
+      "news_at": "2026-10-09T14:39:00.408195+05:30",
+      "news_headlines": [],
+      "missing": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_UNKNOWN:sector_one_year_quality",
+        "RESEARCH_UNKNOWN:sector_leadership_quality",
+        "NEWS_UNVERIFIED",
+        "EXECUTION_PLAN_UNVERIFIED"
+      ],
+      "failed": [],
+      "research_failed": [
+        "valuation_quality",
+        "debt_free_quality",
+        "institutional_holding_quality",
+        "promoter_holding_quality",
+        "commentary_quality"
+      ],
+      "research_unknown": [
+        "recent_news_quality",
+        "sector_one_year_quality",
+        "sector_leadership_quality"
+      ],
+      "safety_checks": {
+        "executed_entry_budget": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+          ],
+          "executed_entries": null,
+          "remaining_entries": null,
+          "checked_at": "2026-10-09T14:41:04.456694+05:30"
+        },
+        "intraday_entry_window": {
+          "status": "PASS",
+          "reason_codes": [
+            "INTRADAY_ENTRY_WINDOW_OPEN"
+          ],
+          "entry_cutoff": "2026-10-09T15:15:00+05:30",
+          "manual_exit_deadline": "2026-10-09T15:20:00+05:30",
+          "manual_exit_warning_active": false,
+          "manual_exit_warning": "Manually close intraday Futures in Zerodha Kite before 15:20 IST. This scanner never places, modifies, cancels, converts or squares off orders.",
+          "automatic_square_off": false
+        },
+        "latest_completed_futures_candle": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+          ],
+          "expected_latest": "2026-10-09T14:35:00+05:30",
+          "candle_timestamp": null,
+          "missing_candles": [
+            "2026-10-09T09:15:00+05:30",
+            "2026-10-09T09:20:00+05:30",
+            "2026-10-09T09:25:00+05:30",
+            "2026-10-09T09:30:00+05:30",
+            "2026-10-09T09:35:00+05:30",
+            "2026-10-09T09:40:00+05:30",
+            "2026-10-09T09:45:00+05:30",
+            "2026-10-09T09:50:00+05:30",
+            "2026-10-09T09:55:00+05:30",
+            "2026-10-09T10:00:00+05:30",
+            "2026-10-09T10:05:00+05:30",
+            "2026-10-09T10:10:00+05:30",
+            "2026-10-09T10:15:00+05:30",
+            "2026-10-09T10:20:00+05:30",
+            "2026-10-09T10:25:00+05:30",
+            "2026-10-09T10:30:00+05:30",
+            "2026-10-09T10:35:00+05:30",
+            "2026-10-09T10:40:00+05:30",
+            "2026-10-09T10:45:00+05:30",
+            "2026-10-09T10:50:00+05:30",
+            "2026-10-09T10:55:00+05:30",
+            "2026-10-09T11:00:00+05:30",
+            "2026-10-09T11:05:00+05:30",
+            "2026-10-09T11:10:00+05:30",
+            "2026-10-09T11:15:00+05:30",
+            "2026-10-09T11:20:00+05:30",
+            "2026-10-09T11:25:00+05:30",
+            "2026-10-09T11:30:00+05:30",
+            "2026-10-09T11:35:00+05:30",
+            "2026-10-09T11:40:00+05:30",
+            "2026-10-09T11:45:00+05:30",
+            "2026-10-09T11:50:00+05:30",
+            "2026-10-09T11:55:00+05:30",
+            "2026-10-09T12:00:00+05:30",
+            "2026-10-09T12:05:00+05:30",
+            "2026-10-09T12:10:00+05:30",
+            "2026-10-09T12:15:00+05:30",
+            "2026-10-09T12:20:00+05:30",
+            "2026-10-09T12:25:00+05:30",
+            "2026-10-09T12:30:00+05:30",
+            "2026-10-09T12:35:00+05:30",
+            "2026-10-09T12:40:00+05:30",
+            "2026-10-09T12:45:00+05:30",
+            "2026-10-09T12:50:00+05:30",
+            "2026-10-09T12:55:00+05:30",
+            "2026-10-09T13:00:00+05:30",
+            "2026-10-09T13:05:00+05:30",
+            "2026-10-09T13:10:00+05:30",
+            "2026-10-09T13:15:00+05:30",
+            "2026-10-09T13:20:00+05:30",
+            "2026-10-09T13:25:00+05:30",
+            "2026-10-09T13:30:00+05:30",
+            "2026-10-09T13:35:00+05:30",
+            "2026-10-09T13:40:00+05:30",
+            "2026-10-09T13:45:00+05:30",
+            "2026-10-09T13:50:00+05:30",
+            "2026-10-09T13:55:00+05:30",
+            "2026-10-09T14:00:00+05:30",
+            "2026-10-09T14:05:00+05:30",
+            "2026-10-09T14:10:00+05:30",
+            "2026-10-09T14:15:00+05:30",
+            "2026-10-09T14:20:00+05:30",
+            "2026-10-09T14:25:00+05:30",
+            "2026-10-09T14:30:00+05:30",
+            "2026-10-09T14:35:00+05:30"
+          ]
+        },
+        "final_futures_quote_freshness": {
+          "status": "PASS",
+          "reason_codes": [
+            "FINAL_FUTURES_QUOTE_FRESH"
+          ],
+          "checked_at": "2026-10-09T14:41:06.742951+05:30"
+        },
+        "directional_consistency": {
+          "status": "PASS",
+          "reason_codes": [
+            "NO_CONTRADICTORY_CONFIRMED_FUTURES_DIRECTIONS"
+          ]
+        },
+        "fixed_strategy_policy": {
+          "status": "PASS",
+          "reason_codes": [
+            "FIXED_FUTURES_STRATEGY_VERIFIED"
+          ]
+        }
+      },
+      "reasons": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_UNKNOWN:sector_one_year_quality",
+        "RESEARCH_UNKNOWN:sector_leadership_quality",
+        "RESEARCH_FAIL:valuation_quality",
+        "RESEARCH_FAIL:debt_free_quality",
+        "RESEARCH_FAIL:institutional_holding_quality",
+        "RESEARCH_FAIL:promoter_holding_quality",
+        "RESEARCH_FAIL:commentary_quality",
+        "EXHAUSTION_OR_COUNTERTREND_DIVERGENCE",
+        "INSUFFICIENT_REMAINING_TARGET_SPACE",
+        "TODAY_NEWS_CHECK_INCOMPLETE",
+        "EXECUTION_PLAN_UNVERIFIED",
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']",
+        "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+      ]
+    },
+    {
+      "rank": 4,
+      "symbol": "ULTRACEMCO",
+      "direction": "SHORT",
+      "technical_score": 75.77,
+      "technical_basis": "COMPLETED_FUTURES_5_MINUTE",
+      "quality_score": 49.16,
+      "report_e_rank_score": 52.0,
+      "quality_coverage_percent": 77.5,
+      "decision": "UNKNOWN",
+      "report_e_entry_status": "REJECT",
+      "research_status": "UNKNOWN",
+      "research_assessment": {
+        "score": 83.35,
+        "status": "PASS",
+        "confidence": 71.43,
+        "factors": {
+          "roe": 72.2,
+          "roce": 75.4,
+          "revenue_growth": null,
+          "profit_growth": null,
+          "debt_to_equity": 89.15,
+          "operating_cash_flow": 80,
+          "promoter_pledge": 100.0
+        },
+        "reason_codes": [],
+        "warnings": [
+          "OPTIONAL_DATA_MISSING"
+        ]
+      },
+      "quote": {
+        "last_price": 10674,
+        "timestamp": "2026-10-09 14:40:17",
+        "oi": 1846700,
+        "volume": 79650
+      },
+      "evidence_timestamp": "2026-10-08T15:25:00+05:30",
+      "research_reference_price": 10488.0,
+      "setup_type": "SUPPORT_BREAKDOWN",
+      "setup_timing": "TOO LATE",
+      "rsi": 31.27939691477566,
+      "adx": 41.087726625759096,
+      "rvol": 1.6303099885189438,
+      "vwap": 10574.683095546909,
+      "atr": 182.88952577565576,
+      "support": null,
+      "resistance": 10522.0,
+      "plan": {},
+      "fundamentals": {
+        "pe_ratio": 35.98,
+        "sector_pe": 44.14,
+        "total_debt": 23755.0,
+        "debt_to_equity": 0.3100203591564001,
+        "roe": 11.1,
+        "roce": 12.7,
+        "fii_holding_percent": 12.36,
+        "dii_holding_percent": 19.69,
+        "fii_holding_change_pct_points": -1.25,
+        "dii_holding_change_pct_points": 1.2699999999999996,
+        "promoter_holding_percent": 59.33,
+        "delivery_percent": 54.70695741605515,
+        "quarterly_revenue_growth_pct": [
+          22.7853,
+          11.8632,
+          15.8543
+        ],
+        "quarterly_profit_growth_pct": [
+          26.8525,
+          21.2121,
+          17.2445
+        ]
+      },
+      "news_state": "FETCH_FAILED",
+      "news_at": "2026-10-09T14:39:00.438171+05:30",
+      "news_headlines": [
+        {
+          "title": "UltraTech Cement stock falls 1.11 percent after green energy milestone - AD HOC NEWS",
+          "description": "UltraTech Cement stock falls 1.11 percent after green energy milestone AD HOC NEWS",
+          "source": "AD HOC NEWS",
+          "published": "2026-10-07T08:26:46+00:00",
+          "url": "https://news.google.com/rss/articles/CBMizgFBVV95cUxQWnZMUkI0bjMzWU1tSU9LbVYzSGJzWV95X29uOFQxT2x2T0x4dzRSZUw1RU5nYVRGU3owM3JoWDJRNGl1VjdXcGFNeU5haTFaNThQWHNIalZVc2Q4WU9icEV6OGlENWZaZGNQazBmMXFqQ1VLSl95S0Q3RFo3RUFvNjdneUxkQ3ZUeTR6LVRpMnRMWlNZMks1TkFmTEx4aTk0Ui0tMnZIdlJJaFFuUE9XY2RjOE9XcndIR0xXVVoxNmg5QVBQMXFIN1pjZ2NDZw?oc=5"
+        },
+        {
+          "title": "UltraTech Cement (NSEI:ULTRACEMCO) Stock Forecast & Analyst Predictions - Simply Wall Street",
+          "description": "UltraTech Cement (NSEI:ULTRACEMCO) Stock Forecast & Analyst Predictions Simply Wall Street",
+          "source": "Simply Wall Street",
+          "published": "2026-10-06T07:00:00+00:00",
+          "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxOZUQ4SGVUZ2dObWhHY2tZaDc4VzNmVHhRMC1fdGdqWFA3TTNmeUh5YVlnOUo3N2VxUkJYU3Njcm5BVU5Sc1lpSHI0WW54c3dfeFFpTU5ZeU9uLWRNb1VqanNteHZyNlFYV1Z1MUZGcXlHMGJQX19KekN5Mnhqb2VuZXhOVVk1a2hBVmtDQlhha0Q?oc=5"
+        }
+      ],
+      "missing": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "FUTURES_MARGIN_OR_AVAILABLE_FUNDS_UNVERIFIED",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_UNKNOWN:sector_one_year_quality",
+        "RESEARCH_UNKNOWN:sector_leadership_quality",
+        "NEWS_UNVERIFIED",
+        "EXECUTION_PLAN_UNVERIFIED"
+      ],
+      "failed": [
+        "futures_spread_quality"
+      ],
+      "research_failed": [
+        "valuation_quality",
+        "delivery_quality",
+        "debt_free_quality",
+        "roe_quality",
+        "roce_quality",
+        "institutional_holding_quality",
+        "commentary_quality"
+      ],
+      "research_unknown": [
+        "recent_news_quality",
+        "sector_one_year_quality",
+        "sector_leadership_quality"
+      ],
+      "safety_checks": {
+        "executed_entry_budget": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+          ],
+          "executed_entries": null,
+          "remaining_entries": null,
+          "checked_at": "2026-10-09T14:41:04.456694+05:30"
+        },
+        "intraday_entry_window": {
+          "status": "PASS",
+          "reason_codes": [
+            "INTRADAY_ENTRY_WINDOW_OPEN"
+          ],
+          "entry_cutoff": "2026-10-09T15:15:00+05:30",
+          "manual_exit_deadline": "2026-10-09T15:20:00+05:30",
+          "manual_exit_warning_active": false,
+          "manual_exit_warning": "Manually close intraday Futures in Zerodha Kite before 15:20 IST. This scanner never places, modifies, cancels, converts or squares off orders.",
+          "automatic_square_off": false
+        },
+        "latest_completed_futures_candle": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+          ],
+          "expected_latest": "2026-10-09T14:35:00+05:30",
+          "candle_timestamp": null,
+          "missing_candles": [
+            "2026-10-09T09:15:00+05:30",
+            "2026-10-09T09:20:00+05:30",
+            "2026-10-09T09:25:00+05:30",
+            "2026-10-09T09:30:00+05:30",
+            "2026-10-09T09:35:00+05:30",
+            "2026-10-09T09:40:00+05:30",
+            "2026-10-09T09:45:00+05:30",
+            "2026-10-09T09:50:00+05:30",
+            "2026-10-09T09:55:00+05:30",
+            "2026-10-09T10:00:00+05:30",
+            "2026-10-09T10:05:00+05:30",
+            "2026-10-09T10:10:00+05:30",
+            "2026-10-09T10:15:00+05:30",
+            "2026-10-09T10:20:00+05:30",
+            "2026-10-09T10:25:00+05:30",
+            "2026-10-09T10:30:00+05:30",
+            "2026-10-09T10:35:00+05:30",
+            "2026-10-09T10:40:00+05:30",
+            "2026-10-09T10:45:00+05:30",
+            "2026-10-09T10:50:00+05:30",
+            "2026-10-09T10:55:00+05:30",
+            "2026-10-09T11:00:00+05:30",
+            "2026-10-09T11:05:00+05:30",
+            "2026-10-09T11:10:00+05:30",
+            "2026-10-09T11:15:00+05:30",
+            "2026-10-09T11:20:00+05:30",
+            "2026-10-09T11:25:00+05:30",
+            "2026-10-09T11:30:00+05:30",
+            "2026-10-09T11:35:00+05:30",
+            "2026-10-09T11:40:00+05:30",
+            "2026-10-09T11:45:00+05:30",
+            "2026-10-09T11:50:00+05:30",
+            "2026-10-09T11:55:00+05:30",
+            "2026-10-09T12:00:00+05:30",
+            "2026-10-09T12:05:00+05:30",
+            "2026-10-09T12:10:00+05:30",
+            "2026-10-09T12:15:00+05:30",
+            "2026-10-09T12:20:00+05:30",
+            "2026-10-09T12:25:00+05:30",
+            "2026-10-09T12:30:00+05:30",
+            "2026-10-09T12:35:00+05:30",
+            "2026-10-09T12:40:00+05:30",
+            "2026-10-09T12:45:00+05:30",
+            "2026-10-09T12:50:00+05:30",
+            "2026-10-09T12:55:00+05:30",
+            "2026-10-09T13:00:00+05:30",
+            "2026-10-09T13:05:00+05:30",
+            "2026-10-09T13:10:00+05:30",
+            "2026-10-09T13:15:00+05:30",
+            "2026-10-09T13:20:00+05:30",
+            "2026-10-09T13:25:00+05:30",
+            "2026-10-09T13:30:00+05:30",
+            "2026-10-09T13:35:00+05:30",
+            "2026-10-09T13:40:00+05:30",
+            "2026-10-09T13:45:00+05:30",
+            "2026-10-09T13:50:00+05:30",
+            "2026-10-09T13:55:00+05:30",
+            "2026-10-09T14:00:00+05:30",
+            "2026-10-09T14:05:00+05:30",
+            "2026-10-09T14:10:00+05:30",
+            "2026-10-09T14:15:00+05:30",
+            "2026-10-09T14:20:00+05:30",
+            "2026-10-09T14:25:00+05:30",
+            "2026-10-09T14:30:00+05:30",
+            "2026-10-09T14:35:00+05:30"
+          ]
+        },
+        "final_futures_quote_freshness": {
+          "status": "PASS",
+          "reason_codes": [
+            "FINAL_FUTURES_QUOTE_FRESH"
+          ],
+          "checked_at": "2026-10-09T14:41:06.742951+05:30"
+        },
+        "directional_consistency": {
+          "status": "PASS",
+          "reason_codes": [
+            "NO_CONTRADICTORY_CONFIRMED_FUTURES_DIRECTIONS"
+          ]
+        },
+        "fixed_strategy_policy": {
+          "status": "PASS",
+          "reason_codes": [
+            "FIXED_FUTURES_STRATEGY_VERIFIED"
+          ]
+        }
+      },
+      "reasons": [
+        "INSUFFICIENT_REMAINING_TARGET_SPACE",
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "futures_spread_quality",
+        "FUTURES_MARGIN_OR_AVAILABLE_FUNDS_UNVERIFIED",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_UNKNOWN:sector_one_year_quality",
+        "RESEARCH_UNKNOWN:sector_leadership_quality",
+        "RESEARCH_FAIL:valuation_quality",
+        "RESEARCH_FAIL:delivery_quality",
+        "RESEARCH_FAIL:debt_free_quality",
+        "RESEARCH_FAIL:roe_quality",
+        "RESEARCH_FAIL:roce_quality",
+        "RESEARCH_FAIL:institutional_holding_quality",
+        "RESEARCH_FAIL:commentary_quality",
+        "RESEARCH_POLICY_REVIEW_REQUIRED_NO_AUTOMATIC_WAIVER",
+        "MOVE_OR_ATR_ALREADY_CONSUMED",
+        "NEXT_PRICE_OBSTACLE_UNVERIFIED",
+        "TODAY_NEWS_CHECK_INCOMPLETE",
+        "EXECUTION_PLAN_UNVERIFIED",
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']",
+        "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+      ]
+    },
+    {
+      "rank": 5,
+      "symbol": "AXISBANK",
+      "direction": "LONG",
+      "technical_score": 62.53,
+      "technical_basis": "COMPLETED_FUTURES_5_MINUTE",
+      "quality_score": 33.8,
+      "report_e_rank_score": 50.28,
+      "quality_coverage_percent": 70.98,
+      "decision": "UNKNOWN",
+      "report_e_entry_status": "REJECT",
+      "research_status": "UNKNOWN",
+      "research_assessment": {
+        "score": 62.6,
+        "status": "PASS",
+        "confidence": 71.43,
+        "factors": {
+          "roe": 76.2,
+          "roce": 62.48,
+          "revenue_growth": null,
+          "profit_growth": null,
+          "debt_to_equity": 54.34,
+          "operating_cash_flow": 20,
+          "promoter_pledge": 100.0
+        },
+        "reason_codes": [],
+        "warnings": [
+          "OPTIONAL_DATA_MISSING"
+        ]
+      },
+      "quote": {
+        "last_price": 1265.2,
+        "timestamp": "2026-10-09 14:40:17",
+        "oi": 87896875,
+        "volume": 4523125
+      },
+      "evidence_timestamp": "2026-10-08T15:25:00+05:30",
+      "research_reference_price": 1250.5,
+      "setup_type": "PULLBACK_REJECTION",
+      "setup_timing": "TOO LATE",
+      "rsi": 53.2389102781188,
+      "adx": 13.80304818617329,
+      "rvol": 3.841865179929042,
+      "vwap": 1250.2413169068002,
+      "atr": 23.552725167702032,
+      "support": 1249.5,
+      "resistance": 1250.8,
+      "plan": {},
+      "fundamentals": {
+        "pe_ratio": 13.96,
+        "sector_pe": 18.23,
+        "total_debt": 280511.0,
+        "debt_to_equity": 1.3044839003701705,
+        "roe": 13.1,
+        "roce": 6.24,
+        "fii_holding_percent": 39.91,
+        "dii_holding_percent": 42.69,
+        "fii_holding_change_pct_points": -2.1300000000000026,
+        "dii_holding_change_pct_points": -0.6600000000000037,
+        "promoter_holding_percent": 7.87,
+        "delivery_percent": 56.21725899297003,
+        "quarterly_revenue_growth_pct": [
+          4.81,
+          5.2971,
+          9.8739
+        ],
+        "quarterly_profit_growth_pct": [
+          4.1452,
+          1.7712,
+          22.1532
+        ]
+      },
+      "news_state": "UNANALYSED_NEW_HEADLINES",
+      "news_at": "2026-10-09T14:38:50.224950+05:30",
+      "news_headlines": [
+        {
+          "title": "A winner among losers: How Axis Bank defied the MPC-led stock market slump | Explained - The Week",
+          "description": "A winner among losers: How Axis Bank defied the MPC-led stock market slump | Explained The Week",
+          "source": "The Week",
+          "published": "2026-10-08T11:28:46+00:00",
+          "url": "https://news.google.com/rss/articles/CBMimAFBVV95cUxQaHd6QmY2cjNGMFJBVGtDNDlyNEpZOVhIVjZFa1lNcTh2c3p4TUJqZ3VNQ0lsWlQxWTlGdEJxUmtEeXJLTUZJaHFWUTV6WUNSWUZYdHRrWl9peTFaRU9pRGZONkVLQ191bWtDd2dJMDFJemN0QlhRSTNlald3QUwzU0Y0N1VMSE5MdkVYYlpjdmtkLWRJWWJoM9IBngFBVV95cUxOWFZaSHZ0ZXFLTDc0b245OTI4VEZLaHpwektSMTZ6UG9PZmhtdjNIaUpMVzhpajNEWVgxbmpiXzZNWHFLUWM2TktMSDBid0RYTDN5Y3FmZ181LU9HSHhZRm5JSjBoWThkNEczaWZpc1pJTVB3SWRwSzRaOVhKTEdSaURkUzRMOUxMQkpOT3VMd2ExQVJaa1hQQ2ZZYVNHQQ?oc=5"
+        },
+        {
+          "title": "Jefferies names Axis Bank stock a top pick on rate outlook - AD HOC NEWS",
+          "description": "Jefferies names Axis Bank stock a top pick on rate outlook AD HOC NEWS",
+          "source": "AD HOC NEWS",
+          "published": "2026-10-08T09:10:56+00:00",
+          "url": "https://news.google.com/rss/articles/CBMivgFBVV95cUxNQWNmLVNTUzFXaFBSUE5kN0xVQl8xanFQV2YweHRuNXhTSUVGeU5KbWE5WnJsQnN5RHc1U3dYOHc4cDZjY1gyNFpXa19vRDdBc0x0aVA2dGp1dEozV0V6VGJISHhqbXJtZTVkX0dLWnY3aTlnYTh5VENzTWZNTlQycU9SZUFTRHduRWlyZzdmYWVyRjNlVHM4bGwyYVVLR1FzUzJvMkhfdWI2WElhTzMxNUJFTXJqLTladUxYcU1n?oc=5"
+        },
+        {
+          "title": "Axis Bank Limited (AXISBANK.NS) stock price, news, quote and history - Yahoo Finance Singapore",
+          "description": "Axis Bank Limited (AXISBANK.NS) stock price, news, quote and history Yahoo Finance Singapore",
+          "source": "Yahoo Finance Singapore",
+          "published": "2026-10-07T02:50:29+00:00",
+          "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1BRnl3RUMwYTNTZEV5Sl8xZXphR0tWZVRMVjZRS3lqbTMtSG5aOVFaU0RpSVVNM2lFVjlubGxpVC1SZ193N3pEVzdvRjhVVTZqWmUyaU9zdU44MFU?oc=5"
+        }
+      ],
+      "missing": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "RESEARCH_UNKNOWN:commentary_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "NEWS_UNVERIFIED",
+        "EXECUTION_PLAN_UNVERIFIED"
+      ],
+      "failed": [],
+      "research_failed": [
+        "valuation_quality",
+        "delivery_quality",
+        "debt_free_quality",
+        "roe_quality",
+        "roce_quality",
+        "institutional_holding_quality",
+        "promoter_holding_quality"
+      ],
+      "research_unknown": [
+        "commentary_quality",
+        "recent_news_quality"
+      ],
+      "safety_checks": {
+        "executed_entry_budget": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+          ],
+          "executed_entries": null,
+          "remaining_entries": null,
+          "checked_at": "2026-10-09T14:41:04.456694+05:30"
+        },
+        "intraday_entry_window": {
+          "status": "PASS",
+          "reason_codes": [
+            "INTRADAY_ENTRY_WINDOW_OPEN"
+          ],
+          "entry_cutoff": "2026-10-09T15:15:00+05:30",
+          "manual_exit_deadline": "2026-10-09T15:20:00+05:30",
+          "manual_exit_warning_active": false,
+          "manual_exit_warning": "Manually close intraday Futures in Zerodha Kite before 15:20 IST. This scanner never places, modifies, cancels, converts or squares off orders.",
+          "automatic_square_off": false
+        },
+        "latest_completed_futures_candle": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+          ],
+          "expected_latest": "2026-10-09T14:35:00+05:30",
+          "candle_timestamp": null,
+          "missing_candles": [
+            "2026-10-09T09:15:00+05:30",
+            "2026-10-09T09:20:00+05:30",
+            "2026-10-09T09:25:00+05:30",
+            "2026-10-09T09:30:00+05:30",
+            "2026-10-09T09:35:00+05:30",
+            "2026-10-09T09:40:00+05:30",
+            "2026-10-09T09:45:00+05:30",
+            "2026-10-09T09:50:00+05:30",
+            "2026-10-09T09:55:00+05:30",
+            "2026-10-09T10:00:00+05:30",
+            "2026-10-09T10:05:00+05:30",
+            "2026-10-09T10:10:00+05:30",
+            "2026-10-09T10:15:00+05:30",
+            "2026-10-09T10:20:00+05:30",
+            "2026-10-09T10:25:00+05:30",
+            "2026-10-09T10:30:00+05:30",
+            "2026-10-09T10:35:00+05:30",
+            "2026-10-09T10:40:00+05:30",
+            "2026-10-09T10:45:00+05:30",
+            "2026-10-09T10:50:00+05:30",
+            "2026-10-09T10:55:00+05:30",
+            "2026-10-09T11:00:00+05:30",
+            "2026-10-09T11:05:00+05:30",
+            "2026-10-09T11:10:00+05:30",
+            "2026-10-09T11:15:00+05:30",
+            "2026-10-09T11:20:00+05:30",
+            "2026-10-09T11:25:00+05:30",
+            "2026-10-09T11:30:00+05:30",
+            "2026-10-09T11:35:00+05:30",
+            "2026-10-09T11:40:00+05:30",
+            "2026-10-09T11:45:00+05:30",
+            "2026-10-09T11:50:00+05:30",
+            "2026-10-09T11:55:00+05:30",
+            "2026-10-09T12:00:00+05:30",
+            "2026-10-09T12:05:00+05:30",
+            "2026-10-09T12:10:00+05:30",
+            "2026-10-09T12:15:00+05:30",
+            "2026-10-09T12:20:00+05:30",
+            "2026-10-09T12:25:00+05:30",
+            "2026-10-09T12:30:00+05:30",
+            "2026-10-09T12:35:00+05:30",
+            "2026-10-09T12:40:00+05:30",
+            "2026-10-09T12:45:00+05:30",
+            "2026-10-09T12:50:00+05:30",
+            "2026-10-09T12:55:00+05:30",
+            "2026-10-09T13:00:00+05:30",
+            "2026-10-09T13:05:00+05:30",
+            "2026-10-09T13:10:00+05:30",
+            "2026-10-09T13:15:00+05:30",
+            "2026-10-09T13:20:00+05:30",
+            "2026-10-09T13:25:00+05:30",
+            "2026-10-09T13:30:00+05:30",
+            "2026-10-09T13:35:00+05:30",
+            "2026-10-09T13:40:00+05:30",
+            "2026-10-09T13:45:00+05:30",
+            "2026-10-09T13:50:00+05:30",
+            "2026-10-09T13:55:00+05:30",
+            "2026-10-09T14:00:00+05:30",
+            "2026-10-09T14:05:00+05:30",
+            "2026-10-09T14:10:00+05:30",
+            "2026-10-09T14:15:00+05:30",
+            "2026-10-09T14:20:00+05:30",
+            "2026-10-09T14:25:00+05:30",
+            "2026-10-09T14:30:00+05:30",
+            "2026-10-09T14:35:00+05:30"
+          ]
+        },
+        "final_futures_quote_freshness": {
+          "status": "PASS",
+          "reason_codes": [
+            "FINAL_FUTURES_QUOTE_FRESH"
+          ],
+          "checked_at": "2026-10-09T14:41:06.742951+05:30"
+        },
+        "directional_consistency": {
+          "status": "PASS",
+          "reason_codes": [
+            "NO_CONTRADICTORY_CONFIRMED_FUTURES_DIRECTIONS"
+          ]
+        },
+        "fixed_strategy_policy": {
+          "status": "PASS",
+          "reason_codes": [
+            "FIXED_FUTURES_STRATEGY_VERIFIED"
+          ]
+        }
+      },
+      "reasons": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "RESEARCH_UNKNOWN:commentary_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_FAIL:valuation_quality",
+        "RESEARCH_FAIL:delivery_quality",
+        "RESEARCH_FAIL:debt_free_quality",
+        "RESEARCH_FAIL:roe_quality",
+        "RESEARCH_FAIL:roce_quality",
+        "RESEARCH_FAIL:institutional_holding_quality",
+        "RESEARCH_FAIL:promoter_holding_quality",
+        "RESEARCH_POLICY_REVIEW_REQUIRED_NO_AUTOMATIC_WAIVER",
+        "MOVE_OR_ATR_ALREADY_CONSUMED",
+        "INSUFFICIENT_REMAINING_TARGET_SPACE",
+        "TODAY_NEWS_CHECK_INCOMPLETE",
+        "EXECUTION_PLAN_UNVERIFIED",
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']",
+        "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+      ]
+    },
+    {
+      "rank": 6,
+      "symbol": "BHARTIARTL",
+      "direction": "LONG",
+      "technical_score": 52.97,
+      "technical_basis": "COMPLETED_FUTURES_5_MINUTE",
+      "quality_score": 41.06,
+      "report_e_rank_score": 49.64,
+      "quality_coverage_percent": 78.12,
+      "decision": "UNKNOWN",
+      "report_e_entry_status": "REJECT",
+      "research_status": "UNKNOWN",
+      "research_assessment": {
+        "score": 81.98,
+        "status": "PASS",
+        "confidence": 71.43,
+        "factors": {
+          "roe": 90.6,
+          "roce": 85.2,
+          "revenue_growth": null,
+          "profit_growth": null,
+          "debt_to_equity": 54.12,
+          "operating_cash_flow": 80,
+          "promoter_pledge": 100.0
+        },
+        "reason_codes": [],
+        "warnings": [
+          "OPTIONAL_DATA_MISSING"
+        ]
+      },
+      "quote": {
+        "last_price": 1814.7,
+        "timestamp": "2026-10-09 14:40:17",
+        "oi": 50490600,
+        "volume": 2444350
+      },
+      "evidence_timestamp": "2026-10-08T15:25:00+05:30",
+      "research_reference_price": 1805.8,
+      "setup_type": "PULLBACK_REJECTION",
+      "setup_timing": "TOO LATE",
+      "rsi": 49.916433996272296,
+      "adx": 35.984669514235,
+      "rvol": 2.2314294169872744,
+      "vwap": 1814.7309562468877,
+      "atr": 30.297811402375523,
+      "support": 1803.6,
+      "resistance": 1806.7,
+      "plan": {},
+      "fundamentals": {
+        "pe_ratio": 38.03,
+        "sector_pe": 26.38,
+        "total_debt": 195412.0,
+        "debt_to_equity": 1.310988413828267,
+        "roe": 20.3,
+        "roce": 17.6,
+        "fii_holding_percent": 26.48,
+        "dii_holding_percent": 20.64,
+        "fii_holding_change_pct_points": -1.3099999999999987,
+        "dii_holding_change_pct_points": 0.10999999999999943,
+        "promoter_holding_percent": 50.07,
+        "delivery_percent": 66.94861579044876,
+        "quarterly_revenue_growth_pct": [
+          19.6171,
+          15.6801,
+          18.3491
+        ],
+        "quarterly_profit_growth_pct": [
+          -47.3009,
+          -25.8817,
+          34.8963
+        ]
+      },
+      "news_state": "UNANALYSED_NEW_HEADLINES",
+      "news_at": "2026-10-09T14:38:51.738061+05:30",
+      "news_headlines": [
+        {
+          "title": "Bharti Airtel Share Price Down 2.11% in Large Cap Trade - Univest",
+          "description": "Bharti Airtel Share Price Down 2.11% in Large Cap Trade Univest",
+          "source": "Univest",
+          "published": "2026-10-08T10:09:00+00:00",
+          "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTFBXVVJKSjRkcC1fcDhEb3FLUnNKN24xVFdsQ1U5bGZRd2tEOXFRWVluNnNoTGF3Q3JuZS1IeTVrdW1lTWwxQldJWkp6NXFGS2dXWkZ6NnhUbDZTMFBZWWVTRE9UWnJGSkVTS1Rza0xxd0hkNE9YRjNMN2tR?oc=5"
+        },
+        {
+          "title": "MOFSL Reiterates Buy for Bharti Airtel stock - AD HOC NEWS",
+          "description": "MOFSL Reiterates Buy for Bharti Airtel stock AD HOC NEWS",
+          "source": "AD HOC NEWS",
+          "published": "2026-10-08T09:17:08+00:00",
+          "url": "https://news.google.com/rss/articles/CBMiqwFBVV95cUxQTnZaLVJFODltVDdCQUxHaDhoTi1VTEh5Q19yWHRxMGtWUzIwdUJfZ0RTamVPTjhBdm11dlhwOHY3VHBsazVSMmcwN2E0T3lsSzZXYmNEZTJqTE05NlBFdTVMcW1fRjJubG9CMXRJSXUtaElkYnpzMGxMZnYxajBPdmtPLVJYcEYtTEhtRjhQWmxUdnZsOWU0TnMwaXNJdV8xVFJESlVQRWxRcVU?oc=5"
+        },
+        {
+          "title": "Key facts: NSE:BHARTIARTL 10.71M subs; tariff hike; Starlink data - TradingView",
+          "description": "Key facts: NSE:BHARTIARTL 10.71M subs; tariff hike; Starlink data TradingView",
+          "source": "TradingView",
+          "published": "2026-10-08T02:00:00+00:00",
+          "url": "https://news.google.com/rss/articles/CBMiwgFBVV95cUxObXZZdk1LV2otc1F6Z2lFTnVUd0hqOENXZHVudEdvdzJ5bUQyT0JPNEVJWG81MUdTQmFXMjROTThoYVgxcnZPQ0RTYUJrZk5CcHI2Wm9VdDhJNVJaMFZqQXlSY1JWV0lyUkpuclhQN25xeGxJYWJwQ01PUW5nT3JJOXhZTmt1TzlzVkJ3WW9kelAwVFVhOGs4cWhhMkxWN25FNWZucW8zYWpGeDZfZTExNS1MY1d2bkMtSGkxZEdTcHpVQQ?oc=5"
+        }
+      ],
+      "missing": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_UNKNOWN:sector_one_year_quality",
+        "RESEARCH_UNKNOWN:sector_leadership_quality",
+        "NEWS_UNVERIFIED",
+        "EXECUTION_PLAN_UNVERIFIED"
+      ],
+      "failed": [],
+      "research_failed": [
+        "valuation_quality",
+        "delivery_quality",
+        "debt_free_quality",
+        "institutional_holding_quality",
+        "quarterly_results_quality",
+        "commentary_quality",
+        "vwap_quality"
+      ],
+      "research_unknown": [
+        "recent_news_quality",
+        "sector_one_year_quality",
+        "sector_leadership_quality"
+      ],
+      "safety_checks": {
+        "executed_entry_budget": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+          ],
+          "executed_entries": null,
+          "remaining_entries": null,
+          "checked_at": "2026-10-09T14:41:04.456694+05:30"
+        },
+        "intraday_entry_window": {
+          "status": "PASS",
+          "reason_codes": [
+            "INTRADAY_ENTRY_WINDOW_OPEN"
+          ],
+          "entry_cutoff": "2026-10-09T15:15:00+05:30",
+          "manual_exit_deadline": "2026-10-09T15:20:00+05:30",
+          "manual_exit_warning_active": false,
+          "manual_exit_warning": "Manually close intraday Futures in Zerodha Kite before 15:20 IST. This scanner never places, modifies, cancels, converts or squares off orders.",
+          "automatic_square_off": false
+        },
+        "latest_completed_futures_candle": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+          ],
+          "expected_latest": "2026-10-09T14:35:00+05:30",
+          "candle_timestamp": null,
+          "missing_candles": [
+            "2026-10-09T09:15:00+05:30",
+            "2026-10-09T09:20:00+05:30",
+            "2026-10-09T09:25:00+05:30",
+            "2026-10-09T09:30:00+05:30",
+            "2026-10-09T09:35:00+05:30",
+            "2026-10-09T09:40:00+05:30",
+            "2026-10-09T09:45:00+05:30",
+            "2026-10-09T09:50:00+05:30",
+            "2026-10-09T09:55:00+05:30",
+            "2026-10-09T10:00:00+05:30",
+            "2026-10-09T10:05:00+05:30",
+            "2026-10-09T10:10:00+05:30",
+            "2026-10-09T10:15:00+05:30",
+            "2026-10-09T10:20:00+05:30",
+            "2026-10-09T10:25:00+05:30",
+            "2026-10-09T10:30:00+05:30",
+            "2026-10-09T10:35:00+05:30",
+            "2026-10-09T10:40:00+05:30",
+            "2026-10-09T10:45:00+05:30",
+            "2026-10-09T10:50:00+05:30",
+            "2026-10-09T10:55:00+05:30",
+            "2026-10-09T11:00:00+05:30",
+            "2026-10-09T11:05:00+05:30",
+            "2026-10-09T11:10:00+05:30",
+            "2026-10-09T11:15:00+05:30",
+            "2026-10-09T11:20:00+05:30",
+            "2026-10-09T11:25:00+05:30",
+            "2026-10-09T11:30:00+05:30",
+            "2026-10-09T11:35:00+05:30",
+            "2026-10-09T11:40:00+05:30",
+            "2026-10-09T11:45:00+05:30",
+            "2026-10-09T11:50:00+05:30",
+            "2026-10-09T11:55:00+05:30",
+            "2026-10-09T12:00:00+05:30",
+            "2026-10-09T12:05:00+05:30",
+            "2026-10-09T12:10:00+05:30",
+            "2026-10-09T12:15:00+05:30",
+            "2026-10-09T12:20:00+05:30",
+            "2026-10-09T12:25:00+05:30",
+            "2026-10-09T12:30:00+05:30",
+            "2026-10-09T12:35:00+05:30",
+            "2026-10-09T12:40:00+05:30",
+            "2026-10-09T12:45:00+05:30",
+            "2026-10-09T12:50:00+05:30",
+            "2026-10-09T12:55:00+05:30",
+            "2026-10-09T13:00:00+05:30",
+            "2026-10-09T13:05:00+05:30",
+            "2026-10-09T13:10:00+05:30",
+            "2026-10-09T13:15:00+05:30",
+            "2026-10-09T13:20:00+05:30",
+            "2026-10-09T13:25:00+05:30",
+            "2026-10-09T13:30:00+05:30",
+            "2026-10-09T13:35:00+05:30",
+            "2026-10-09T13:40:00+05:30",
+            "2026-10-09T13:45:00+05:30",
+            "2026-10-09T13:50:00+05:30",
+            "2026-10-09T13:55:00+05:30",
+            "2026-10-09T14:00:00+05:30",
+            "2026-10-09T14:05:00+05:30",
+            "2026-10-09T14:10:00+05:30",
+            "2026-10-09T14:15:00+05:30",
+            "2026-10-09T14:20:00+05:30",
+            "2026-10-09T14:25:00+05:30",
+            "2026-10-09T14:30:00+05:30",
+            "2026-10-09T14:35:00+05:30"
+          ]
+        },
+        "final_futures_quote_freshness": {
+          "status": "PASS",
+          "reason_codes": [
+            "FINAL_FUTURES_QUOTE_FRESH"
+          ],
+          "checked_at": "2026-10-09T14:41:06.742951+05:30"
+        },
+        "directional_consistency": {
+          "status": "PASS",
+          "reason_codes": [
+            "NO_CONTRADICTORY_CONFIRMED_FUTURES_DIRECTIONS"
+          ]
+        },
+        "fixed_strategy_policy": {
+          "status": "PASS",
+          "reason_codes": [
+            "FIXED_FUTURES_STRATEGY_VERIFIED"
+          ]
+        }
+      },
+      "reasons": [
+        "EXHAUSTION_OR_COUNTERTREND_DIVERGENCE",
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_UNKNOWN:sector_one_year_quality",
+        "RESEARCH_UNKNOWN:sector_leadership_quality",
+        "RESEARCH_FAIL:valuation_quality",
+        "RESEARCH_FAIL:delivery_quality",
+        "RESEARCH_FAIL:debt_free_quality",
+        "RESEARCH_FAIL:institutional_holding_quality",
+        "RESEARCH_FAIL:quarterly_results_quality",
+        "RESEARCH_FAIL:commentary_quality",
+        "RESEARCH_FAIL:vwap_quality",
+        "MOVE_OR_ATR_ALREADY_CONSUMED",
+        "INSUFFICIENT_REMAINING_TARGET_SPACE",
+        "TODAY_NEWS_CHECK_INCOMPLETE",
+        "EXECUTION_PLAN_UNVERIFIED",
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']",
+        "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+      ]
+    },
+    {
+      "rank": 7,
+      "symbol": "TMPV",
+      "direction": "SHORT",
+      "technical_score": 71.34,
+      "technical_basis": "COMPLETED_FUTURES_5_MINUTE",
+      "quality_score": 55.09,
+      "report_e_rank_score": 48.05,
+      "quality_coverage_percent": 77.5,
+      "decision": "UNKNOWN",
+      "report_e_entry_status": "REJECT",
+      "research_status": "UNKNOWN",
+      "research_assessment": {
+        "score": 82.15,
+        "status": "PASS",
+        "confidence": 71.43,
+        "factors": {
+          "roe": 100.0,
+          "roce": 55.46,
+          "revenue_growth": null,
+          "profit_growth": null,
+          "debt_to_equity": 75.29,
+          "operating_cash_flow": 80,
+          "promoter_pledge": 100.0
+        },
+        "reason_codes": [],
+        "warnings": [
+          "OPTIONAL_DATA_MISSING"
+        ]
+      },
+      "quote": {
+        "last_price": 280.4,
+        "timestamp": "2026-10-09 14:40:17",
+        "oi": 84008000,
+        "volume": 4521600
+      },
+      "evidence_timestamp": "2026-10-08T15:25:00+05:30",
+      "research_reference_price": 274.45,
+      "setup_type": "BEARISH_TREND_CONTINUATION",
+      "setup_timing": "TOO LATE",
+      "rsi": 37.295391971537,
+      "adx": 40.71329747180307,
+      "rvol": 1.0592334494773519,
+      "vwap": 277.9867912327275,
+      "atr": 7.932266093787358,
+      "support": 274.3,
+      "resistance": 275.15,
+      "plan": {},
+      "fundamentals": {
+        "pe_ratio": 1.27,
+        "sector_pe": 4.06,
+        "total_debt": 79109.0,
+        "debt_to_equity": 0.7059017739229754,
+        "roe": 75.7,
+        "roce": 2.73,
+        "fii_holding_percent": 17.11,
+        "dii_holding_percent": 16.97,
+        "fii_holding_change_pct_points": -0.17999999999999972,
+        "dii_holding_change_pct_points": 0.17999999999999972,
+        "promoter_holding_percent": 42.51,
+        "delivery_percent": 39.531406245312304,
+        "quarterly_revenue_growth_pct": [
+          -25.7897,
+          7.1866,
+          9.2635
+        ],
+        "quarterly_profit_growth_pct": [
+          -163.512,
+          -31.2997,
+          -78.5411
+        ]
+      },
+      "news_state": "FETCH_FAILED",
+      "news_at": "2026-10-09T14:39:00.430832+05:30",
+      "news_headlines": [],
+      "missing": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "NEWS_UNVERIFIED",
+        "EXECUTION_PLAN_UNVERIFIED"
+      ],
+      "failed": [],
+      "research_failed": [
+        "valuation_quality",
+        "delivery_quality",
+        "debt_free_quality",
+        "roce_quality",
+        "institutional_holding_quality",
+        "promoter_holding_quality",
+        "quarterly_results_quality",
+        "commentary_quality",
+        "sector_one_year_quality",
+        "sector_leadership_quality"
+      ],
+      "research_unknown": [
+        "recent_news_quality"
+      ],
+      "safety_checks": {
+        "executed_entry_budget": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+          ],
+          "executed_entries": null,
+          "remaining_entries": null,
+          "checked_at": "2026-10-09T14:41:04.456694+05:30"
+        },
+        "intraday_entry_window": {
+          "status": "PASS",
+          "reason_codes": [
+            "INTRADAY_ENTRY_WINDOW_OPEN"
+          ],
+          "entry_cutoff": "2026-10-09T15:15:00+05:30",
+          "manual_exit_deadline": "2026-10-09T15:20:00+05:30",
+          "manual_exit_warning_active": false,
+          "manual_exit_warning": "Manually close intraday Futures in Zerodha Kite before 15:20 IST. This scanner never places, modifies, cancels, converts or squares off orders.",
+          "automatic_square_off": false
+        },
+        "latest_completed_futures_candle": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+          ],
+          "expected_latest": "2026-10-09T14:35:00+05:30",
+          "candle_timestamp": null,
+          "missing_candles": [
+            "2026-10-09T09:15:00+05:30",
+            "2026-10-09T09:20:00+05:30",
+            "2026-10-09T09:25:00+05:30",
+            "2026-10-09T09:30:00+05:30",
+            "2026-10-09T09:35:00+05:30",
+            "2026-10-09T09:40:00+05:30",
+            "2026-10-09T09:45:00+05:30",
+            "2026-10-09T09:50:00+05:30",
+            "2026-10-09T09:55:00+05:30",
+            "2026-10-09T10:00:00+05:30",
+            "2026-10-09T10:05:00+05:30",
+            "2026-10-09T10:10:00+05:30",
+            "2026-10-09T10:15:00+05:30",
+            "2026-10-09T10:20:00+05:30",
+            "2026-10-09T10:25:00+05:30",
+            "2026-10-09T10:30:00+05:30",
+            "2026-10-09T10:35:00+05:30",
+            "2026-10-09T10:40:00+05:30",
+            "2026-10-09T10:45:00+05:30",
+            "2026-10-09T10:50:00+05:30",
+            "2026-10-09T10:55:00+05:30",
+            "2026-10-09T11:00:00+05:30",
+            "2026-10-09T11:05:00+05:30",
+            "2026-10-09T11:10:00+05:30",
+            "2026-10-09T11:15:00+05:30",
+            "2026-10-09T11:20:00+05:30",
+            "2026-10-09T11:25:00+05:30",
+            "2026-10-09T11:30:00+05:30",
+            "2026-10-09T11:35:00+05:30",
+            "2026-10-09T11:40:00+05:30",
+            "2026-10-09T11:45:00+05:30",
+            "2026-10-09T11:50:00+05:30",
+            "2026-10-09T11:55:00+05:30",
+            "2026-10-09T12:00:00+05:30",
+            "2026-10-09T12:05:00+05:30",
+            "2026-10-09T12:10:00+05:30",
+            "2026-10-09T12:15:00+05:30",
+            "2026-10-09T12:20:00+05:30",
+            "2026-10-09T12:25:00+05:30",
+            "2026-10-09T12:30:00+05:30",
+            "2026-10-09T12:35:00+05:30",
+            "2026-10-09T12:40:00+05:30",
+            "2026-10-09T12:45:00+05:30",
+            "2026-10-09T12:50:00+05:30",
+            "2026-10-09T12:55:00+05:30",
+            "2026-10-09T13:00:00+05:30",
+            "2026-10-09T13:05:00+05:30",
+            "2026-10-09T13:10:00+05:30",
+            "2026-10-09T13:15:00+05:30",
+            "2026-10-09T13:20:00+05:30",
+            "2026-10-09T13:25:00+05:30",
+            "2026-10-09T13:30:00+05:30",
+            "2026-10-09T13:35:00+05:30",
+            "2026-10-09T13:40:00+05:30",
+            "2026-10-09T13:45:00+05:30",
+            "2026-10-09T13:50:00+05:30",
+            "2026-10-09T13:55:00+05:30",
+            "2026-10-09T14:00:00+05:30",
+            "2026-10-09T14:05:00+05:30",
+            "2026-10-09T14:10:00+05:30",
+            "2026-10-09T14:15:00+05:30",
+            "2026-10-09T14:20:00+05:30",
+            "2026-10-09T14:25:00+05:30",
+            "2026-10-09T14:30:00+05:30",
+            "2026-10-09T14:35:00+05:30"
+          ]
+        },
+        "final_futures_quote_freshness": {
+          "status": "PASS",
+          "reason_codes": [
+            "FINAL_FUTURES_QUOTE_FRESH"
+          ],
+          "checked_at": "2026-10-09T14:41:06.742951+05:30"
+        },
+        "directional_consistency": {
+          "status": "PASS",
+          "reason_codes": [
+            "NO_CONTRADICTORY_CONFIRMED_FUTURES_DIRECTIONS"
+          ]
+        },
+        "fixed_strategy_policy": {
+          "status": "PASS",
+          "reason_codes": [
+            "FIXED_FUTURES_STRATEGY_VERIFIED"
+          ]
+        }
+      },
+      "reasons": [
+        "SETUP_CONFIRMATION_PENDING",
+        "SHORT_COVERING_EVIDENCE_REQUIRE_CONFIRMATION",
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_FAIL:valuation_quality",
+        "RESEARCH_FAIL:delivery_quality",
+        "RESEARCH_FAIL:debt_free_quality",
+        "RESEARCH_FAIL:roce_quality",
+        "RESEARCH_FAIL:institutional_holding_quality",
+        "RESEARCH_FAIL:promoter_holding_quality",
+        "RESEARCH_FAIL:quarterly_results_quality",
+        "RESEARCH_FAIL:commentary_quality",
+        "RESEARCH_FAIL:sector_one_year_quality",
+        "RESEARCH_FAIL:sector_leadership_quality",
+        "RESEARCH_POLICY_REVIEW_REQUIRED_NO_AUTOMATIC_WAIVER",
+        "MOVE_OR_ATR_ALREADY_CONSUMED",
+        "INSUFFICIENT_REMAINING_TARGET_SPACE",
+        "TODAY_NEWS_CHECK_INCOMPLETE",
+        "EXECUTION_PLAN_UNVERIFIED",
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']",
+        "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+      ]
+    },
+    {
+      "rank": 8,
+      "symbol": "ICICIPRULI",
+      "direction": "LONG",
+      "technical_score": 66.17,
+      "technical_basis": "COMPLETED_FUTURES_5_MINUTE",
+      "quality_score": 36.17,
+      "report_e_rank_score": 46.7,
+      "quality_coverage_percent": 67.41,
+      "decision": "UNKNOWN",
+      "report_e_entry_status": "UNKNOWN",
+      "research_status": "UNKNOWN",
+      "research_assessment": {
+        "score": 64.69,
+        "status": "PASS",
+        "confidence": 57.14,
+        "factors": {
+          "roe": 75.2,
+          "roce": 70.2,
+          "revenue_growth": null,
+          "profit_growth": null,
+          "debt_to_equity": 93.34,
+          "operating_cash_flow": 20,
+          "promoter_pledge": null
+        },
+        "reason_codes": [],
+        "warnings": [
+          "OPTIONAL_DATA_MISSING"
+        ]
+      },
+      "quote": {
+        "last_price": 462.1,
+        "timestamp": "2026-10-09 14:40:17",
+        "oi": 18278925,
+        "volume": 1623375
+      },
+      "evidence_timestamp": "2026-10-08T15:25:00+05:30",
+      "research_reference_price": 451.2,
+      "setup_type": "PULLBACK_REJECTION",
+      "setup_timing": "WAIT",
+      "rsi": 55.28972693306783,
+      "adx": 11.83308861347943,
+      "rvol": 5.794392523364486,
+      "vwap": 450.39603131749465,
+      "atr": 12.439999383734275,
+      "support": 450.05,
+      "resistance": 451.3,
+      "plan": {},
+      "fundamentals": {
+        "pe_ratio": 41.25,
+        "sector_pe": 13.52,
+        "total_debt": 2595.0,
+        "debt_to_equity": 0.19037488078644266,
+        "roe": 12.6,
+        "roce": 10.1,
+        "fii_holding_percent": 10.22,
+        "dii_holding_percent": 11.81,
+        "fii_holding_change_pct_points": -0.6699999999999999,
+        "dii_holding_change_pct_points": 0.7599999999999998,
+        "promoter_holding_percent": 72.73,
+        "delivery_percent": 53.46491505612182,
+        "quarterly_revenue_growth_pct": null,
+        "quarterly_profit_growth_pct": null
+      },
+      "news_state": "UNANALYSED_NEW_HEADLINES",
+      "news_at": "2026-10-09T14:38:57.541435+05:30",
+      "news_headlines": [
+        {
+          "title": "ICICI Life Insurance (NSE:ICICIPRULI): What Does Its September 2026 Performance Update Reveal? - Kalkine India",
+          "description": "ICICI Life Insurance (NSE:ICICIPRULI): What Does Its September 2026 Performance Update Reveal? Kalkine India",
+          "source": "Kalkine India",
+          "published": "2026-10-08T06:53:00+00:00",
+          "url": "https://news.google.com/rss/articles/CBMi0wFBVV95cUxOQzd3YXNkWVZnbTJXaUFoSkJ3RUJGamdkblBLdXEtWXdQVlhoeXFfZ3F4NXJhWmVMeTM2ajdiZkdOUG5XNl9yYklpTUY0QWhmSEFVYmc0WUZPekw4TWJhVExSODhhV2l0b0piRWJZUV9wWnRpQ0ZEWWd1UHdfNnV4YmM1b1d5ZGh1V3U0bDhWZzcxWVJYWXRjc3NnTW5VanU5TXVvb00xczFSVHRXclRDbVlNX2xfQS1RQTRNRnVVRjhSOGFCNU9jc3BzampfZEQtaEpv?oc=5"
+        }
+      ],
+      "missing": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "RESEARCH_UNKNOWN:quarterly_results_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_UNKNOWN:sector_one_year_quality",
+        "RESEARCH_UNKNOWN:sector_leadership_quality",
+        "NEWS_UNVERIFIED",
+        "EXECUTION_PLAN_UNVERIFIED"
+      ],
+      "failed": [
+        "futures_spread_quality"
+      ],
+      "research_failed": [
+        "valuation_quality",
+        "debt_free_quality",
+        "roe_quality",
+        "roce_quality",
+        "institutional_holding_quality",
+        "promoter_holding_quality",
+        "commentary_quality",
+        "vwap_quality"
+      ],
+      "research_unknown": [
+        "quarterly_results_quality",
+        "recent_news_quality",
+        "sector_one_year_quality",
+        "sector_leadership_quality"
+      ],
+      "safety_checks": {
+        "executed_entry_budget": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+          ],
+          "executed_entries": null,
+          "remaining_entries": null,
+          "checked_at": "2026-10-09T14:41:04.456694+05:30"
+        },
+        "intraday_entry_window": {
+          "status": "PASS",
+          "reason_codes": [
+            "INTRADAY_ENTRY_WINDOW_OPEN"
+          ],
+          "entry_cutoff": "2026-10-09T15:15:00+05:30",
+          "manual_exit_deadline": "2026-10-09T15:20:00+05:30",
+          "manual_exit_warning_active": false,
+          "manual_exit_warning": "Manually close intraday Futures in Zerodha Kite before 15:20 IST. This scanner never places, modifies, cancels, converts or squares off orders.",
+          "automatic_square_off": false
+        },
+        "latest_completed_futures_candle": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+          ],
+          "expected_latest": "2026-10-09T14:35:00+05:30",
+          "candle_timestamp": null,
+          "missing_candles": [
+            "2026-10-09T09:15:00+05:30",
+            "2026-10-09T09:20:00+05:30",
+            "2026-10-09T09:25:00+05:30",
+            "2026-10-09T09:30:00+05:30",
+            "2026-10-09T09:35:00+05:30",
+            "2026-10-09T09:40:00+05:30",
+            "2026-10-09T09:45:00+05:30",
+            "2026-10-09T09:50:00+05:30",
+            "2026-10-09T09:55:00+05:30",
+            "2026-10-09T10:00:00+05:30",
+            "2026-10-09T10:05:00+05:30",
+            "2026-10-09T10:10:00+05:30",
+            "2026-10-09T10:15:00+05:30",
+            "2026-10-09T10:20:00+05:30",
+            "2026-10-09T10:25:00+05:30",
+            "2026-10-09T10:30:00+05:30",
+            "2026-10-09T10:35:00+05:30",
+            "2026-10-09T10:40:00+05:30",
+            "2026-10-09T10:45:00+05:30",
+            "2026-10-09T10:50:00+05:30",
+            "2026-10-09T10:55:00+05:30",
+            "2026-10-09T11:00:00+05:30",
+            "2026-10-09T11:05:00+05:30",
+            "2026-10-09T11:10:00+05:30",
+            "2026-10-09T11:15:00+05:30",
+            "2026-10-09T11:20:00+05:30",
+            "2026-10-09T11:25:00+05:30",
+            "2026-10-09T11:30:00+05:30",
+            "2026-10-09T11:35:00+05:30",
+            "2026-10-09T11:40:00+05:30",
+            "2026-10-09T11:45:00+05:30",
+            "2026-10-09T11:50:00+05:30",
+            "2026-10-09T11:55:00+05:30",
+            "2026-10-09T12:00:00+05:30",
+            "2026-10-09T12:05:00+05:30",
+            "2026-10-09T12:10:00+05:30",
+            "2026-10-09T12:15:00+05:30",
+            "2026-10-09T12:20:00+05:30",
+            "2026-10-09T12:25:00+05:30",
+            "2026-10-09T12:30:00+05:30",
+            "2026-10-09T12:35:00+05:30",
+            "2026-10-09T12:40:00+05:30",
+            "2026-10-09T12:45:00+05:30",
+            "2026-10-09T12:50:00+05:30",
+            "2026-10-09T12:55:00+05:30",
+            "2026-10-09T13:00:00+05:30",
+            "2026-10-09T13:05:00+05:30",
+            "2026-10-09T13:10:00+05:30",
+            "2026-10-09T13:15:00+05:30",
+            "2026-10-09T13:20:00+05:30",
+            "2026-10-09T13:25:00+05:30",
+            "2026-10-09T13:30:00+05:30",
+            "2026-10-09T13:35:00+05:30",
+            "2026-10-09T13:40:00+05:30",
+            "2026-10-09T13:45:00+05:30",
+            "2026-10-09T13:50:00+05:30",
+            "2026-10-09T13:55:00+05:30",
+            "2026-10-09T14:00:00+05:30",
+            "2026-10-09T14:05:00+05:30",
+            "2026-10-09T14:10:00+05:30",
+            "2026-10-09T14:15:00+05:30",
+            "2026-10-09T14:20:00+05:30",
+            "2026-10-09T14:25:00+05:30",
+            "2026-10-09T14:30:00+05:30",
+            "2026-10-09T14:35:00+05:30"
+          ]
+        },
+        "final_futures_quote_freshness": {
+          "status": "PASS",
+          "reason_codes": [
+            "FINAL_FUTURES_QUOTE_FRESH"
+          ],
+          "checked_at": "2026-10-09T14:41:06.742951+05:30"
+        },
+        "directional_consistency": {
+          "status": "PASS",
+          "reason_codes": [
+            "NO_CONTRADICTORY_CONFIRMED_FUTURES_DIRECTIONS"
+          ]
+        },
+        "fixed_strategy_policy": {
+          "status": "PASS",
+          "reason_codes": [
+            "FIXED_FUTURES_STRATEGY_VERIFIED"
+          ]
+        }
+      },
+      "reasons": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "futures_spread_quality",
+        "RESEARCH_UNKNOWN:quarterly_results_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_UNKNOWN:sector_one_year_quality",
+        "RESEARCH_UNKNOWN:sector_leadership_quality",
+        "RESEARCH_FAIL:valuation_quality",
+        "RESEARCH_FAIL:debt_free_quality",
+        "RESEARCH_FAIL:roe_quality",
+        "RESEARCH_FAIL:roce_quality",
+        "RESEARCH_FAIL:institutional_holding_quality",
+        "RESEARCH_FAIL:promoter_holding_quality",
+        "RESEARCH_FAIL:commentary_quality",
+        "RESEARCH_FAIL:vwap_quality",
+        "INSUFFICIENT_REMAINING_TARGET_SPACE",
+        "TODAY_NEWS_CHECK_INCOMPLETE",
+        "EXECUTION_PLAN_UNVERIFIED",
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']",
+        "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+      ]
+    },
+    {
+      "rank": 9,
+      "symbol": "HINDUNILVR",
+      "direction": "SHORT",
+      "technical_score": 70.49,
+      "technical_basis": "COMPLETED_FUTURES_5_MINUTE",
+      "quality_score": 47.17,
+      "report_e_rank_score": 45.8,
+      "quality_coverage_percent": 77.5,
+      "decision": "UNKNOWN",
+      "report_e_entry_status": "REJECT",
+      "research_status": "UNKNOWN",
+      "research_assessment": {
+        "score": 95.79,
+        "status": "PASS",
+        "confidence": 71.43,
+        "factors": {
+          "roe": 100.0,
+          "roce": 100.0,
+          "revenue_growth": null,
+          "profit_growth": null,
+          "debt_to_equity": 98.94,
+          "operating_cash_flow": 80,
+          "promoter_pledge": 100.0
+        },
+        "reason_codes": [],
+        "warnings": [
+          "OPTIONAL_DATA_MISSING"
+        ]
+      },
+      "quote": {
+        "last_price": 1869.9,
+        "timestamp": "2026-10-09 14:40:18",
+        "oi": 15782100,
+        "volume": 779100
+      },
+      "evidence_timestamp": "2026-10-08T15:25:00+05:30",
+      "research_reference_price": 1846.0,
+      "setup_type": "BEARISH_TREND_CONTINUATION",
+      "setup_timing": "TOO LATE",
+      "rsi": 36.99993968529767,
+      "adx": 40.74301524538065,
+      "rvol": 1.1444921316165952,
+      "vwap": 1860.2866578765618,
+      "atr": 30.14586388785604,
+      "support": null,
+      "resistance": 1851.9,
+      "plan": {},
+      "fundamentals": {
+        "pe_ratio": 28.97,
+        "sector_pe": 35.46,
+        "total_debt": 1478.0,
+        "debt_to_equity": 0.03032479123494532,
+        "roe": 31.0,
+        "roce": 28.4,
+        "fii_holding_percent": 9.5,
+        "dii_holding_percent": 16.92,
+        "fii_holding_change_pct_points": -0.5999999999999996,
+        "dii_holding_change_pct_points": 0.5900000000000034,
+        "promoter_holding_percent": 61.9,
+        "delivery_percent": 60.132095754916925,
+        "quarterly_revenue_growth_pct": [
+          5.6891,
+          7.6432,
+          10.0527
+        ],
+        "quarterly_profit_growth_pct": [
+          120.91,
+          20.9697,
+          -3.1792
+        ]
+      },
+      "news_state": "UNANALYSED_NEW_HEADLINES",
+      "news_at": "2026-10-09T14:38:57.137341+05:30",
+      "news_headlines": [
+        {
+          "title": "Hindustan Unilever stock heads toward October 28 results - AD HOC NEWS",
+          "description": "Hindustan Unilever stock heads toward October 28 results AD HOC NEWS",
+          "source": "AD HOC NEWS",
+          "published": "2026-10-07T08:34:07+00:00",
+          "url": "https://news.google.com/rss/articles/CBMiuwFBVV95cUxORy1FbTdmWDJ0ejZ5WGY5N1ZlNlR1QktySmZFUGNDaklLLWt2QjlqMlN2NjlKWF9IT1pwaE9KYlFydzhiWTNGZkR2M3p4OTZhZmtjWDgxM3NZSTFoZW93OFRENUN1dEJEcmc2cmpYQ2lLNVFoWGs2MFF1VTV6ODlSdUFyNnRyYUU4YmsyNEd2SmxiaFpVRDFnYW16Sk1sV3I1NkQzbVRwUDJ4WDhwZUhpb2czQU1nY21naVRr?oc=5"
+        }
+      ],
+      "missing": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "FUTURES_MARGIN_OR_AVAILABLE_FUNDS_UNVERIFIED",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "NEWS_UNVERIFIED",
+        "EXECUTION_PLAN_UNVERIFIED"
+      ],
+      "failed": [],
+      "research_failed": [
+        "valuation_quality",
+        "debt_free_quality",
+        "institutional_holding_quality",
+        "quarterly_results_quality",
+        "commentary_quality",
+        "sector_one_year_quality",
+        "sector_leadership_quality",
+        "vwap_quality"
+      ],
+      "research_unknown": [
+        "recent_news_quality"
+      ],
+      "safety_checks": {
+        "executed_entry_budget": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+          ],
+          "executed_entries": null,
+          "remaining_entries": null,
+          "checked_at": "2026-10-09T14:41:04.456694+05:30"
+        },
+        "intraday_entry_window": {
+          "status": "PASS",
+          "reason_codes": [
+            "INTRADAY_ENTRY_WINDOW_OPEN"
+          ],
+          "entry_cutoff": "2026-10-09T15:15:00+05:30",
+          "manual_exit_deadline": "2026-10-09T15:20:00+05:30",
+          "manual_exit_warning_active": false,
+          "manual_exit_warning": "Manually close intraday Futures in Zerodha Kite before 15:20 IST. This scanner never places, modifies, cancels, converts or squares off orders.",
+          "automatic_square_off": false
+        },
+        "latest_completed_futures_candle": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+          ],
+          "expected_latest": "2026-10-09T14:35:00+05:30",
+          "candle_timestamp": null,
+          "missing_candles": [
+            "2026-10-09T09:15:00+05:30",
+            "2026-10-09T09:20:00+05:30",
+            "2026-10-09T09:25:00+05:30",
+            "2026-10-09T09:30:00+05:30",
+            "2026-10-09T09:35:00+05:30",
+            "2026-10-09T09:40:00+05:30",
+            "2026-10-09T09:45:00+05:30",
+            "2026-10-09T09:50:00+05:30",
+            "2026-10-09T09:55:00+05:30",
+            "2026-10-09T10:00:00+05:30",
+            "2026-10-09T10:05:00+05:30",
+            "2026-10-09T10:10:00+05:30",
+            "2026-10-09T10:15:00+05:30",
+            "2026-10-09T10:20:00+05:30",
+            "2026-10-09T10:25:00+05:30",
+            "2026-10-09T10:30:00+05:30",
+            "2026-10-09T10:35:00+05:30",
+            "2026-10-09T10:40:00+05:30",
+            "2026-10-09T10:45:00+05:30",
+            "2026-10-09T10:50:00+05:30",
+            "2026-10-09T10:55:00+05:30",
+            "2026-10-09T11:00:00+05:30",
+            "2026-10-09T11:05:00+05:30",
+            "2026-10-09T11:10:00+05:30",
+            "2026-10-09T11:15:00+05:30",
+            "2026-10-09T11:20:00+05:30",
+            "2026-10-09T11:25:00+05:30",
+            "2026-10-09T11:30:00+05:30",
+            "2026-10-09T11:35:00+05:30",
+            "2026-10-09T11:40:00+05:30",
+            "2026-10-09T11:45:00+05:30",
+            "2026-10-09T11:50:00+05:30",
+            "2026-10-09T11:55:00+05:30",
+            "2026-10-09T12:00:00+05:30",
+            "2026-10-09T12:05:00+05:30",
+            "2026-10-09T12:10:00+05:30",
+            "2026-10-09T12:15:00+05:30",
+            "2026-10-09T12:20:00+05:30",
+            "2026-10-09T12:25:00+05:30",
+            "2026-10-09T12:30:00+05:30",
+            "2026-10-09T12:35:00+05:30",
+            "2026-10-09T12:40:00+05:30",
+            "2026-10-09T12:45:00+05:30",
+            "2026-10-09T12:50:00+05:30",
+            "2026-10-09T12:55:00+05:30",
+            "2026-10-09T13:00:00+05:30",
+            "2026-10-09T13:05:00+05:30",
+            "2026-10-09T13:10:00+05:30",
+            "2026-10-09T13:15:00+05:30",
+            "2026-10-09T13:20:00+05:30",
+            "2026-10-09T13:25:00+05:30",
+            "2026-10-09T13:30:00+05:30",
+            "2026-10-09T13:35:00+05:30",
+            "2026-10-09T13:40:00+05:30",
+            "2026-10-09T13:45:00+05:30",
+            "2026-10-09T13:50:00+05:30",
+            "2026-10-09T13:55:00+05:30",
+            "2026-10-09T14:00:00+05:30",
+            "2026-10-09T14:05:00+05:30",
+            "2026-10-09T14:10:00+05:30",
+            "2026-10-09T14:15:00+05:30",
+            "2026-10-09T14:20:00+05:30",
+            "2026-10-09T14:25:00+05:30",
+            "2026-10-09T14:30:00+05:30",
+            "2026-10-09T14:35:00+05:30"
+          ]
+        },
+        "final_futures_quote_freshness": {
+          "status": "PASS",
+          "reason_codes": [
+            "FINAL_FUTURES_QUOTE_FRESH"
+          ],
+          "checked_at": "2026-10-09T14:41:06.742951+05:30"
+        },
+        "directional_consistency": {
+          "status": "PASS",
+          "reason_codes": [
+            "NO_CONTRADICTORY_CONFIRMED_FUTURES_DIRECTIONS"
+          ]
+        },
+        "fixed_strategy_policy": {
+          "status": "PASS",
+          "reason_codes": [
+            "FIXED_FUTURES_STRATEGY_VERIFIED"
+          ]
+        }
+      },
+      "reasons": [
+        "SETUP_CONFIRMATION_PENDING",
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "FUTURES_MARGIN_OR_AVAILABLE_FUNDS_UNVERIFIED",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_FAIL:valuation_quality",
+        "RESEARCH_FAIL:debt_free_quality",
+        "RESEARCH_FAIL:institutional_holding_quality",
+        "RESEARCH_FAIL:quarterly_results_quality",
+        "RESEARCH_FAIL:commentary_quality",
+        "RESEARCH_FAIL:sector_one_year_quality",
+        "RESEARCH_FAIL:sector_leadership_quality",
+        "RESEARCH_FAIL:vwap_quality",
+        "RESEARCH_POLICY_REVIEW_REQUIRED_NO_AUTOMATIC_WAIVER",
+        "MOVE_OR_ATR_ALREADY_CONSUMED",
+        "NEXT_PRICE_OBSTACLE_UNVERIFIED",
+        "TODAY_NEWS_CHECK_INCOMPLETE",
+        "EXECUTION_PLAN_UNVERIFIED",
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']",
+        "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+      ]
+    },
+    {
+      "rank": 10,
+      "symbol": "TATACONSUM",
+      "direction": "SHORT",
+      "technical_score": 70.36,
+      "technical_basis": "COMPLETED_FUTURES_5_MINUTE",
+      "quality_score": 45.98,
+      "report_e_rank_score": 45.09,
+      "quality_coverage_percent": 75.28,
+      "decision": "UNKNOWN",
+      "report_e_entry_status": "REJECT",
+      "research_status": "UNKNOWN",
+      "research_assessment": {
+        "score": 81.73,
+        "status": "PASS",
+        "confidence": 71.43,
+        "factors": {
+          "roe": 64.7,
+          "roce": 68.48,
+          "revenue_growth": null,
+          "profit_growth": null,
+          "debt_to_equity": 95.47,
+          "operating_cash_flow": 80,
+          "promoter_pledge": 100.0
+        },
+        "reason_codes": [],
+        "warnings": [
+          "OPTIONAL_DATA_MISSING"
+        ]
+      },
+      "quote": {
+        "last_price": 959,
+        "timestamp": "2026-10-09 14:40:18",
+        "oi": 16312450,
+        "volume": 518650
+      },
+      "evidence_timestamp": "2026-10-08T15:25:00+05:30",
+      "research_reference_price": 951.45,
+      "setup_type": "PULLBACK_REJECTION",
+      "setup_timing": "TOO LATE",
+      "rsi": 35.223850045041786,
+      "adx": 29.604170190256447,
+      "rvol": 0.5037783375314862,
+      "vwap": 962.0969797727902,
+      "atr": 17.184894438147527,
+      "support": null,
+      "resistance": 953.8,
+      "plan": {},
+      "fundamentals": {
+        "pe_ratio": 57.2,
+        "sector_pe": null,
+        "total_debt": 2820.0,
+        "debt_to_equity": 0.1294290435101891,
+        "roe": 7.35,
+        "roce": 9.24,
+        "fii_holding_percent": 20.08,
+        "dii_holding_percent": 24.99,
+        "fii_holding_change_pct_points": -0.7100000000000009,
+        "dii_holding_change_pct_points": 0.8099999999999987,
+        "promoter_holding_percent": 33.83,
+        "delivery_percent": 61.92654601634023,
+        "quarterly_revenue_growth_pct": [
+          15.0315,
+          17.9253,
+          11.9272
+        ],
+        "quarterly_profit_growth_pct": [
+          36.5248,
+          21.49,
+          28.6145
+        ]
+      },
+      "news_state": "FETCH_FAILED",
+      "news_at": "2026-10-09T14:39:00.418859+05:30",
+      "news_headlines": [],
+      "missing": [
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "FUTURES_MARGIN_OR_AVAILABLE_FUNDS_UNVERIFIED",
+        "RESEARCH_UNKNOWN:valuation_quality",
+        "RESEARCH_UNKNOWN:block_deal_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "NEWS_UNVERIFIED",
+        "EXECUTION_PLAN_UNVERIFIED"
+      ],
+      "failed": [
+        "futures_spread_quality"
+      ],
+      "research_failed": [
+        "debt_free_quality",
+        "roe_quality",
+        "roce_quality",
+        "institutional_holding_quality",
+        "promoter_holding_quality",
+        "commentary_quality",
+        "sector_one_year_quality"
+      ],
+      "research_unknown": [
+        "valuation_quality",
+        "block_deal_quality",
+        "recent_news_quality"
+      ],
+      "safety_checks": {
+        "executed_entry_budget": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']"
+          ],
+          "executed_entries": null,
+          "remaining_entries": null,
+          "checked_at": "2026-10-09T14:41:04.456694+05:30"
+        },
+        "intraday_entry_window": {
+          "status": "PASS",
+          "reason_codes": [
+            "INTRADAY_ENTRY_WINDOW_OPEN"
+          ],
+          "entry_cutoff": "2026-10-09T15:15:00+05:30",
+          "manual_exit_deadline": "2026-10-09T15:20:00+05:30",
+          "manual_exit_warning_active": false,
+          "manual_exit_warning": "Manually close intraday Futures in Zerodha Kite before 15:20 IST. This scanner never places, modifies, cancels, converts or squares off orders.",
+          "automatic_square_off": false
+        },
+        "latest_completed_futures_candle": {
+          "status": "UNKNOWN",
+          "reason_codes": [
+            "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+          ],
+          "expected_latest": "2026-10-09T14:35:00+05:30",
+          "candle_timestamp": null,
+          "missing_candles": [
+            "2026-10-09T09:15:00+05:30",
+            "2026-10-09T09:20:00+05:30",
+            "2026-10-09T09:25:00+05:30",
+            "2026-10-09T09:30:00+05:30",
+            "2026-10-09T09:35:00+05:30",
+            "2026-10-09T09:40:00+05:30",
+            "2026-10-09T09:45:00+05:30",
+            "2026-10-09T09:50:00+05:30",
+            "2026-10-09T09:55:00+05:30",
+            "2026-10-09T10:00:00+05:30",
+            "2026-10-09T10:05:00+05:30",
+            "2026-10-09T10:10:00+05:30",
+            "2026-10-09T10:15:00+05:30",
+            "2026-10-09T10:20:00+05:30",
+            "2026-10-09T10:25:00+05:30",
+            "2026-10-09T10:30:00+05:30",
+            "2026-10-09T10:35:00+05:30",
+            "2026-10-09T10:40:00+05:30",
+            "2026-10-09T10:45:00+05:30",
+            "2026-10-09T10:50:00+05:30",
+            "2026-10-09T10:55:00+05:30",
+            "2026-10-09T11:00:00+05:30",
+            "2026-10-09T11:05:00+05:30",
+            "2026-10-09T11:10:00+05:30",
+            "2026-10-09T11:15:00+05:30",
+            "2026-10-09T11:20:00+05:30",
+            "2026-10-09T11:25:00+05:30",
+            "2026-10-09T11:30:00+05:30",
+            "2026-10-09T11:35:00+05:30",
+            "2026-10-09T11:40:00+05:30",
+            "2026-10-09T11:45:00+05:30",
+            "2026-10-09T11:50:00+05:30",
+            "2026-10-09T11:55:00+05:30",
+            "2026-10-09T12:00:00+05:30",
+            "2026-10-09T12:05:00+05:30",
+            "2026-10-09T12:10:00+05:30",
+            "2026-10-09T12:15:00+05:30",
+            "2026-10-09T12:20:00+05:30",
+            "2026-10-09T12:25:00+05:30",
+            "2026-10-09T12:30:00+05:30",
+            "2026-10-09T12:35:00+05:30",
+            "2026-10-09T12:40:00+05:30",
+            "2026-10-09T12:45:00+05:30",
+            "2026-10-09T12:50:00+05:30",
+            "2026-10-09T12:55:00+05:30",
+            "2026-10-09T13:00:00+05:30",
+            "2026-10-09T13:05:00+05:30",
+            "2026-10-09T13:10:00+05:30",
+            "2026-10-09T13:15:00+05:30",
+            "2026-10-09T13:20:00+05:30",
+            "2026-10-09T13:25:00+05:30",
+            "2026-10-09T13:30:00+05:30",
+            "2026-10-09T13:35:00+05:30",
+            "2026-10-09T13:40:00+05:30",
+            "2026-10-09T13:45:00+05:30",
+            "2026-10-09T13:50:00+05:30",
+            "2026-10-09T13:55:00+05:30",
+            "2026-10-09T14:00:00+05:30",
+            "2026-10-09T14:05:00+05:30",
+            "2026-10-09T14:10:00+05:30",
+            "2026-10-09T14:15:00+05:30",
+            "2026-10-09T14:20:00+05:30",
+            "2026-10-09T14:25:00+05:30",
+            "2026-10-09T14:30:00+05:30",
+            "2026-10-09T14:35:00+05:30"
+          ]
+        },
+        "final_futures_quote_freshness": {
+          "status": "PASS",
+          "reason_codes": [
+            "FINAL_FUTURES_QUOTE_FRESH"
+          ],
+          "checked_at": "2026-10-09T14:41:06.742951+05:30"
+        },
+        "directional_consistency": {
+          "status": "PASS",
+          "reason_codes": [
+            "NO_CONTRADICTORY_CONFIRMED_FUTURES_DIRECTIONS"
+          ]
+        },
+        "fixed_strategy_policy": {
+          "status": "PASS",
+          "reason_codes": [
+            "FIXED_FUTURES_STRATEGY_VERIFIED"
+          ]
+        }
+      },
+      "reasons": [
+        "SETUP_CONFIRMATION_PENDING",
+        "futures_atr_quality",
+        "futures_vwap_quality",
+        "futures_rvol_quality",
+        "futures_rsi_quality",
+        "futures_event_quality",
+        "futures_spread_quality",
+        "FUTURES_MARGIN_OR_AVAILABLE_FUNDS_UNVERIFIED",
+        "RESEARCH_UNKNOWN:valuation_quality",
+        "RESEARCH_UNKNOWN:block_deal_quality",
+        "RESEARCH_UNKNOWN:recent_news_quality",
+        "RESEARCH_FAIL:debt_free_quality",
+        "RESEARCH_FAIL:roe_quality",
+        "RESEARCH_FAIL:roce_quality",
+        "RESEARCH_FAIL:institutional_holding_quality",
+        "RESEARCH_FAIL:promoter_holding_quality",
+        "RESEARCH_FAIL:commentary_quality",
+        "RESEARCH_FAIL:sector_one_year_quality",
+        "RESEARCH_POLICY_REVIEW_REQUIRED_NO_AUTOMATIC_WAIVER",
+        "MOVE_OR_ATR_ALREADY_CONSUMED",
+        "NEXT_PRICE_OBSTACLE_UNVERIFIED",
+        "TODAY_NEWS_CHECK_INCOMPLETE",
+        "EXECUTION_PLAN_UNVERIFIED",
+        "BROKER_RECONCILIATION_UNAVAILABLE: ['BROKER_ACCOUNT_READ_FAILED:TimeoutError']",
+        "LATEST_COMPLETED_FUTURES_CANDLE_MISSING_OR_SESSION_INCOMPLETE"
+      ]
+    }
+  ]
+}

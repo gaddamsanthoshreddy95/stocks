@@ -1,0 +1,128 @@
+{
+  "status": "IMPLEMENTED_AND_REGRESSION_VALIDATED",
+  "strategy": {
+    "instrument": "Intraday NSE Futures",
+    "target_fraction": 0.003,
+    "stop_fraction": 0.002,
+    "minimum_net_rr": 1,
+    "maximum_executed_entries_per_IST_day": 2,
+    "entry_cutoff_default_IST": "15:15",
+    "manual_warning_default_IST": "15:10",
+    "manual_and_backtest_exit_cutoff_IST": "15:20"
+  },
+  "broker_mutations": "NONE_IMPLEMENTED_OR_ACTIVATED",
+  "verification_broker_access": "MOCK_FEEDS_ONLY",
+  "final_tests": {
+    "test_cases": 901,
+    "subtests": 16,
+    "total_checks": 917,
+    "passed": 917,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 136.703,
+    "started_at": "2026-10-09T03:23:35.308058+00:00"
+  },
+  "focused_new_test_counts": {
+    "test_futures_sessions": 41,
+    "test_futures_trade_ledger": 39,
+    "test_futures_read_only_gateway": 13,
+    "test_futures_cost_calibration": 22,
+    "test_futures_correction_regressions": 36
+  },
+  "comparison_summary": {
+    "futures_contract_histories": 214,
+    "directional_replays": 404,
+    "excluded_rows": 12630,
+    "changed_rounded_technical_scores": 4,
+    "changed_indicator_evidence": 398,
+    "changed_timing": 0,
+    "saved_futures_score_records_compared": 32,
+    "saved_scores_matching_raw_replay": 32,
+    "saved_approved_count": 0,
+    "corrected_approved_count": null,
+    "corrected_approval_status": "NOT_REEVALUATED_NO_FRESH_EXECUTION_OR_RECONCILIATION",
+    "historical_probability": null,
+    "historical_probability_status": "UNKNOWN_NOT_PREPARED"
+  },
+  "synthetic_fixture": {
+    "before_approved": 0,
+    "after_approved": 0,
+    "all_daily_scores_unchanged": true,
+    "all_technical_scores_unchanged": true,
+    "all_company_thresholds_unchanged": true
+  },
+  "commands": [
+    ".venv/bin/python -m pytest -q tests/test_futures_sessions.py tests/test_futures_intraday_backtest.py tests/test_futures_execution.py",
+    ".venv/bin/python -m pytest -q tests/test_futures_trade_ledger.py tests/test_futures_read_only_gateway.py",
+    ".venv/bin/python -m pytest -q tests/test_futures_correction_regressions.py --disable-warnings --junitxml=reports/futures_correction_integration.xml",
+    ".venv/bin/python -m pytest -q --disable-warnings --junitxml=reports/futures_correction_tests.xml > reports/futures_correction_tests.log 2>&1",
+    ".venv/bin/python scripts/compare_futures_corrections.py",
+    ".venv/bin/python scripts/audit_futures_costs.py > reports/futures_cost_calibration.json"
+  ],
+  "files": {
+    "Canonical sessions and indicator inputs": [
+      "src/futures/sessions.py",
+      "src/futures/scoring.py",
+      "src/quality/futures_execution.py",
+      "src/futures/data_recovery.py"
+    ],
+    "Futures price basis and operational policy": [
+      "src/futures/config.py",
+      "src/futures/runtime.py",
+      "src/futures/costs.py",
+      "src/futures/backtest.py"
+    ],
+    "Read-only account reconciliation and final safety": [
+      "src/futures/trade_ledger.py",
+      "src/futures/gateway.py",
+      "src/futures/execution_safety.py",
+      "src/futures/scanner.py",
+      "src/futures/preparation.py"
+    ],
+    "Report provenance and evidence versions": [
+      "src/futures/rejected_analysis.py",
+      "src/futures/report_e.py",
+      "src/futures/report_e_history.py",
+      "src/presenter/futures_opportunities.py",
+      "ui_app.py",
+      "main.py",
+      "scripts/run_futures_mode.py"
+    ],
+    "Cost sources and offline comparison": [
+      "resources/futures_fee_schedule.json",
+      "scripts/audit_futures_costs.py",
+      "scripts/compare_futures_corrections.py"
+    ],
+    "Documentation": [
+      "README.md",
+      ".env.example"
+    ],
+    "New regression tests": [
+      "tests/test_futures_sessions.py",
+      "tests/test_futures_trade_ledger.py",
+      "tests/test_futures_read_only_gateway.py",
+      "tests/test_futures_cost_calibration.py",
+      "tests/test_futures_correction_regressions.py"
+    ],
+    "Updated synthetic fixtures and approved-behavior expectations": [
+      "tests/futures_mode_fixture.py",
+      "tests/test_bidirectional_futures.py",
+      "tests/test_futures_research_and_timing.py",
+      "tests/test_prepared_futures_modes.py",
+      "tests/test_report_e.py",
+      "tests/test_fixed_target_stop_report.py"
+    ],
+    "Preserved before-change evidence": [
+      "tests/fixtures/futures_correction_before.json"
+    ]
+  },
+  "limitations": [
+    "Observed slippage and contract-note calibration remain UNKNOWN without observations; residual slippage remains 2 bps per leg, PROVISIONAL.",
+    "Cached-data score replay is not a fresh all-gates scan; actual corrected live approvals were not reevaluated.",
+    "Twelve cached contracts have invalid daily OHLC records; exact dates and fields are retained in comparison evidence. Values were not repaired or invented.",
+    "Read-only reconciliation can block scanner approvals after two executions, but cannot prevent an external/manual third trade or close positions.",
+    "No real-data historical backtest/preparation or win-probability publication was performed. Existing incompatible caches require corrected-version regeneration after validation.",
+    "Historical technical simulations remain independent by direction, not a calibrated portfolio simulation of the two-entry manual strategy and missing point-in-time research/depth gates."
+  ]
+}

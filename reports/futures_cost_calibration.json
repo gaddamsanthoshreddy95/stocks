@@ -1,0 +1,130 @@
+{
+  "read_only": true,
+  "fee_schedule": {
+    "version": "NSE_FUTURES_2026_10_09_V1",
+    "verified_on_ist": "2026-10-09",
+    "market": "NSE equity futures",
+    "account_scope": "Resident individual standard Zerodha online orders; special tariffs, debit-balance surcharges, dealer orders, physical settlement and penalties require separate evidence",
+    "common_rates": {
+      "brokerage_rate": 0.0003,
+      "brokerage_cap_per_executed_order": 20,
+      "sebi_rate": 1e-06,
+      "gst_rate": 0.18,
+      "stamp_buy_rate": 2e-05
+    },
+    "effective_periods": [
+      {
+        "from": "2024-10-01",
+        "until_exclusive": "2026-03-01",
+        "stt_sell_rate": 0.0002,
+        "exchange_rate": 1.73e-05,
+        "ipft_rate": 1e-06
+      },
+      {
+        "from": "2026-03-01",
+        "until_exclusive": "2026-04-01",
+        "stt_sell_rate": 0.0002,
+        "exchange_rate": 1.8299e-05,
+        "ipft_rate": 1e-09
+      },
+      {
+        "from": "2026-04-01",
+        "until_exclusive": null,
+        "stt_sell_rate": 0.0005,
+        "exchange_rate": 1.8299e-05,
+        "ipft_rate": 1e-09
+      }
+    ],
+    "rounding": {
+      "stt": "Nearest whole rupee, half up, after the applicable client/day aggregation; do not round each hypothetical round trip independently",
+      "other_fees": "Unrounded allocations retained for strategy economics; contract-note aggregation and rounding remain uncalibrated",
+      "source": "zerodha_stt"
+    },
+    "execution_costs": {
+      "residual_slippage_bps_per_leg": 2,
+      "calibration_status": "PROVISIONAL",
+      "reason": "No matched contemporaneous quote/fill observations or contract notes supplied",
+      "entry_spread": "Embedded in a depth-weighted executable entry; do not add it again",
+      "exit_spread": "Half the observed full bid-ask spread on exit turnover only; current spread is a provisional proxy for future exit spread"
+    },
+    "sources": [
+      {
+        "id": "nse_exchange_ipft",
+        "url": "https://nsearchives.nseindia.com/content/circulars/FA73061.pdf",
+        "published": "2026-02-27",
+        "retrieved_on_ist": "2026-10-09",
+        "supports": "March 1 2026 exchange/IPFT split and preceding split; combined total remains INR 183 per crore per side"
+      },
+      {
+        "id": "nse_stt_2026",
+        "url": "https://nsearchives.nseindia.com/content/circulars/FATAX73524.pdf",
+        "published": "2026-03-31",
+        "retrieved_on_ist": "2026-10-09",
+        "supports": "STT on Futures sale: 0.05% from April 1 2026, 0.02% before"
+      },
+      {
+        "id": "zerodha_2024",
+        "url": "https://zerodha.com/z-connect/business-updates/revision-in-exchange-transaction-charges-and-securities-transaction-tax-from-october-1-2024",
+        "published": "2024-10-01",
+        "retrieved_on_ist": "2026-10-09",
+        "supports": "October 1 2024 exchange fee and STT start date"
+      },
+      {
+        "id": "zerodha_tariff",
+        "url": "https://zerodha.com/charges/",
+        "retrieved_on_ist": "2026-10-09",
+        "supports": "Resident individual standard brokerage, SEBI, GST, stamp and current indicative transaction charges"
+      },
+      {
+        "id": "zerodha_stt",
+        "url": "https://support.zerodha.com/category/account-opening/resident-individual/ri-charges/articles/how-is-the-securities-transaction-tax-stt-calculated",
+        "retrieved_on_ist": "2026-10-09",
+        "supports": "STT nearest-rupee rounding; applicable sell turnover"
+      },
+      {
+        "id": "nse_stt_computation",
+        "url": "https://www.nseindia.com/static/products-services/equity-derivatives-securities-transaction-tax",
+        "retrieved_on_ist": "2026-10-09",
+        "supports": "Exchange client/day aggregation and statutory STT computation"
+      },
+      {
+        "id": "zerodha_account_tariff",
+        "url": "https://support.zerodha.com/category/account-opening/resident-individual/ri-charges/articles/what-is-the-brokerage-at-zerodha-for-equity",
+        "retrieved_on_ist": "2026-10-09",
+        "supports": "Standard resident tariff and debit-balance/cash-collateral exceptions"
+      }
+    ]
+  },
+  "configured_assumptions": {
+    "brokerage_rate": 0.0003,
+    "brokerage_cap": 20.0,
+    "exchange_rate": 1.83e-05,
+    "sebi_rate": 1e-06,
+    "gst_rate": 0.18,
+    "stamp_rate": 2e-05,
+    "slippage_bps": 2.0,
+    "ipft_rate": 1e-09
+  },
+  "contract_note_comparisons": [],
+  "fill_observations": [],
+  "failures": [],
+  "calibration_status": "UNKNOWN",
+  "slippage_calibration": {
+    "status": "UNKNOWN",
+    "sample_size": 0,
+    "median_observed_adverse_bps": null,
+    "active_model_bps_per_leg": 2.0,
+    "active_model_status": "PROVISIONAL",
+    "reason": "No automatic calibration; representativeness, quantities and market regimes require review"
+  },
+  "rounding": {
+    "stt_method": "Half up on aggregated daily taxable Futures sales",
+    "warning": "Per-trade estimates retain fractional allocation; do not round each trade independently"
+  },
+  "not_performed": [
+    "Network or broker calls",
+    "Order actions",
+    "Configuration mutation",
+    "Historical probability preparation"
+  ]
+}

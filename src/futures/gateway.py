@@ -78,9 +78,9 @@ class KiteGateway:
             return {'account_id': profile['user_id'], 'orders': orders, 'trades': trades, 'positions': positions}
         def signature(book):
             # Exclude mark-to-market/P&L changes; retain execution quantities and identity.
-            position_keys = ('exchange','tradingsymbol','product','quantity','overnight_quantity','buy_quantity','sell_quantity','day_buy_quantity','day_sell_quantity')
-            order_keys = ('order_id','exchange','tradingsymbol','product','status','quantity','filled_quantity','transaction_type')
-            trade_keys = ('trade_id','order_id','exchange','tradingsymbol','transaction_type','quantity','average_price','fill_timestamp','exchange_timestamp')
+            position_keys = ('exchange','tradingsymbol','instrument_token','product','quantity','overnight_quantity','buy_quantity','sell_quantity','day_buy_quantity','day_sell_quantity')
+            order_keys = ('order_id','exchange','tradingsymbol','instrument_token','product','status','quantity','filled_quantity','transaction_type')
+            trade_keys = ('trade_id','order_id','exchange','tradingsymbol','instrument_token','product','transaction_type','quantity','average_price','fill_timestamp','exchange_timestamp')
             project=lambda rows, keys: sorted([{k:r.get(k) for k in keys} for r in rows], key=lambda r:json.dumps(r,sort_keys=True,default=str))
             return json.dumps({'account_id': book['account_id'], 'orders':project(book['orders'],order_keys),
                 'trades':project(book['trades'],trade_keys), 'positions':{k:project(book['positions'][k],position_keys) for k in ('net','day')}},sort_keys=True,default=str)

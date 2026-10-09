@@ -180,7 +180,7 @@ def test_scheduled_command_appends_d_after_existing_output(tmp_path, capsys):
         exec(compile(tree, 'scripts/run_futures_mode.py', 'exec'), {'__file__': str(Path('scripts/run_futures_mode.py').resolve())})
     output = capsys.readouterr().out
     assert json.loads(output.splitlines()[0])['mode'] == 'LIVE_SCAN'
-    assert output.splitlines()[1] == '## ' + TITLE
+    assert output.index('Report A') < output.index('Report B') < output.index('Report C') < output.index(TITLE) < output.index('REPORT E')
     assert output.count(TITLE) == 1
     assert len(list((tmp_path / 'reports' / 'prepared_scans').glob('*.md'))) == 1
 

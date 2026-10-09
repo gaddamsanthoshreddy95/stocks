@@ -48,7 +48,7 @@ def main():
     suggest.add_argument("--technical-only", action="store_true",
                          help="show preliminary technical candidates without futures research approval")
     suggest.add_argument("--json", action="store_true", help="emit machine-readable JSON instead of detailed explanations")
-    directional = subcommands.add_parser("futures-scan", help="scan the full stock universe independently for LONG and SHORT setups")
+    directional = subcommands.add_parser("futures-scan", help="read-only LONG/SHORT discovery and Futures execution checks; manual trading only")
     directional.add_argument("--limit", type=int, default=5)
     directional.add_argument("--mode", choices=('FULL_RESEARCH','DAILY_PREP','LIVE_SCAN','AFTER_MARKET_RESEARCH'), default='LIVE_SCAN')
     directional.add_argument("--skip-backtest", action="store_true", help="leave historical rates unavailable instead of simulating current-contract history")
@@ -58,7 +58,7 @@ def main():
     historical.add_argument("--lot-size", required=True, type=int, help="historical lot size of this exact contract")
     historical.add_argument("--daily-candles", help="optional daily futures CSV for completed daily ATR")
     historical.add_argument("--benchmark-candles", help="optional daily Nifty CSV for historical market regimes")
-    historical.add_argument("--underlying-candles", help="underlying five-minute CSV for the 0.3%%/0.2%% underlying-movement strategy")
+    historical.add_argument("--underlying-candles", help="optional equity research context; execution target/stop always use Futures entry")
     daily = subcommands.add_parser("daily-report", help="generate the final daily trading report")
     daily.add_argument("--limit", type=int, default=5, help="maximum final trades; top 20 are risk-reviewed")
     daily.add_argument("--minimum-score", type=int, default=40)

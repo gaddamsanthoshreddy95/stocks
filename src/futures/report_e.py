@@ -196,7 +196,7 @@ def entry_analysis(item,report,context,*,rejected=False):
     coverage=sum(v is not None for v in conditions.values())/len(conditions)*100
     plan=item.get('plan') or {}
     movement_basis=plan.get('movement_basis') or item.get('data_freshness',{}).get('history_basis')
-    execution_prices_ok=quote_ok and bar_ok and not missing_bars and all(checks.get(k,{}).get('status')=='PASS' for k in REQUIRED_EXECUTION) and checks.get('listed_futures_contract',{}).get('status')=='PASS' and item.get('execution_reviewed') and not after
+    execution_prices_ok=quote_ok and bar_ok and not missing_bars and all(checks.get(k,{}).get('status')=='PASS' for k in REQUIRED_EXECUTION) and checks.get('listed_futures_contract',{}).get('status')=='PASS' and item.get('execution_reviewed') and item.get('scan_gates',{}).get('intraday_entry_window',{}).get('status')=='PASS' and not after
     entry=plan.get('entry') if execution_prices_ok and numeric(plan.get('entry')) and plan['entry']>0 else None
     policy_match=policy.get('target_fraction')==.003 and policy.get('stop_fraction')==.002 and movement_basis=='FUTURES'
     target=stop=rr=None

@@ -116,3 +116,12 @@ def test_actual_charge_differences_do_not_change_tariff():
     assert comparison['status'] == 'COMPARISON_ONLY'
     assert comparison['differences']['brokerage']['observed_minus_modeled'] == pytest.approx(0)
     assert result['configured_assumptions']['brokerage_cap'] == 20
+
+
+@pytest.mark.parametrize('reference',[None, 0, -1, float('nan'), 'unavailable'])
+def test_missing_equity_reference_never_changes_futures_execution_basis(reference):
+    plan=trade_plan(205,100,'SHORT',config=FuturesScanConfig(),costs=FuturesCosts(),
+                    risk_budget=1000,trade_date='2026-10-08',movement_reference_price=reference)
+    assert plan['target']==pytest.approx(204.385)
+    assert plan['stop_loss']==pytest.approx(205.41)
+    assert plan['underlying_entry'] is None

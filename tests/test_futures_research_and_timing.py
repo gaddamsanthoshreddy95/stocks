@@ -222,7 +222,8 @@ def test_report_shows_actual_research_values_original_statuses_and_review_flags(
 def test_short_approval_requires_research_trigger_confirmation_remaining_space_and_stop(case, expected):
     from src.quality.futures_execution import CHECKS, check
     scanner, _ = scanner_fixture()
-    scanner.config = replace(scanner.config, minimum_net_rr=.4)
+    from futures_mode_fixture import SimulatedProvider, SyntheticNoCostModel
+    scanner.costs = SyntheticNoCostModel()
     research_result = {'unavailable_checks': [], 'failed_checks': [], 'policy_review_required': False}
     if case == 'research_unknown':
         research_result['unavailable_checks'] = ['roe_quality']
@@ -238,8 +239,8 @@ def test_short_approval_requires_research_trigger_confirmation_remaining_space_a
              'reason_codes': [], 'setup_type': 'BEARISH_TREND_CONTINUATION', 'evidence': evidence}
     checks = {key: check(True, {}, 'VALIDATED') for key in CHECKS}
     checks['futures_oi_quality'] = check(True, {'price_change_percent': -1}, 'SHORT_BUILDUP')
-    data = {'daily': candles(np.full(260, 200)), 'intraday': candles(np.full(260, 200)),
-            'quote': {'depth': {'buy': [{'price': 200, 'quantity': 10000}],
+    data = {'daily': candles(np.full(260, 200)), 'intraday': SimulatedProvider(['TEST']).intraday,
+            'quote': {'timestamp':NOW.isoformat(), 'last_price':200, 'depth': {'buy': [{'price': 200, 'quantity': 10000}],
                                'sell': [{'price': 200.02, 'quantity': 10000}]}}}
     with patch('src.futures.scanner.assess_execution', return_value=checks), patch('src.futures.scanner.directional_setup', return_value=setup):
         scanner._execution(item, data, {'lot_size': 500}, (None, None),

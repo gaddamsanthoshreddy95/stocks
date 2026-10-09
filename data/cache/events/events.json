@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-08T19:40:50.354903+00:00",
+  "generated_at": "2026-10-09T09:09:00.455431+00:00",
   "events": [
     {
       "event_id": "CRUDE_PRICE-20261008",
@@ -17,7 +17,7 @@
       "event_end": null,
       "expected_duration": "THREE_TO_SEVEN_DAYS",
       "raw_score": 50.0,
-      "decayed_score": 43.79,
+      "decayed_score": 33.79,
       "confidence": 1.0,
       "freshness_score": 25,
       "materiality": 1.0,
@@ -71,7 +71,7 @@
       "event_end": null,
       "expected_duration": "ONE_TO_THREE_DAYS",
       "raw_score": 70.0,
-      "decayed_score": 57.38,
+      "decayed_score": 38.89,
       "confidence": 0.95,
       "freshness_score": 25,
       "materiality": 1.0,

@@ -617,16 +617,16 @@ LONG/SHORT filters, VWAP/volume/volatility/liquidity gates, and report formats
 remain. Prepared modes add mandatory fresh read-only margin/funds validation.
 The margin calculation endpoint does not submit an order.
 
-The latest movement requirement is explicit: 0.3% target and 0.2% stop are based
-on the **underlying price**, while entry, costs and P&L use actual futures
-prices. Displayed futures target/stop proxies assume a fixed futures/spot basis,
-and both futures and underlying target clearance are checked. Underlying-bar
-backtests use aligned underlying/futures bars, retain stop-first ambiguity,
-and use conservative actual futures OHLC bounds for fills. Missing aligned
-underlying data is not replaced with a futures-movement hit rate. The legacy
-futures-percentage strategy remains available with
-`FUTURES_RUNTIME_MOVEMENT_BASIS=FUTURES`. Historical rates are explicitly empirical
-frequencies, not guaranteed future probabilities.
+The approved strategy uses **Futures entry prices**: LONG target/stop are
+entry × 1.003 / entry × 0.998; SHORT target/stop are entry × 0.997 / entry × 1.002.
+`FUTURES_RUNTIME_MOVEMENT_BASIS=FUTURES` is required; the former UNDERLYING
+execution setting fails explicitly. Equity prices and levels remain research
+context. Fresh depth supplies a modeled entry reference, never an actual fill.
+Broker-confirmed opening fills have separate weighted entry/target/stop fields
+in the read-only reconciliation ledger. Missing/stale depth never supplies an
+executable price. Strategy barriers are unrounded mathematical levels, not
+submitted exchange orders; tick size is retained where available.
+Historical rates remain empirical frequencies, not future probabilities.
 
 Kite requests have bounded timeouts/retries, quote pacing >=1 second and
 historical pacing >=1/3 second. Live requests stop starting when their deadline
@@ -919,16 +919,16 @@ Rejected records cannot become READY. After-market execution is NOT LIVE,
 readiness is UNKNOWN and any exhausted/rejected conditional setup is flagged.
 Structure/invalidation references never replace the original fixed stop.
 
-**Policy conflict is explicit:** the current prepared scanner can use
-UNDERLYING movement references. Report E requests Futures-entry percentages.
-Existing plans/backtests are not silently converted. Report E's entry/target/
-stop/RR remain UNKNOWN unless an actual validated Futures entry and an existing
-compatible 0.3%/0.2% Futures plan are retained. Incompatible policies are flagged
-for review. Equity prices never substitute for Futures entry prices.
+**Execution policy:** Report E uses the validated Futures-percentage plan.
+Legacy UNDERLYING historical evidence is incompatible and remains UNKNOWN.
+Fresh quote estimates, completed-candle research references and actual broker
+fills are labeled separately. Both directions may be researched, but conflicting
+confirmed Futures setups cannot both be READY. Equity prices never substitute
+for Futures entry prices.
 
 Historical evidence is prepared in FULL_RESEARCH/DAILY_PREP using the separately
 cached ReportEBacktester; LIVE_SCAN and AFTER_MARKET_RESEARCH never run it.
-The original backtester, trades and metrics remain unchanged. Historical signals
+The corrected backtester normalizes session rows and uses Futures barriers. Previously cached metrics require the new calculation version. Historical signals
 use the same completed-prefix core READY setup and the reconstructible Report E
 RSI/EMA/MACD/ADX/VWAP/ATR/volume/candle timing conditions. Matched-time volume uses
 only prior sessions. Execution occurs on the next bar, within trading hours;
@@ -964,3 +964,64 @@ break-even target-first rate includes the time-exit bucket; it may be
 unattainable. Net R:R, cost totals, average wins/losses, drawdown and intervals
 are separately reported. Without broker-fill/contract-note calibration, costs
 and net expectancy are **PROVISIONAL**, not validated profit forecasts.
+
+### Focused Futures corrections: manual execution only
+
+The scanner **never submits, modifies, cancels, converts or squares off broker
+orders/positions**. It reads account profile, orders, trades and positions for
+reconciliation before evaluation and again before final approval. GET failures,
+inconsistent/moving books and stale reconciliation block APPROVED/READY as UNKNOWN.
+Read-only margin calculations remain separate; they do not place orders.
+
+The durable ledger defaults to `data/futures_executions.sqlite3`, relative to the
+repository root (override `FUTURES_RUNTIME_LEDGER_PATH`). It binds to the linked
+account and IST date, counts executed opening/increasing order IDs globally
+across symbols, expiries, LONG and SHORT, and survives scanner restarts. Partial
+fills count once per order; pure exits and unfilled orders count zero. A new
+scale-in/re-entry order and a reversal's opening portion count as entries.
+Pending orders can make capacity UNKNOWN; overnight exposure blocks new
+approvals. Candidates do not consume slots. At two executed entries the scanner
+withdraws further approvals. This read-only check cannot prevent a third manual
+or external order placed after the snapshot, nor prevent holding overnight.
+
+Default new-entry cutoff is **15:15 IST**, configured with
+`FUTURES_SCAN_ENTRY_CUTOFF_HOUR/MINUTE`. The retained backtest forced-exit/manual
+exit deadline is **15:20 IST**. A manual exit warning starts at **15:10 IST**
+(`FUTURES_SCAN_MANUAL_EXIT_WARNING_MINUTES=10`). Close positions manually in Kite;
+there is no automatic live square-off. CLI, dashboard and API retain research
+results after the cutoff, but no new entry is APPROVED or READY.
+
+Canonical candle normalization excludes weekends/configured holidays and
+out-of-session/off-grid rows. Five-minute bars start at 09:15 through 15:25 IST;
+09:20 is the first completed-bar time. Duplicate/invalid timestamps fail closed.
+Only completed rows feed Futures indicators; final validation requires every
+current-session bar through the exact latest expected completed bar. Quote,
+candle, cutoff and executed-entry checks run at the final report clock. Daily
+provisional equity discovery is labeled separately. Raw cached evidence remains
+available; corrected backtest caches use a new calculation version.
+
+Reports retain **A → B → C → D → E**. Existing compatibility fields have explicit
+provenance alongside `daily_discovery`, `futures_execution_confirmation` and
+`scan_gates`. Original weights and unrelated research/technical gates remain.
+Report D/E reuse retained records; they make no additional market/account calls.
+
+The sourced fee schedule is `resources/futures_fee_schedule.json`. The existing
+`FUTURES_COST_EXCHANGE_RATE=0.0000183` means the combined exchange+IPFT rate;
+IPFT is allocated within it, not charged twice. Defaults split the levy by its
+effective date and change STT on 1 April 2026. Depth-weighted entry already embeds
+entry spread/impact; modeled exit half-spread is charged separately. Residual
+slippage remains **2 bps per leg, PROVISIONAL**. Contract-note rounding is not
+invented. Audit locally with:
+
+```bash
+.venv/bin/python scripts/audit_futures_costs.py --help
+.venv/bin/python scripts/audit_futures_costs.py
+.venv/bin/python -m pytest -q --junitxml=reports/futures_correction_tests.xml
+```
+
+Contract-note/fill calibration stays UNKNOWN without observations; the minimum
+net reward/risk remains **1.0** and target/stop stay **0.3%/0.2%**, even with zero
+approvals. Historical preparation/probability publication was not performed in
+this correction phase. Existing technical simulations analyze directions
+independently; they are not a calibrated portfolio simulation of a global
+two-entry manual trading day or unavailable historical research/depth gates.
