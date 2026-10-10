@@ -31,9 +31,12 @@ def universe(instruments,now):
     return result
 
 
-def unknown(reason):
-    return {'classification':'UNKNOWN_DATA','recovery_status':'UNKNOWN','reason_codes':[reason],
+def unknown(reason,details=None):
+    result={'classification':'UNKNOWN_DATA','recovery_status':'UNKNOWN','reason_codes':[reason],
             'technical_score':None,'confidence':0,'data_completeness':0}
+    if details:
+        result['history_quality']=details
+    return result
 
 
 def technical(frame,config,now,benchmark=None,sector=None):
@@ -45,7 +48,9 @@ def technical(frame,config,now,benchmark=None,sector=None):
     try:
         data=normalise_candles(frame,'day',now)
         if len(data)<253:
-            return unknown('INSUFFICIENT_253_SESSION_HISTORY')
+            return unknown('INSUFFICIENT_253_SESSION_HISTORY',{'fetched_rows':len(frame),'completed_rows':len(data),'minimum_rows':253,
+                'excluded_rows':data.attrs.get('session_normalization',{}).get('excluded_rows'),
+                'latest_session':data.index[-1].isoformat() if not data.empty else None})
         expected=ist(now).normalize()
         if ist(now)<expected+pd.Timedelta(hours=15,minutes=30) or not trading_day(expected):
             expected-=pd.Timedelta(days=1)
@@ -54,21 +59,26 @@ def technical(frame,config,now,benchmark=None,sector=None):
         missing=sum(trading_day(day) for day in pd.date_range(data.index[-1]+pd.Timedelta(days=1),expected,freq='D'))
         if missing>config.maximum_history_age_sessions:
             return unknown('HISTORY_STALE')
-        session_grid=pd.DatetimeIndex([day for day in pd.date_range(data.index[0],data.index[-1],freq='D') if trading_day(day)])
+        # Validate the complete required 253-session indicator window, rather
+        # than demanding identical start dates across older provider caches.
+        window_start=data.index[-253]
+        session_grid=pd.DatetimeIndex([day for day in pd.date_range(window_start,data.index[-1],freq='D') if trading_day(day)])
         # A covering broad-market history provides observed exchange sessions,
         # including weekday closures absent from the configured holiday list.
         if benchmark is not None:
             try:
                 calendar=normalise_candles(benchmark,'day',now)
                 closes=pd.to_numeric(calendar.Close,errors='coerce')
-                if (not calendar.empty and calendar.index[0]<=data.index[0]
+                if (not calendar.empty and calendar.index[0]<=window_start
                         and calendar.index[-1]>=data.index[-1]
                         and np.isfinite(closes.to_numpy()).all() and (closes>0).all()):
-                    session_grid=calendar.index[(calendar.index>=data.index[0]) & (calendar.index<=data.index[-1])]
+                    session_grid=calendar.index[(calendar.index>=window_start) & (calendar.index<=data.index[-1])]
             except (ValueError,KeyError,TypeError):
                 pass
-        if not session_grid.difference(data.index).empty:
-            return unknown('HISTORY_MISSING_SESSIONS')
+        gaps=session_grid.difference(data.index)
+        if not gaps.empty:
+            return unknown('HISTORY_MISSING_SESSIONS',{'missing_session_count':len(gaps),'sample_missing_sessions':[day.isoformat() for day in gaps[:10]],
+                'fetched_rows':len(frame),'completed_rows':len(data),'first_session':data.index[0].isoformat(),'latest_session':data.index[-1].isoformat()})
         columns=['Open','High','Low','Close','Volume']
         values=data[columns].apply(pd.to_numeric,errors='coerce')
         if (not np.isfinite(values.to_numpy()).all()

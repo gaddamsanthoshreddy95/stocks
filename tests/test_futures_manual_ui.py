@@ -28,7 +28,7 @@ render(SimpleNamespace(settings=PlatformSettings(market_data_source="cache")),Si
             assert all('STOCK0' not in element.value and 'evaluations' not in element.value for element in app.json)
             assert not next(b for b in app.button if b.label=='Run Full Universe Scan').disabled
             app.checkbox[0].check().run(timeout=15)
-            assert len(app.json)==2
+            assert sum('STOCK0' in element.value for element in app.json)==1
             assert 'STOCK0' in app.json[-1].value and 'STOCK100' not in app.json[-1].value
             # Settings must not read any scan/history payload, even after visiting it.
             with patch.object(WorkspaceStore,'latest_result',side_effect=AssertionError('No report reads')):

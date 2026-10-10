@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import math
+from collections import Counter
 from time import perf_counter
 import pandas as pd
 from src.futures.sessions import ist, trading_day
@@ -89,8 +90,11 @@ class FuturesWorkspace:
                 symbols=sorted(existing) if selected_only else sorted(contracts)
                 try:
                     benchmark=self.adapter.history('NIFTY 50')
-                except Exception:
+                    benchmark_quality={'status':'AVAILABLE' if benchmark is not None and not benchmark.empty else 'UNKNOWN',
+                                       'rows':len(benchmark) if benchmark is not None else 0}
+                except Exception as exc:
                     benchmark=None
+                    benchmark_quality={'status':'UNKNOWN','error_type':type(exc).__name__,'rows':0}
                 parallel=AdaptiveRunner(self.config.maximum_workers,self.config.healthy_parallel_batches)
                 def screen(symbol):
                     parallel.stage(symbol+': historical and sector data')
@@ -99,7 +103,17 @@ class FuturesWorkspace:
                         item=unknown('ACTIVE_CONTRACT_MISSING_REVIEW_REQUIRED')
                     else:
                         try:
-                            item=deepcopy(technical(self.adapter.history(symbol),self.config,now,benchmark,self.adapter.sector_history(symbol)))
+                            history=self.adapter.history(symbol)
+                            sector_error=None
+                            try:
+                                sector_history=self.adapter.sector_history(symbol)
+                            except Exception as exc:
+                                sector_history=None; sector_error=type(exc).__name__
+                            item=deepcopy(technical(history,self.config,now,benchmark,sector_history))
+                            item['history_rows']=len(history) if history is not None else 0
+                            item['history_source']=self.config.weekly_history_source
+                            if sector_error:
+                                item['sector_context_error']=sector_error
                         except Exception as exc:
                             if transient(exc):
                                 raise
@@ -129,10 +143,15 @@ class FuturesWorkspace:
                 except Exception:
                     quotes={}
                 context_cache={s:{} for s in symbols}
+                context_failures={}
                 def read_context(symbol,kind,operation):
                     cache=context_cache[symbol]
                     if kind not in cache:
-                        cache[kind]=operation()
+                        if symbol in context_failures:
+                            cache[kind]={'status':'UNKNOWN','reason':'OPTIONAL_CONTEXT_UNAVAILABLE:'+context_failures[symbol],
+                                         'bullish_score':None,'bearish_score':None}
+                        else:
+                            cache[kind]=operation()
                     return deepcopy(cache[kind])
                 def enrich(symbol):
                     item=deepcopy(evaluations[symbol])
@@ -187,11 +206,11 @@ class FuturesWorkspace:
                         item['reason_codes'].append('WEEKLY_EXECUTION_LIQUIDITY_UNVERIFIED_DAILY_CHECK_REQUIRED')
                     return item
                 def failed_context(symbol,exc):
-                    item=deepcopy(evaluations[symbol])
-                    item.update({'classification':'UNKNOWN_DATA','eligible_for_admission':False,
-                        'futures_quality':{'status':'UNKNOWN'},'fundamentals':{'status':'UNKNOWN'},'news_events':{'status':'UNKNOWN'}})
-                    item['reason_codes'].append('CONTEXT_FETCH_FAILED:'+type(exc).__name__)
-                    item['discovery']=discovery_score(item,item['fundamentals'],item['news_events'],self.config)
+                    # Optional research outages must not erase valid technical
+                    # evidence. Keep completed stages and label missing context.
+                    context_failures[symbol]=type(exc).__name__
+                    item=enrich(symbol)
+                    item['reason_codes'].append('OPTIONAL_CONTEXT_UNAVAILABLE:'+type(exc).__name__)
                     return item
                 evaluations=parallel.run(symbols,enrich,failed_context,
                     (lambda c,t,label:progress(c,t,'Candidate context: '+label)) if progress else None)
@@ -210,6 +229,14 @@ class FuturesWorkspace:
                         'technical_evaluated_count':len(evaluations),'context_evaluated_count':sum(e['eligible_for_admission'] for e in evaluations.values()),
                         'weekly_liquidity_policy':'COMPLETED_VOLUME_CONTEXT_LIVE_DEPTH_RESERVED_FOR_DAILY'})
                 output.update({'elapsed_seconds':round(perf_counter()-started,2),'parallel_events':parallel.events,'parallel_workers_final':parallel.workers,
+                    'classification_counts':dict(Counter(e['classification'] for e in evaluations.values())),
+                    'technical_classification_counts':dict(Counter(e['technical_classification'] for e in evaluations.values())),
+                    'data_failure_reasons':dict(Counter(reason for e in evaluations.values() if e['classification']=='UNKNOWN_DATA' for reason in e['reason_codes'] if reason not in (*LISTS,'UNKNOWN_DATA','NOT_RECOVERY','NONE','TRANSITION','MULTI_SESSION_CONFIRMED','NOT_CONFIRMED','RECOVERY_WATCH','RECOVERY_CONFIRMED','RECOVERY_INVALIDATED'))),
+                    'history_fetched_count':sum(e.get('history_rows',0)>0 for e in evaluations.values()),
+                    'usable_history_count':sum(e['technical_classification'] not in ('UNKNOWN_DATA','TRANSITION') for e in evaluations.values()),
+                    'fundamental_available_count':sum(e['fundamentals'].get('status')=='AVAILABLE' for e in evaluations.values()),
+                    'optional_context_unavailable_count':sum(any(r.startswith('OPTIONAL_CONTEXT_UNAVAILABLE') for r in e['reason_codes']) for e in evaluations.values()),
+                    'history_source':self.config.weekly_history_source,'benchmark_quality':benchmark_quality,
                     'context_shortlist':sorted(s for s,e in evaluations.items() if e['eligible_for_admission']),
                     'context_policy':'TOP_TWICE_LIST_CAPACITY_PER_DIRECTION_PLUS_EXISTING_MEMBERS',
                     'execution_liquidity_unverified':[s for s,e in evaluations.items() if e['futures_quality']['status']=='UNKNOWN' and e['eligible_for_admission']]})

@@ -580,3 +580,40 @@ The final regression suite passed **1005 tests and 16 subtests** in 146.80
 seconds, including the safeguard that resets each phase to two workers and
 prevents skipped items from promoting capacity. Compilation and whitespace
 checks passed.
+
+### Incomplete-data diagnostics and optional-feed isolation
+
+`NO_RELIABLE_CLASSIFICATIONS_LAST_VERSION_PRESERVED` means the attempted scan
+could not publish reliable directional research; it does not distinguish failed
+fetches from rejected historical data. New rotation reports/UI summaries show
+fetched/usable history counts, technical/final classification counts, available
+fundamentals, optional-context outages, benchmark coverage and counted rejection
+reasons. Individual gap failures include sample missing dates and row counts.
+Insufficient-history failures include fetched and completed row counts. These
+diagnostics remain lightweight and do not render the full universe's raw evidence.
+
+For the default adjusted-equity source, Nifty history now uses the same explicit
+two-year adjusted source (`^NSEI`). If that source fails, the adapter requests an
+explicit two-year broker history, rather than accepting a potentially shorter
+annual cache. This prevents shorter benchmark coverage from misidentifying
+weekday exchange holidays as stock-history gaps. Verified missing sessions,
+stale data, missing adjustment provenance and invalid OHLC still fail closed.
+Session-gap checks require full coverage of the latest 253-session indicator
+window, rather than identical start dates across unused older cache history.
+
+Sector-history outages are optional context and no longer discard valid stock
+history. After bounded optional-context retries exhaust, the coordinator reuses
+completed stages and keeps reliable technical classifications with missing
+fundamentals/news labelled UNKNOWN. Confirmed low Futures volume and verified
+major events still require review. Daily Trading's mandatory live gates and
+manual-only operation remain unchanged.
+
+Final focused validation passed 100 tests covering aligned benchmark fetching/fallback,
+optional sector/news failures, counted missing-history reasons, gap diagnostics,
+manual UI and existing discovery/parallel regressions. The actual data failure
+on the user's machine remains unverified until a new manual run supplies these
+source/reason counts; no unavailable production data was fabricated.
+The full regression run before the final required-window boundary refinement
+passed 1012 tests and 16 subtests in 148.50 seconds; the final focused run covers
+that refinement, including genuine missing-session rejection. Compilation and
+whitespace checks passed.

@@ -214,6 +214,18 @@ def render(platform,database):
         if rotation:
             st.caption('Last saved rotation result')
             st.write({k:rotation.get(k) for k in ('status','eligible_universe_size','evaluated_count','technical_evaluated_count','context_evaluated_count','elapsed_seconds','as_of','reason') if k in rotation})
+            st.write({'Technical classifications':rotation.get('technical_classification_counts',{}),
+                      'Histories fetched':rotation.get('history_fetched_count','UNKNOWN'),
+                      'Histories usable':rotation.get('usable_history_count','UNKNOWN'),
+                      'Fundamentals available':rotation.get('fundamental_available_count','UNKNOWN'),
+                      'Optional context unavailable':rotation.get('optional_context_unavailable_count','UNKNOWN'),
+                      'Final classifications':rotation.get('classification_counts',{}),
+                      'History source':rotation.get('history_source','UNKNOWN'),
+                      'Benchmark data':rotation.get('benchmark_quality',{})})
+            failures=rotation.get('data_failure_reasons',{})
+            if failures:
+                st.subheader('Why data could not be used')
+                st.dataframe(pd.DataFrame([{'Reason':reason,'Stocks':count} for reason,count in sorted(failures.items(),key=lambda v:-v[1])]),hide_index=True)
             st.dataframe(pd.DataFrame(rotation.get('changes',[])),hide_index=True,width='stretch')
             details_and_export('Show individual stock evidence and export',rotation,'ft-rotation-details','futures_weekly_rotation.json')
         st.caption('Routine changes apply automatically. Unknown data preserves the last version or marks membership REVIEW_REQUIRED.')

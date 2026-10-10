@@ -104,7 +104,18 @@ class RepositoryAdapter:
 
     def _history(self,symbol):
         if symbol not in self.history_cache:
-            if self.config.weekly_history_source=='yahoo_adjusted' and symbol not in {'NIFTY 50',*SectorStrength.KITE_INDEX_SYMBOLS.values()}:
+            if symbol=='NIFTY 50' and self.config.weekly_history_source=='yahoo_adjusted':
+                # Match the equity research window; annual broker caches may only
+                # cover one year and cannot establish a two-year holiday calendar.
+                try:
+                    frame=self.adjusted_history('^NSEI')
+                except Exception:
+                    getter=getattr(self.provider,'get_long_history',None)
+                    if getter is None:
+                        raise
+                    with self._provider_lock:
+                        frame=getter(symbol,period='2y')
+            elif self.config.weekly_history_source=='yahoo_adjusted' and symbol not in set(SectorStrength.KITE_INDEX_SYMBOLS.values()):
                 frame=self.adjusted_history(symbol)
             else:
                 getter=getattr(self.provider,'get_annual_history',self.provider.get_data)
