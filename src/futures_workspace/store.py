@@ -86,6 +86,12 @@ class WorkspaceStore:
             row=c.execute('SELECT payload FROM ft_settings WHERE id=1').fetchone()
             return json.loads(row[0]) if row else {}
 
+    def locked_job(self):
+        """Saved lease owner; RUNNING is a persisted status, not a liveness check."""
+        with closing(self.connect()) as c:
+            row=c.execute("SELECT j.id,j.kind,j.status,j.started_at FROM ft_lease l JOIN ft_jobs j ON j.id=l.owner WHERE l.name='workspace'").fetchone()
+            return dict(row) if row else None
+
     def save_settings(self,payload):
         with self.transaction() as c:
             c.execute('INSERT OR REPLACE INTO ft_settings VALUES(1,?)',(dumps(payload),))

@@ -396,3 +396,12 @@ use the explicit `recover-job` procedure above. Never recover a live worker's le
 The follow-up progress/UI fix passed 71 workspace and background-job tests,
 including stalled-status messaging, failure display, button re-enablement,
 scheduled stage updates, and the existing eight-section UI regression.
+
+If a persisted lock exists without a worker in this UI process, the status panel
+now displays its job ID and explains that saved RUNNING status is not evidence
+of a live worker. It suppresses scheduled retries and offers **Recover stopped
+job**. Stop other Streamlit/scheduler workers before using it. After recovery,
+manual scan controls are available and automatic maintenance waits five minutes.
+CLI `status` and `recover-job` now read the database directly without constructing
+market-data services or requiring broker credentials. The saved-lock recovery UI
+and existing workspace/background-job tests pass (72 tests).

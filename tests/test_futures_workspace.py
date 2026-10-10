@@ -589,6 +589,38 @@ render(SimpleNamespace(settings=PlatformSettings(market_data_source="cache")),Si
         jobs.pool.shutdown(wait=True)
 
 
+def test_saved_job_lock_ui_recovery_without_starting_worker(tmp_path,monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    from src.futures_workspace.ui import JobController
+    monkeypatch.setenv('FUTURES_WORKSPACE_ENABLED','true')
+    path=tmp_path/'ui.db'
+    store=WorkspaceStore(path)
+    with store.transaction() as c:
+        c.execute("INSERT INTO ft_jobs(id,kind,status,started_at) VALUES('abandoned','WEEKLY_ROTATION','RUNNING',?)",(NOW.isoformat(),))
+        c.execute("INSERT INTO ft_lease VALUES('workspace','abandoned')")
+    jobs=JobController()
+    code=f'''from types import SimpleNamespace
+from src.futures_workspace.ui import render
+from src.application.settings import PlatformSettings
+render(SimpleNamespace(settings=PlatformSettings(market_data_source="cache")),SimpleNamespace(path={str(path)!r}))
+'''
+    try:
+        with patch('src.futures_workspace.ui.controller',return_value=jobs),patch('src.futures_workspace.scheduler.WorkspaceScheduler.tick') as tick:
+            app=AppTest.from_string(code).run(timeout=15)
+            assert not app.exception
+            assert any('saved job lock' in w.value for w in app.warning)
+            tick.assert_not_called()
+            next(b for b in app.button if b.label=='Recover stopped job').click().run(timeout=15)
+            assert not app.exception
+            assert store.locked_job() is None
+            assert store.jobs()[0]['status']=='FAILED'
+            tick.assert_not_called()
+            app.radio[0].set_value('Weekly Rotation').run(timeout=15)
+            assert not next(b for b in app.button if b.label=='Run Full Universe Scan').disabled
+    finally:
+        jobs.pool.shutdown(wait=True)
+
+
 def test_production_universe_maps_actual_nse_equities_and_excludes_unknown_indices():
     from src.futures_workspace.adapter import RepositoryAdapter
     adapter=RepositoryAdapter(SimpleNamespace(provider=object(),settings=SimpleNamespace(market_data_source='kite')),CFG)

@@ -83,13 +83,24 @@ def render(platform,database):
     def submit(label,operation):
         jobs.submit(label,operation)
     # Scheduled catch-up runs while the workspace is open. External scheduler supports closed UI.
-    if jobs.future is None:
+    if jobs.future is None and time.monotonic()>=jobs.next_schedule and store.locked_job() is None:
         from src.futures_workspace.scheduler import WorkspaceScheduler
         submit('Scheduled initialization / weekly rotation',lambda:WorkspaceScheduler(new_workspace()).tick(progress=jobs.update))
 
     @st.fragment(run_every='2s')
     def job_status():
-        if (jobs.future is None or jobs.future.done()) and time.monotonic()>=jobs.next_schedule:
+        saved_job=store.locked_job()
+        local_busy=bool(jobs.future and not jobs.future.done())
+        if saved_job and not local_busy:
+            st.warning('A saved job lock is blocking scans. This does not prove a worker is still running.')
+            st.write({'Job ID':saved_job['id'],'Job':saved_job['kind'],'Started':saved_job['started_at']})
+            st.caption('Use recovery only after stopping any other Streamlit or scheduler worker. Recovery preserves watchlists and history.')
+            if st.button('Recover stopped job',key='ft-recover-job'):
+                store.recover_job(saved_job['id'],worker_stopped=True)
+                jobs.future=None
+                jobs.next_schedule=time.monotonic()+300
+                st.rerun(scope='app')
+        if not saved_job and (jobs.future is None or jobs.future.done()) and time.monotonic()>=jobs.next_schedule:
             from src.futures_workspace.scheduler import WorkspaceScheduler
             submit('Scheduled universe / weekly maintenance',lambda:WorkspaceScheduler(new_workspace()).tick(progress=jobs.update))
         if jobs.future:
@@ -118,7 +129,7 @@ def render(platform,database):
         if st.button('Refresh workspace view',key='ft-refresh'):
             st.rerun(scope='app')
     job_status()
-    busy=bool(jobs.future and not jobs.future.done())
+    busy=bool(jobs.future and not jobs.future.done()) or store.locked_job() is not None
     section=st.radio('Futures Trading section',SECTIONS,horizontal=True,key='ft-section')
     members=store.members()
     daily=latest(store,'DAILY_TRADING')
