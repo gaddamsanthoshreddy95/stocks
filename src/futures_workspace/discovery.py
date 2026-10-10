@@ -54,9 +54,28 @@ def technical(frame,config,now,benchmark=None,sector=None):
         missing=sum(trading_day(day) for day in pd.date_range(data.index[-1]+pd.Timedelta(days=1),expected,freq='D'))
         if missing>config.maximum_history_age_sessions:
             return unknown('HISTORY_STALE')
+        session_grid=pd.DatetimeIndex([day for day in pd.date_range(data.index[0],data.index[-1],freq='D') if trading_day(day)])
+        # A covering broad-market history provides observed exchange sessions,
+        # including weekday closures absent from the configured holiday list.
+        if benchmark is not None:
+            try:
+                calendar=normalise_candles(benchmark,'day',now)
+                closes=pd.to_numeric(calendar.Close,errors='coerce')
+                if (not calendar.empty and calendar.index[0]<=data.index[0]
+                        and calendar.index[-1]>=data.index[-1]
+                        and np.isfinite(closes.to_numpy()).all() and (closes>0).all()):
+                    session_grid=calendar.index[(calendar.index>=data.index[0]) & (calendar.index<=data.index[-1])]
+            except (ValueError,KeyError,TypeError):
+                pass
+        if not session_grid.difference(data.index).empty:
+            return unknown('HISTORY_MISSING_SESSIONS')
         columns=['Open','High','Low','Close','Volume']
         values=data[columns].apply(pd.to_numeric,errors='coerce')
-        if not np.isfinite(values.to_numpy()).all() or (values[['Open','High','Low','Close']]<=0).any().any() or (values.Volume<0).any() or (values.High<values.Low).any():
+        if (not np.isfinite(values.to_numpy()).all()
+                or (values[['Open','High','Low','Close']]<=0).any().any()
+                or (values.Volume<0).any()
+                or (values.High<values[['Open','Low','Close']].max(axis=1)).any()
+                or (values.Low>values[['Open','High','Close']].min(axis=1)).any()):
             return unknown('HISTORY_INVALID')
         p=prepare(data)
         c=p.Close; last=p.iloc[-1]

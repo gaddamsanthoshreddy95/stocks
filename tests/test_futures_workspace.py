@@ -182,6 +182,77 @@ def test_atomic_publication_failure(workspace):
     assert workspace.store.members()==before
 
 
+@pytest.mark.parametrize('failure', ['eligibility_audit', 'provider_cleanup'])
+def test_late_rotation_failure_preserves_previous_version(workspace,failure):
+    rotate(workspace)
+    before=workspace.store.members()
+    version=workspace.store.versions()[0]['id']
+    if failure=='eligibility_audit':
+        original=workspace.store.record
+        def record(job_id,symbol,kind,payload):
+            if kind=='ELIGIBILITY':
+                raise RuntimeError('audit unavailable')
+            return original(job_id,symbol,kind,payload)
+        target=patch.object(workspace.store,'record',side_effect=record)
+    else:
+        target=patch.object(workspace.adapter,'end',side_effect=RuntimeError('cleanup unavailable'))
+    with target, pytest.raises(RuntimeError):
+        rotate(workspace,{'BEAR':evaluation('NONE',20),'RECOVER':evaluation(LISTS[1]),'UNSELECTED':evaluation(LISTS[0])})
+    assert workspace.store.members()==before
+    assert workspace.store.versions()[0]['id']==version
+    assert any(job['status']=='FAILED' for job in workspace.store.jobs())
+    with workspace.store.job('LEASE_RELEASE_CHECK'):
+        pass
+
+
+def test_weekly_history_missing_internal_session_is_unknown():
+    history=frame(np.linspace(220,100,280)).drop(frame(np.linspace(220,100,280)).index[-20])
+    assert technical(history,CFG,NOW)['reason_codes']==['HISTORY_MISSING_SESSIONS']
+
+
+def test_weekly_history_uses_covering_benchmark_exchange_calendar():
+    history=frame(np.linspace(220,100,280))
+    holiday=history.index[-20]
+    benchmark=history.drop(holiday)
+    closed=history.drop(holiday)
+    result=technical(closed,CFG,NOW,benchmark)
+    assert result['classification']!='UNKNOWN_DATA'
+    assert result['technical_score'] is not None
+    incomplete=closed.drop(closed.index[-10])
+    assert technical(incomplete,CFG,NOW,benchmark)['reason_codes']==['HISTORY_MISSING_SESSIONS']
+
+
+@pytest.mark.parametrize('column,multiplier', [('Open',1.1),('Open',.9),('Close',1.1),('Close',.9)])
+def test_weekly_history_ohlc_outside_range_is_unknown(column,multiplier):
+    history=frame(np.linspace(220,100,280))
+    history.loc[history.index[-1],column]*=multiplier
+    assert technical(history,CFG,NOW)['reason_codes']==['HISTORY_INVALID']
+
+
+def test_market_bias_custom_thresholds_preserve_report_only_adjustments():
+    inputs={name:{'status':'PASS','value':.5,'source':'OFFLINE_FIXTURE','as_of':NOW.isoformat()}
+            for name in MarketBias.WEIGHTS}
+    baseline=MarketBias.evaluate(inputs)
+    custom=MarketBias.evaluate(inputs,directional_threshold=30,strong_threshold=45)
+    assert baseline['classification']=='BULLISH'
+    assert custom['classification']=='STRONG_BULLISH'
+    assert custom['score']==baseline['score']==50
+    assert custom['mode']=='REPORT_ONLY'
+    assert custom['thresholds']=={'directional':30,'strong':45}
+    assert custom['long_adjustment']==10 and custom['short_adjustment']==-10
+    with pytest.raises(ValueError):
+        replace(CFG,bias_directional_threshold=60,bias_strong_threshold=40)
+    with pytest.raises(ValueError):
+        MarketBias.evaluate(inputs,directional_threshold=0)
+
+
+def test_market_bias_threshold_environment_configuration(monkeypatch):
+    monkeypatch.setenv('FUTURES_WORKSPACE_BIAS_DIRECTIONAL_THRESHOLD','25')
+    monkeypatch.setenv('FUTURES_WORKSPACE_BIAS_STRONG_THRESHOLD','70')
+    cfg=WorkspaceConfig.from_env()
+    assert (cfg.bias_directional_threshold,cfg.bias_strong_threshold)==(25,70)
+
+
 def test_manual_management_and_canonical_dedup(workspace):
     workspace.manage('BEAR','add',LISTS[0])
     with pytest.raises(ValueError,match='already has'):

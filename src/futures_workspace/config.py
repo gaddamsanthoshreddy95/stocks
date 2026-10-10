@@ -18,6 +18,8 @@ class WorkspaceConfig:
     fundamental_weight: float = .2
     news_weight: float = .1
     context_ranking_validated: bool = False
+    bias_directional_threshold: float = 20
+    bias_strong_threshold: float = 60
     require_adjusted_history: bool = True
     weekly_history_source: str = "yahoo_adjusted"
     minimum_futures_volume: int = 1000
@@ -52,6 +54,8 @@ class WorkspaceConfig:
             raise ValueError('Workspace manual flat deadline cannot exceed 15:10 IST')
         if self.minimum_score>100 or self.hysteresis>100:
             raise ValueError('Scores must be within 0..100')
+        if not 0<self.bias_directional_threshold<self.bias_strong_threshold<=100:
+            raise ValueError('Market Bias thresholds must satisfy 0 < directional < strong <= 100')
 
     @classmethod
     def from_env(cls):

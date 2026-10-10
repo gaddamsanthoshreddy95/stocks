@@ -200,6 +200,8 @@ def render(platform,database):
             hysteresis=st.number_input('Hysteresis points',0.,100.,float(config.hysteresis))
             decline=st.number_input('Recovery six-month decline %',0.,100.,float(config.recovery_decline_percent))
             drawdown=st.number_input('Recovery high drawdown %',0.,100.,float(config.recovery_drawdown_percent))
+            bias_directional=st.number_input('Market Bias directional threshold',1.,99.,float(config.bias_directional_threshold))
+            bias_strong=st.number_input('Market Bias strong threshold',2.,100.,float(config.bias_strong_threshold))
             day=st.selectbox('Weekly day',range(7),index=config.weekly_day,format_func=lambda d:('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday')[d])
             hour=st.number_input('Weekly hour IST',0,23,config.weekly_hour)
             minute=st.number_input('Weekly minute IST',0,59,config.weekly_minute)
@@ -208,9 +210,14 @@ def render(platform,database):
             if st.form_submit_button('Save workspace settings',disabled=busy):
                 payload={**store.settings(),'minimum_score':minimum,'maximum_per_list':count,'confirmation_sessions':confirmation,
                     'hysteresis':hysteresis,'recovery_decline_percent':decline,'recovery_drawdown_percent':drawdown,
+                    'bias_directional_threshold':bias_directional,'bias_strong_threshold':bias_strong,
                     'weekly_day':day,'weekly_hour':hour,'weekly_minute':minute,'require_adjusted_history':adjusted,'weekly_history_source':history_source}
-                replace(config,**payload)
-                store.save_settings(payload)
-                st.rerun()
+                try:
+                    replace(config,**payload)
+                    store.save_settings(payload)
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    st.rerun()
         st.json(asdict(config))
         st.caption('Run scripts/run_futures_workspace.py schedule with Windows Task Scheduler to rotate while the UI is closed. Daily Trading remains user initiated.')

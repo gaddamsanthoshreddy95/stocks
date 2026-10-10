@@ -132,11 +132,14 @@ class FuturesWorkspace:
                     output.update({'status':'COMPLETE','eligible_universe_size':len(contracts),'evaluated_count':len(evaluations),
                         'evaluations':evaluations,'changes':changes,'as_of':now.isoformat(),'data_sources':['KITE','EXISTING_PUBLIC_FUNDAMENTALS','EXISTING_NEWS_EVENTS'],
                         'data_quality_failures':[s for s,e in evaluations.items() if e['classification']=='UNKNOWN_DATA']})
-                    with self.store.transaction() as c:
-                        output['version']=self.store.publish(c,members,kind,output)
                 self.store.record(job_id,'*','ELIGIBILITY',{'contracts':contracts,'as_of':now.isoformat()})
             finally:
                 self.adapter.end()
+            # Finish evidence writes and provider cleanup before publishing membership.
+            # A failure in either must leave the previous version authoritative.
+            if output.get('status')=='COMPLETE':
+                with self.store.transaction() as c:
+                    output['version']=self.store.publish(c,members,kind,output)
         return output
 
     def _rotation(self,existing,evaluations,now,selected_only):

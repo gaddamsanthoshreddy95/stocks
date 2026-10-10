@@ -1,5 +1,46 @@
 # Futures Trading: implementation and operating guide
 
+## Verification and hardening on 10 October 2026
+
+The requested workspace was already present in the clean repository at the start
+of this request. It was inspected and retained, rather than recreated. This
+attempt changes only workspace code, its configuration example, tests and this
+guide. It adds no new database migration or API route; the additive `ft_*` schema
+and routes documented below remain authoritative.
+
+Changes in this attempt:
+
+- `discovery.py` rejects an internal missing session and OHLC values outside the
+  recorded high/low range. A covering, valid Nifty history supplies observed
+  market sessions; without it, the existing `MARKET_HOLIDAYS_IST` calendar applies.
+  Configure actual exchange holidays for the history period when the benchmark
+  is unavailable. Missing sessions yield UNKNOWN_DATA rather than invented bars.
+- `service.py` finishes eligibility audit persistence and provider cleanup before
+  publishing a rotation. Failure in either preserves the preceding watchlist
+  version, marks the job FAILED and releases its lease.
+- `config.py`, `bias.py`, `adapter.py` and `ui.py` expose validated directional and
+  strong Market Bias thresholds, defaulting to 20 and 60. Set
+  `FUTURES_WORKSPACE_BIAS_DIRECTIONAL_THRESHOLD` and
+  `FUTURES_WORKSPACE_BIAS_STRONG_THRESHOLD`, or save them in workspace Settings.
+  They require `0 < directional < strong <= 100`. Adjustments remain REPORT_ONLY.
+  Invalid settings display an error and do not replace saved settings.
+- `.env.example` documents both settings. `tests/test_futures_workspace.py` adds
+  ten offline cases for late rotation failure, internal gaps, observed holidays,
+  malformed OHLC and threshold configuration.
+
+No existing LONG/SHORT scoring, Reports A–E, target/stop settings, execution ledger,
+broker order behavior or legacy session settings were changed. Workspace entry
+and manual-close deadlines remain 15:00 and 15:10 IST respectively.
+
+Kite metadata and quote assumptions were checked against the official
+[instrument and quote API documentation](https://kite.trade/docs/connect/v3/market-quotes/).
+This was a documentation check, not a live broker verification.
+
+Current verification results are recorded at the end of this guide. Full live
+integration activation, a machine-level scheduled task, linked manual-fill
+performance and point-in-time fundamental/news ablation remain external or
+unvalidated dependencies, as detailed below.
+
 ## Architecture findings
 
 The existing UI is Streamlit (`ui_app.py`), its report store is SQLite
@@ -307,3 +348,33 @@ financial fields, sector mappings or event coverage. The interfaces record those
 limitations rather than invent observations. Scheduling while the UI is closed
 requires the local task described above. Full-universe research can be slow
 because public-source access and Kite requests are bounded and paced.
+
+### Current attempt results — 10 October 2026
+
+The final fresh-process `.venv/bin/python -m pytest -q` run passed **969 tests
+and 16 subtests** in 137.90 seconds, including 68 workspace cases and the eight
+Streamlit sections. Compilation, CLI help and `git diff --check` also passed.
+The initial full-suite attempt passed 958 tests but failed one UI test because
+its process had imported the pre-edit config class before loading the edited UI;
+the fresh final run above resolved that mixed-version failure. No live broker
+credentials were required by the deterministic workspace tests.
+
+Test-generated tracked cache/report changes and the new recommendation artifact
+were removed after verification. The final changes contain only the workspace
+hardening, configuration example, offline tests and this operating guide.
+
+Linux launch from the repository root:
+
+```bash
+.venv/bin/python -m streamlit run ui_app.py
+```
+
+Use the existing credential configuration (`KITE_API_KEY`, `KITE_ACCESS_TOKEN`),
+`MARKET_DATA_SOURCE=kite`, and `FUTURES_WORKSPACE_ENABLED=true`. Refresh expired
+broker authorization through the established login flow. Open Futures Trading,
+let first-run initialization finish or run Weekly Rotation, then use Daily
+Trading's **SCAN SELECTED STOCKS** for the combined selected-only result.
+For maintenance while the UI is closed, schedule
+`.venv/bin/python scripts/run_futures_workspace.py schedule` through your existing
+host scheduler, using Asia/Kolkata. The configured weekly default remains
+Saturday 09:00; the command never schedules daily recommendations or broker orders.

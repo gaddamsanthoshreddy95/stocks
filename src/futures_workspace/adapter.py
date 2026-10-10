@@ -175,7 +175,8 @@ class RepositoryAdapter:
             inputs['sector_participation']={'status':'PASS','value':sum(1 if s['return_percent']>0 else -1 if s['return_percent']<0 else 0 for s in sectors)/len(sectors),
                 'source':'KITE_SECTOR_INDICES','as_of':min(s['as_of'] for s in sectors),'sectors':sectors}
         # Market breadth is not inferred from selected watchlists or sector index counts.
-        return MarketBias.evaluate(inputs)
+        return MarketBias.evaluate(inputs,directional_threshold=self.config.bias_directional_threshold,
+                                   strong_threshold=self.config.bias_strong_threshold)
 
 class SelectedScanProvider:
     """Per-job shared reads; fresh execution quotes remain subject to scanner gates."""

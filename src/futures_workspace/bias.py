@@ -6,7 +6,9 @@ class MarketBias:
     WEIGHTS={'nifty_vwap':.15,'nifty_trend':.20,'bank_trend':.10,'midcap_trend':.10,
              'breadth':.20,'sector_participation':.15,'opening_range':.05,'relative_volume':.05}
     @classmethod
-    def evaluate(cls,inputs):
+    def evaluate(cls,inputs,*,directional_threshold=20,strong_threshold=60):
+        if not 0<directional_threshold<strong_threshold<=100:
+            raise ValueError('Invalid Market Bias thresholds')
         valid={}
         for name,weight in cls.WEIGHTS.items():
             evidence=inputs.get(name,{})
@@ -18,8 +20,8 @@ class MarketBias:
         # Nifty trend plus broad participation required; a single index is insufficient.
         sufficient='nifty_trend' in valid and ('breadth' in valid or 'sector_participation' in valid) and coverage>=.5
         score=round(sum(valid[k]*cls.WEIGHTS[k] for k in valid)/coverage*100,2) if sufficient else None
-        label='UNKNOWN' if score is None else 'STRONG_BULLISH' if score>=60 else 'BULLISH' if score>=20 else 'STRONG_BEARISH' if score<=-60 else 'BEARISH' if score<=-20 else 'NEUTRAL'
+        label='UNKNOWN' if score is None else 'STRONG_BULLISH' if score>=strong_threshold else 'BULLISH' if score>=directional_threshold else 'STRONG_BEARISH' if score<=-strong_threshold else 'BEARISH' if score<=-directional_threshold else 'NEUTRAL'
         adjustment={'STRONG_BULLISH':10,'BULLISH':5,'NEUTRAL':0,'BEARISH':-5,'STRONG_BEARISH':-10,'UNKNOWN':0}[label]
         return {'classification':label,'score':score,'coverage_percent':coverage*100,'inputs':inputs,
             'mode':'REPORT_ONLY','long_adjustment':adjustment,'short_adjustment':-adjustment,
-            'thresholds':{'strong':60,'directional':20},'experimental':True}
+            'thresholds':{'strong':strong_threshold,'directional':directional_threshold},'experimental':True}
