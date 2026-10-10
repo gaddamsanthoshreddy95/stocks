@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import math
+from time import perf_counter
 import pandas as pd
 from src.futures.sessions import ist, trading_day
 from src.futures_workspace.config import WorkspaceConfig
@@ -11,6 +12,7 @@ from src.futures_workspace.store import WorkspaceStore, LISTS, timestamp
 from src.futures_workspace.discovery import universe, technical, unknown, discovery_score
 from src.futures_workspace.adapter import RepositoryAdapter
 from src.futures_workspace.bias import MarketBias
+from src.futures_workspace.liquidity import closing_volume
 
 class FuturesWorkspace:
     def __init__(self,platform,store=None,config=None,adapter=None,scanner_factory=None):
@@ -66,6 +68,7 @@ class FuturesWorkspace:
 
     def rotate(self,now=None,*,selected_only=False,key=None,progress=None):
         self.check_enabled(); now=self.now(now)
+        started=perf_counter()
         if progress:
             progress(0,0,'Starting selected recheck' if selected_only else 'Starting weekly rotation')
         if key:
@@ -83,12 +86,6 @@ class FuturesWorkspace:
                     raise ValueError('Instrument universe unavailable; prior lists preserved')
                 existing={m['symbol']:m for m in self.store.members()}
                 symbols=sorted(existing) if selected_only else sorted(contracts)
-                if progress:
-                    progress(0,len(symbols),'Fetching Futures quotes and market history')
-                try:
-                    quotes=self.adapter.quotes({s:contracts[s] for s in symbols if s in contracts})
-                except Exception:
-                    quotes={}
                 try:
                     benchmark=self.adapter.history('NIFTY 50')
                 except Exception:
@@ -105,19 +102,58 @@ class FuturesWorkspace:
                             item=deepcopy(technical(self.adapter.history(symbol),self.config,now,benchmark,self.adapter.sector_history(symbol)))
                         except Exception as exc:
                             item=unknown('HISTORY_FETCH_FAILED:'+type(exc).__name__)
-                    q=self.quote_quality(quotes.get('NFO:'+contract['tradingsymbol'],{}),self.config,now) if contract else {'status':'UNKNOWN'}
-                    item.update({'symbol':symbol,'contract':contract,'futures_quality':q,'evaluated_at':now.isoformat(),
+                    item.update({'symbol':symbol,'contract':contract,'evaluated_at':now.isoformat(),
                                  'sector':self.adapter.sector(symbol)})
+                    item['technical_classification']=item['classification']
+                    evaluations[symbol]=item
+                    if progress:
+                        progress(i+1,len(symbols),symbol+': technical screening complete')
+                # The full universe is screened technically before expensive context reads.
+                # Enrich twice each list's capacity plus every existing member.
+                shortlist=set(existing)
+                for category in LISTS:
+                    ranked=sorted((e for e in evaluations.values() if e['classification']==category),
+                        key=lambda e: (-(e.get('technical_score') or 0),e['symbol']))
+                    shortlist.update(e['symbol'] for e in ranked[:self.config.maximum_per_list*2])
+                if progress:
+                    progress(0,len(shortlist),'Technical screen complete; fetching closing-session volume snapshots')
+                try:
+                    quotes=self.adapter.quotes({s:contracts[s] for s in shortlist if s in contracts}) if shortlist else {}
+                except Exception:
+                    quotes={}
+                for i,(symbol,item) in enumerate(evaluations.items()):
+                    contract=item['contract']
+                    enriched=symbol in shortlist and contract is not None
+                    item['eligible_for_admission']=enriched
+                    missing={'status':'UNKNOWN','bullish_score':None,'bearish_score':None,
+                             'reason':'NOT_FETCHED_OUTSIDE_TECHNICAL_SHORTLIST'}
+                    fundamental=dict(missing); news=dict(missing)
+                    q={'status':'UNKNOWN','basis':'NOT_FETCHED_OUTSIDE_TECHNICAL_SHORTLIST',
+                       'execution_liquidity':'UNVERIFIED_REQUIRES_DAILY_LIVE_CHECKS'}
                     try:
-                        if progress:
+                        if enriched and progress:
+                            progress(i,len(symbols),symbol+': completed Futures liquidity')
+                        if enriched:
+                            reader=getattr(self.adapter,'weekly_liquidity',None)
+                            if reader:
+                                q=reader(contract,now)
+                            if q['status']=='UNKNOWN':
+                                q=closing_volume(quotes.get('NFO:'+contract['tradingsymbol'],{}),self.config,now)
+                    except Exception:
+                        q=closing_volume(quotes.get('NFO:'+contract['tradingsymbol'],{}),self.config,now)
+                    item['futures_quality']=q
+                    try:
+                        if enriched and progress:
                             progress(i,len(symbols),symbol+': fundamental data')
-                        fundamental=self.adapter.fundamentals(symbol,now)
+                        if enriched:
+                            fundamental=self.adapter.fundamentals(symbol,now)
                     except Exception as exc:
                         fundamental={'status':'UNKNOWN','bullish_score':None,'bearish_score':None,'reason':type(exc).__name__}
                     try:
-                        if progress:
+                        if enriched and progress:
                             progress(i,len(symbols),symbol+': news and events')
-                        news=self.adapter.news(symbol,now)
+                        if enriched:
+                            news=self.adapter.news(symbol,now)
                     except Exception as exc:
                         news={'status':'UNKNOWN','bullish_score':None,'bearish_score':None,'reason':type(exc).__name__}
                     item['fundamentals']=fundamental; item['news_events']=news
@@ -127,9 +163,11 @@ class FuturesWorkspace:
                         item['reason_codes'].append('VERIFIED_MAJOR_EVENT_RISK_REVIEW_REQUIRED')
                     item['discovery']=discovery_score(item,fundamental,news,self.config)
                     item['discovery_mode']='TECHNICAL_ONLY' if fundamental.get('status')=='UNKNOWN' else 'TECHNICAL_WITH_CONTEXT'
-                    if q['status']!='PASS' and item['classification'] not in ('UNKNOWN_DATA','TRANSITION'):
+                    if q['status']=='FAIL' and item['classification'] not in ('UNKNOWN_DATA','TRANSITION'):
                         item['classification']='UNKNOWN_DATA'
-                        item['reason_codes'].append('FUTURES_LIQUIDITY_UNVERIFIED')
+                        item['reason_codes'].append('COMPLETED_FUTURES_VOLUME_BELOW_THRESHOLD_REVIEW_REQUIRED')
+                    elif enriched and q['status']=='UNKNOWN':
+                        item['reason_codes'].append('WEEKLY_EXECUTION_LIQUIDITY_UNVERIFIED_DAILY_CHECK_REQUIRED')
                     evaluations[symbol]=item
                     for evidence_kind,payload in (('DISCOVERY',item),('FUNDAMENTAL',fundamental),('NEWS_EVENT',news)):
                         self.store.record(job_id,symbol,evidence_kind,payload)
@@ -142,8 +180,14 @@ class FuturesWorkspace:
                 else:
                     members,changes=self._rotation(existing,evaluations,now,selected_only)
                     output.update({'status':'COMPLETE','eligible_universe_size':len(contracts),'evaluated_count':len(evaluations),
-                        'evaluations':evaluations,'changes':changes,'as_of':now.isoformat(),'data_sources':['KITE','EXISTING_PUBLIC_FUNDAMENTALS','EXISTING_NEWS_EVENTS'],
-                        'data_quality_failures':[s for s,e in evaluations.items() if e['classification']=='UNKNOWN_DATA']})
+                        'evaluations':evaluations,'changes':changes,'as_of':now.isoformat(),'data_sources':['KITE','ADJUSTED_EQUITY_HISTORY:'+self.config.weekly_history_source,'KITE_COMPLETED_FUTURES_VOLUME','EXISTING_PUBLIC_FUNDAMENTALS','EXISTING_NEWS_EVENTS'],
+                        'data_quality_failures':[s for s,e in evaluations.items() if e['classification']=='UNKNOWN_DATA'],
+                        'technical_evaluated_count':len(evaluations),'context_evaluated_count':sum(e['eligible_for_admission'] for e in evaluations.values()),
+                        'weekly_liquidity_policy':'COMPLETED_VOLUME_CONTEXT_LIVE_DEPTH_RESERVED_FOR_DAILY'})
+                output.update({'elapsed_seconds':round(perf_counter()-started,2),
+                    'context_shortlist':sorted(s for s,e in evaluations.items() if e['eligible_for_admission']),
+                    'context_policy':'TOP_TWICE_LIST_CAPACITY_PER_DIRECTION_PLUS_EXISTING_MEMBERS',
+                    'execution_liquidity_unverified':[s for s,e in evaluations.items() if e['futures_quality']['status']=='UNKNOWN' and e['eligible_for_admission']]})
                 self.store.record(job_id,'*','ELIGIBILITY',{'contracts':contracts,'as_of':now.isoformat()})
             finally:
                 self.adapter.end()
@@ -179,7 +223,7 @@ class FuturesWorkspace:
                 changes.append({'symbol':symbol,'action':'HYSTERESIS_RETAINED','from':old['category'],'to':old['category']})
             # Strong confirmed transfer or removal is handled by the ranked admission below.
         for category in LISTS:
-            candidates=sorted((e for e in evaluations.values() if e['classification']==category),key=lambda e:e['discovery']['ranking_score'] or 0,reverse=True)
+            candidates=sorted((e for e in evaluations.values() if e['classification']==category and e.get('eligible_for_admission',True)),key=lambda e:e['discovery']['ranking_score'] or 0,reverse=True)
             if selected_only:
                 candidates=[e for e in candidates if e['symbol'] in existing]
             pinned=sum(m['category']==category and m['pinned'] for m in next_members.values())

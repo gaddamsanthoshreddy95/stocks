@@ -7,6 +7,7 @@ import pandas as pd
 from src.futures.sessions import ist, normalise_candles
 from src.futures_workspace.discovery import fundamental_context, universe
 from src.futures_workspace.bias import MarketBias
+from src.futures_workspace.liquidity import completed_day, historical_volume
 from src.futures.gateway import KiteGateway
 from src.futures.runtime import ScanRuntime
 from src.sector.sector_mapper import SectorMapper
@@ -59,6 +60,36 @@ class RepositoryAdapter:
             self.gateway=KiteGateway(self.provider,ScanRuntime.from_env())
         return self.gateway.quotes(['NFO:'+c['tradingsymbol'] for c in contracts.values()])
 
+    def weekly_liquidity(self,contract,now):
+        """Exact-contract completed volume, cached per completed session."""
+        import hashlib
+        day=completed_day(now)
+        folder=Path('.cache/futures_workspace_liquidity')
+        folder.mkdir(parents=True,exist_ok=True)
+        key=hashlib.sha256(f"{contract['tradingsymbol']}:{contract['instrument_token']}:{day.date()}".encode()).hexdigest()
+        path=folder/(key+'.json')
+        if path.exists():
+            try:
+                cached=json.loads(path.read_text())
+                if cached.get('as_of') and ist(cached['as_of']).normalize()==day:
+                    return {**cached,'cache_reused':True,'status':'PASS' if cached['average_volume']>=self.config.minimum_futures_volume else 'FAIL'}
+            except (ValueError,OSError):
+                pass
+        if self.gateway is None:
+            self.gateway=KiteGateway(self.provider,ScanRuntime.from_env())
+        rows=self.gateway.history(contract['instrument_token'],day-pd.Timedelta(days=20),day+pd.Timedelta(hours=15,minutes=30),'day')
+        frame=pd.DataFrame(rows)
+        if frame.empty:
+            return historical_volume(frame,self.config,now)
+        frame=frame.set_index('date').rename(columns={'volume':'Volume'})
+        result=historical_volume(frame,self.config,now)
+        result['source']='KITE_EXACT_CONTRACT_COMPLETED_DAILY'
+        if result['status']!='UNKNOWN':
+            temporary=path.with_suffix('.tmp')
+            temporary.write_text(json.dumps(result))
+            temporary.replace(path)
+        return result
+
     def history(self,symbol):
         if symbol not in self.history_cache:
             if self.config.weekly_history_source=='yahoo_adjusted' and symbol not in {'NIFTY 50',*SectorStrength.KITE_INDEX_SYMBOLS.values()}:
@@ -96,9 +127,12 @@ class RepositoryAdapter:
         folder.mkdir(parents=True,exist_ok=True)
         key=hashlib.sha256(symbol.encode()).hexdigest()
         path=folder/(key+'.parquet')
-        if path.exists() and 0<=time.time()-path.stat().st_mtime<=3600:
+        if path.exists():
             try:
-                return pd.read_parquet(path)
+                cached=pd.read_parquet(path)
+                normalized=normalise_candles(cached,'day',self.now)
+                if not normalized.empty and normalized.index[-1].normalize()==completed_day(self.now):
+                    return cached
             except (OSError,ValueError):
                 pass
         delay=max(0,.35-(time.monotonic()-getattr(self,'last_adjusted_request',0)))
@@ -134,7 +168,7 @@ class RepositoryAdapter:
             self._events=EventRiskService(self.platform.settings)
         if self._event_context is None:
             self._event_context=self._events.build_daily_context(as_of=ist(now).to_pydatetime())
-        raw=NewsAnalysisService.analyze(symbol,force_refresh=True,limit=16)
+        raw=NewsAnalysisService.analyze(symbol,force_refresh=False,limit=16)
         event=self._events.assess_candidate({'symbol':symbol,'sector':self.sector(symbol)},self._event_context,
             news_context=raw,as_of=ist(now).to_pydatetime()).to_dict()
         # Model headline sentiment is context, not a verified corporate disclosure.

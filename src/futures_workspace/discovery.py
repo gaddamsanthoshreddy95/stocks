@@ -82,6 +82,8 @@ def technical(frame,config,now,benchmark=None,sector=None):
         ret=lambda n:float((c.iloc[-1]/c.iloc[-n-1]-1)*100)
         metrics={f'return_{n}d_percent':ret(n) for n in (5,20,21,63,126)}
         metrics.update({'drawdown_52w_percent':float((c.iloc[-1]/p.High.iloc[-252:].max()-1)*100),
+            'low_52w':float(p.Low.iloc[-252:].min()),
+            'distance_52w_low_percent':float((c.iloc[-1]/p.Low.iloc[-252:].min()-1)*100),
             'distance_6m_low_percent':float((c.iloc[-1]/p.Low.iloc[-126:].min()-1)*100),
             'sma20':float(c.tail(20).mean()),'sma50':float(c.tail(50).mean()),'sma200':float(c.tail(200).mean()),
             'rsi':float(last.RSI),'macd':float(last.MACD),'macd_signal':float(last.MACD_SIGNAL),

@@ -165,6 +165,11 @@ def render(platform,database):
         rows=[{'Symbol':m['symbol'],'Status':m['status'],'Enabled':bool(m['enabled']),'Pinned':bool(m['pinned']),
             'Added':m['added_at'],'Evaluated':m['evaluated_at'],'Weekly score':m['evidence'].get('discovery',{}).get('ranking_score'),
             'Confidence':m['evidence'].get('confidence'),'Recovery':m['evidence'].get('recovery_status'),
+            '52-week low':m['evidence'].get('metrics',{}).get('low_52w'),
+            'Distance from 52-week low %':m['evidence'].get('metrics',{}).get('distance_52w_low_percent'),
+            '52-week high drawdown %':m['evidence'].get('metrics',{}).get('drawdown_52w_percent'),
+            'Weekly volume evidence':m['evidence'].get('futures_quality',{}).get('status','UNKNOWN'),
+            'Daily execution liquidity':'Requires fresh live checks',
             'Reason':', '.join(m['evidence'].get('reason_codes',[]))} for m in selected]
         st.dataframe(pd.DataFrame(rows),hide_index=True,width='stretch')
         with st.form('ft-management-'+category):
@@ -181,6 +186,7 @@ def render(platform,database):
             st.json(selected)
             st.json([{'version':v['id'],'members':[m for m in v['snapshot'] if m['category']==category]} for v in store.versions()])
     elif section=='Weekly Rotation':
+        st.caption('Post-market discovery uses completed sessions. Live spread and depth are checked during Daily Trading. Fundamentals and news are fetched for shortlisted candidates and existing members.')
         if st.button('Run Full Universe Scan',disabled=busy,type='primary'):
             submit('Full universe weekly rotation',lambda:new_workspace().rotate(progress=jobs.update))
             st.rerun()

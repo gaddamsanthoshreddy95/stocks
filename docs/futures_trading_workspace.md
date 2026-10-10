@@ -120,12 +120,13 @@ Stock Futures names must map to NSE-segment EQ underlying securities; index
 instruments are excluded. Contracts must have the correct exchange/segment/type,
 positive token/lot size, a symbol and an unexpired expiry. The nearest valid
 contract supplies mapping, expiry and lot size. No permanent stock list is used.
-Kite quotes/depth validate availability, volume and spread; historical quality is
-validated per security. Metadata eligibility count is distinct from the count
+Weekly liquidity uses completed Futures volume or a closing-session volume
+snapshot; live quote/depth/spread checks are reserved for Daily Trading. Historical
+quality is validated per security. Metadata eligibility count is distinct from the count
 with sufficient research data.
 
 Default adjusted equity history comes from the existing YahooProvider with
-`auto_adjust=True`, two-year daily history and a bounded local cache. Raw Kite
+`auto_adjust=True`, two-year daily history and a completed-session local cache. Raw Kite
 candles are never appended to that adjusted series. Benchmark/sector index data
 comes from the existing index provider. Completed-session normalization removes
 live/incomplete days and holidays configured by `MARKET_HOLIDAYS_IST`. Missing
@@ -134,7 +135,7 @@ Changing `weekly_history_source` to `kite` requires adjustment provenance or an
 explicit technical-only unadjusted-history configuration.
 
 Indicators: 5/20/21/63/126-session returns, 252-session high drawdown, six-month
-low distance, SMA20/50/200, RSI, MACD/signal, ATR, trend slope, higher/lower
+low distance, 52-week low and distance from that low, SMA20/50/200, RSI, MACD/signal, ATR, trend slope, higher/lower
 high-low structure, support/resistance, breakout/breakdown, volume trend,
 relative volume, volatility, and aligned Nifty/sector excess returns. Unknown
 relative inputs stay unknown; they never become observed neutral values.
@@ -454,3 +455,48 @@ recovery without broker initialization, and Windows lock acquire/release.
 The final full regression run passed **979 tests and 16 subtests** in 138.37
 seconds. Compilation and `git diff --check` passed. Native Windows launcher
 execution and live broker/data-provider operation have not been verified here.
+
+### Post-market weekly discovery and technical-first research
+
+Weekly Rotation now runs a full-universe completed-session technical screen
+before optional detailed research. It enriches up to twice the configured list
+capacity per direction, plus every existing membership (including stocks losing
+their classification). All stocks still receive technical evaluations and audit
+evidence. Qualified stocks outside the enrichment shortlist remain discovery
+research; they are not automatically admitted without that context attempt.
+The rotation summary records the technical count, context count, shortlist,
+execution-liquidity unknowns, policy and elapsed seconds.
+
+Weekly liquidity evidence uses the nearest valid exact Futures contract's last
+five completed daily volumes, with at least three usable sessions, freshness
+checks and the existing minimum-volume setting. The dated volume average is
+cached separately per contract, token and completed session; cached observations
+are re-evaluated against the current threshold. If historical volume is
+unavailable, a recent near-close volume snapshot can provide context. Partial
+intraday, stale and future snapshots cannot pass. Neither bid/ask prices nor
+spread are weekly admission gates.
+
+Unknown weekly volume does not erase reliable technical classification; the
+candidate is labelled execution-liquidity unverified and requires Daily Trading's
+live checks. Observed low completed volume marks the candidate UNKNOWN_DATA and
+preserves an existing membership for review; wholly unreliable rotations retain
+the preceding version. Verified major-event blocks still require review.
+
+Adjusted equity history is reused across jobs/weekends while its latest completed
+session matches the required session; a new completed session triggers refresh.
+Weekly news permits the existing short-lived cache instead of always forcing
+refresh. Public fundamentals retain their existing dated cache. No synthetic
+bars, prices or fundamentals are generated.
+
+The watchlist UI includes the 52-week low, distance above it, high drawdown,
+weekly volume-evidence status and a reminder that daily execution liquidity needs
+fresh validation. A 52-week low alone does not create a SHORT signal. Daily scan
+scores, quotes, spread/depth, ledger reconciliation, session/risk checks and
+Reports A–E remain unchanged. No new configuration or migration is required.
+
+Focused validation passed 134 tests covering this behavior and daily execution
+regressions. The final full suite passed **991 tests and 16 subtests** in 146.67
+seconds; compilation and whitespace checks passed. These changes reduce redundant context requests, but no production
+runtime estimate has been validated. Network outages and slow history providers
+can still extend full-universe scan times; parallel fetching and resumable scans
+were not added in this change.
