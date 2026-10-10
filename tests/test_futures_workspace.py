@@ -361,6 +361,22 @@ def test_scheduler_separate_refresh_weekly_idempotency_no_daily(workspace):
     assert len(workspace.store.jobs('UNIVERSE_REFRESH'))==1
 
 
+def test_scheduled_rotation_reports_progress_before_slow_sources(workspace):
+    progress=Mock()
+    def fundamentals(symbol,now):
+        assert progress.call_args.args[2]==symbol+': fundamental data'
+        return {'status':'UNKNOWN','bullish_score':None,'bearish_score':None}
+    workspace.adapter.fundamentals=fundamentals
+    with patch('src.futures_workspace.service.technical',return_value=evaluation(LISTS[0])):
+        WorkspaceScheduler(workspace).tick(NOW,progress=progress)
+    stages=[call.args[2] for call in progress.call_args_list]
+    assert stages[0]=='Refreshing Futures instrument universe'
+    assert 'Loading Futures instrument metadata' in stages
+    assert any(stage.endswith(': historical and sector data') for stage in stages)
+    assert any(stage.endswith(': news and events') for stage in stages)
+    assert progress.call_args.args[:2]==(3,3)
+
+
 def test_recheck_does_not_admit_new_universe_symbols(workspace):
     rotate(workspace)
     rotate(workspace,{'BEAR':evaluation(LISTS[0]),'RECOVER':evaluation(LISTS[1]),'UNSELECTED':evaluation(LISTS[0],100)},selected_only=True)
@@ -538,6 +554,39 @@ render(SimpleNamespace(settings=PlatformSettings(market_data_source="cache"),pro
             if section=='Daily Trading':
                 assert sum(b.label=='SCAN SELECTED STOCKS' for b in app.button)==1
     jobs.pool.shutdown(wait=True)
+
+
+def test_workspace_job_failure_reenables_buttons_and_displays_error(tmp_path,monkeypatch):
+    from concurrent.futures import Future
+    from streamlit.testing.v1 import AppTest
+    from src.futures_workspace.ui import JobController
+    import time
+    monkeypatch.setenv('FUTURES_WORKSPACE_ENABLED','true')
+    jobs=JobController()
+    jobs.future=Future()
+    jobs.label='Scheduled initialization / weekly rotation'
+    jobs.started_at=jobs.updated_at=time.monotonic()-130
+    jobs.next_schedule=time.monotonic()+300
+    jobs.progress=(0,0,'Refreshing Futures instrument universe')
+    code=f'''from types import SimpleNamespace
+from src.futures_workspace.ui import render
+from src.application.settings import PlatformSettings
+render(SimpleNamespace(settings=PlatformSettings(market_data_source="cache")),SimpleNamespace(path={str(tmp_path/'ui.db')!r}))
+'''
+    try:
+        with patch('src.futures_workspace.ui.controller',return_value=jobs):
+            app=AppTest.from_string(code).run(timeout=15)
+            app.radio[0].set_value('Weekly Rotation').run(timeout=15)
+            button=next(b for b in app.button if b.label=='Run Full Universe Scan')
+            assert button.disabled
+            assert any('No progress update' in warning.value for warning in app.warning)
+            jobs.future.set_exception(RuntimeError('Instrument feed unavailable'))
+            app.run(timeout=15)
+            assert not app.exception
+            assert not next(b for b in app.button if b.label=='Run Full Universe Scan').disabled
+            assert any('Instrument feed unavailable' in error.value for error in app.error)
+    finally:
+        jobs.pool.shutdown(wait=True)
 
 
 def test_production_universe_maps_actual_nse_equities_and_excludes_unknown_indices():

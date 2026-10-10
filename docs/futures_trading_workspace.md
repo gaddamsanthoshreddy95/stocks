@@ -378,3 +378,21 @@ For maintenance while the UI is closed, schedule
 `.venv/bin/python scripts/run_futures_workspace.py schedule` through your existing
 host scheduler, using Asia/Kolkata. The configured weekly default remains
 Saturday 09:00; the command never schedules daily recommendations or broker orders.
+
+### Workspace appears stuck or scan buttons stay disabled
+
+Scheduled maintenance now reports instrument refresh, market history, and each
+stock's history, fundamentals and news stages. The UI displays elapsed time and
+warns if no stage update arrives for two minutes. This warning does not declare
+the worker dead or release its lease. A completed or failed background job triggers
+a full-page refresh so controls outside the status fragment become available;
+failure details remain visible. Previously, scheduled jobs supplied no progress
+callback and fragment refreshes could leave the scan controls stale.
+
+After updating these files, restart Streamlit to replace its cached controller.
+If a stage remains stuck, inspect the terminal and persisted CLI `status` before
+retrying. For an abandoned persisted lease, stop the original worker first and
+use the explicit `recover-job` procedure above. Never recover a live worker's lease.
+The follow-up progress/UI fix passed 71 workspace and background-job tests,
+including stalled-status messaging, failure display, button re-enablement,
+scheduled stage updates, and the existing eight-section UI regression.

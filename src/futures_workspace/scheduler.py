@@ -6,13 +6,15 @@ class WorkspaceScheduler:
     def __init__(self,workspace):
         self.workspace=workspace
 
-    def tick(self,now=None):
+    def tick(self,now=None,progress=None):
         w=self.workspace; now=w.now(now)
         w.check_enabled()
         # Universe metadata refresh has its own schedule, never triggered by daily scan.
         key='UNIVERSE:'+now.date().isoformat()
         jobs=w.store.jobs('UNIVERSE_REFRESH')
         if not any(j['job_key']==key and j['status']=='COMPLETED' for j in jobs):
+            if progress:
+                progress(0,0,'Refreshing Futures instrument universe')
             # Refresh records through a separate idempotent job.
             with w.store.job('UNIVERSE_REFRESH',key) as (job_id,output):
                 from src.futures_workspace.discovery import universe
@@ -34,4 +36,4 @@ class WorkspaceScheduler:
         key='WEEKLY:'+due.date().isoformat()
         if any(j['job_key']==key and j['status']=='COMPLETED' for j in w.store.jobs('WEEKLY_ROTATION')):
             return {'status':'ALREADY_COMPLETED','key':key}
-        return w.rotate(now,key=key)
+        return w.rotate(now,key=key,progress=progress)

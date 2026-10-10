@@ -20,6 +20,8 @@ class JobController:
         self.progress=(0,0,'')
         self.label=''
         self.next_schedule=0.
+        self.started_at=0.
+        self.updated_at=0.
         self.lock=Lock()
 
     def submit(self,label,operation):
@@ -27,6 +29,7 @@ class JobController:
             if self.future and not self.future.done():
                 return False
             self.label=label; self.progress=(0,0,'')
+            self.started_at=self.updated_at=time.monotonic()
             self.next_schedule=time.monotonic()+300
             self.future=self.pool.submit(operation)
         return True
@@ -34,6 +37,7 @@ class JobController:
     def update(self,current,total,symbol):
         with self.lock:
             self.progress=(current,total,symbol)
+            self.updated_at=time.monotonic()
 
 @st.cache_resource
 def controller(path):
@@ -74,24 +78,38 @@ def render(platform,database):
         return
     jobs=controller(str(store.path))
     def new_workspace():
+        jobs.update(0,0,'Initializing market-data services')
         return FuturesWorkspace(TradingPlatform(settings=platform.settings),WorkspaceStore(store.path))
     def submit(label,operation):
         jobs.submit(label,operation)
     # Scheduled catch-up runs while the workspace is open. External scheduler supports closed UI.
     if jobs.future is None:
         from src.futures_workspace.scheduler import WorkspaceScheduler
-        submit('Scheduled initialization / weekly rotation',lambda:WorkspaceScheduler(new_workspace()).tick())
+        submit('Scheduled initialization / weekly rotation',lambda:WorkspaceScheduler(new_workspace()).tick(progress=jobs.update))
 
     @st.fragment(run_every='2s')
     def job_status():
         if (jobs.future is None or jobs.future.done()) and time.monotonic()>=jobs.next_schedule:
             from src.futures_workspace.scheduler import WorkspaceScheduler
-            submit('Scheduled universe / weekly maintenance',lambda:WorkspaceScheduler(new_workspace()).tick())
+            submit('Scheduled universe / weekly maintenance',lambda:WorkspaceScheduler(new_workspace()).tick(progress=jobs.update))
         if jobs.future:
+            future=jobs.future
             if not jobs.future.done():
                 current,total,symbol=jobs.progress
-                st.progress(current/total if total else 0,text=f'{jobs.label}: {current}/{total} {symbol}' if total else jobs.label)
+                st.progress(current/total if total else 0,text=f'{jobs.label}: {current}/{total} {symbol}' if total else f'{jobs.label}: {symbol or "Starting worker"}')
+                st.caption(f'Elapsed: {int(time.monotonic()-jobs.started_at)} seconds')
+                if time.monotonic()-jobs.updated_at>120:
+                    st.warning('No progress update for over two minutes. The worker may be waiting on a data source. Check the Streamlit terminal before restarting; another scan cannot run while this worker is active.')
             else:
+                # Fragment refreshes do not refresh the scan buttons outside it.
+                # Refresh the whole page once per completed job and browser session.
+                completed_key='ft-completed-job-'+str(store.path)
+                if st.session_state.get(completed_key)!=id(future):
+                    st.session_state[completed_key]=id(future)
+                    from streamlit.runtime.scriptrunner import get_script_run_ctx
+                    context=get_script_run_ctx()
+                    if context is not None and context.fragment_ids_this_run:
+                        st.rerun(scope='app')
                 try:
                     output=jobs.future.result()
                     st.caption(f'Last job: {jobs.label} — {output.get("status","completed")}')

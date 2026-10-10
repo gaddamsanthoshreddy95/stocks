@@ -66,6 +66,8 @@ class FuturesWorkspace:
 
     def rotate(self,now=None,*,selected_only=False,key=None,progress=None):
         self.check_enabled(); now=self.now(now)
+        if progress:
+            progress(0,0,'Starting selected recheck' if selected_only else 'Starting weekly rotation')
         if key:
             previous=next((j for j in self.store.jobs('WEEKLY_ROTATION') if j['job_key']==key and j['status']=='COMPLETED'),None)
             if previous:
@@ -74,11 +76,15 @@ class FuturesWorkspace:
         with self.store.job(kind,key) as (job_id,output):
             self.adapter.begin(now)
             try:
+                if progress:
+                    progress(0,0,'Loading Futures instrument metadata')
                 contracts=universe(self.adapter.instruments(),now)
                 if not contracts:
                     raise ValueError('Instrument universe unavailable; prior lists preserved')
                 existing={m['symbol']:m for m in self.store.members()}
                 symbols=sorted(existing) if selected_only else sorted(contracts)
+                if progress:
+                    progress(0,len(symbols),'Fetching Futures quotes and market history')
                 try:
                     quotes=self.adapter.quotes({s:contracts[s] for s in symbols if s in contracts})
                 except Exception:
@@ -89,6 +95,8 @@ class FuturesWorkspace:
                     benchmark=None
                 evaluations={}
                 for i,symbol in enumerate(symbols):
+                    if progress:
+                        progress(i,len(symbols),symbol+': historical and sector data')
                     contract=contracts.get(symbol)
                     if contract is None:
                         item=unknown('ACTIVE_CONTRACT_MISSING_REVIEW_REQUIRED')
@@ -101,10 +109,14 @@ class FuturesWorkspace:
                     item.update({'symbol':symbol,'contract':contract,'futures_quality':q,'evaluated_at':now.isoformat(),
                                  'sector':self.adapter.sector(symbol)})
                     try:
+                        if progress:
+                            progress(i,len(symbols),symbol+': fundamental data')
                         fundamental=self.adapter.fundamentals(symbol,now)
                     except Exception as exc:
                         fundamental={'status':'UNKNOWN','bullish_score':None,'bearish_score':None,'reason':type(exc).__name__}
                     try:
+                        if progress:
+                            progress(i,len(symbols),symbol+': news and events')
                         news=self.adapter.news(symbol,now)
                     except Exception as exc:
                         news={'status':'UNKNOWN','bullish_score':None,'bearish_score':None,'reason':type(exc).__name__}
