@@ -88,3 +88,65 @@ def record_outcome(request: OutcomeRequest):
         request.recommendation_id, request.won, request.return_percent,
         request.exit_price, request.mfe_percent, request.mae_percent,
     ))
+
+# Additive workspace routes. Disabled workspaces reject operations before broker reads.
+def _futures_workspace_call(operation):
+    from src.futures_workspace.service import FuturesWorkspace
+    try:
+        return operation(FuturesWorkspace(TradingPlatform(settings=platform.settings)))
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+class FuturesMembershipRequest(SymbolRequest):
+    action: str
+    category: str | None = None
+
+@app.get('/futures-trading')
+def futures_trading_status():
+    def read(w):
+        w.check_enabled()
+        return {'memberships':w.store.members(),'jobs':w.store.jobs(),'performance':w.performance()}
+    return _futures_workspace_call(read)
+
+@app.post('/futures-trading/rotate')
+def futures_trading_rotate():
+    return _futures_workspace_call(lambda w:w.rotate())
+
+@app.post('/futures-trading/recheck')
+def futures_trading_recheck():
+    return _futures_workspace_call(lambda w:w.rotate(selected_only=True))
+
+@app.post('/futures-trading/scan-selected')
+def futures_trading_scan_selected():
+    return _futures_workspace_call(lambda w:w.scan_daily())
+
+@app.post('/futures-trading/universe-refresh')
+def futures_trading_refresh():
+    return _futures_workspace_call(lambda w:w.refresh_universe())
+
+@app.post('/futures-trading/membership')
+def futures_trading_membership(request: FuturesMembershipRequest):
+    return _futures_workspace_call(lambda w:w.manage(request.symbol,request.action,request.category))
+
+@app.get('/futures-trading/versions')
+def futures_trading_versions():
+    def read(w):
+        w.check_enabled()
+        return w.store.versions()
+    return _futures_workspace_call(read)
+
+@app.post('/futures-trading/versions/{version}/restore')
+def futures_trading_restore(version:int):
+    def restore(w):
+        w.check_enabled()
+        return w.store.rollback(version)
+    return _futures_workspace_call(restore)
+
+class FuturesReplayRequest(BaseModel):
+    universe_snapshots: list[dict] = Field(default_factory=list)
+    equity_histories: dict = Field(default_factory=dict)
+    futures_histories: dict = Field(default_factory=dict)
+
+@app.post('/futures-trading/research-replay')
+def futures_trading_replay(request:FuturesReplayRequest):
+    return _futures_workspace_call(lambda w:w.replay(request.model_dump()))

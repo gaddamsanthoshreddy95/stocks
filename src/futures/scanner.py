@@ -72,10 +72,12 @@ class FuturesOpportunityScanner:
                 self.context_cache[symbol] = None
         return self.context_cache[symbol]
 
-    def scan(self, limit=5, *, now=None, include_backtest=True, mode=None, runtime=None):
+    def scan(self, limit=5, *, now=None, include_backtest=True, mode=None, runtime=None, selected_symbols=None):
         from src.futures.rejected_analysis import append_report_d
         from src.futures.report_e import append_report_e
         if mode is not None:
+            if selected_symbols is not None:
+                raise ValidationError('Selected-symbol scans cannot use full-universe preparation modes')
             from src.futures.preparation import PreparedScanner
             report = PreparedScanner(self, runtime=runtime).run(mode, limit, now=now)
             report = append_report_d(report)
@@ -88,7 +90,7 @@ class FuturesOpportunityScanner:
         now = now.tz_localize('Asia/Kolkata') if now.tz is None else now.tz_convert('Asia/Kolkata')
         self._fixed_clock = fixed_now is not None
         self._clock = (lambda: now) if fixed_now is not None else (lambda: pd.Timestamp.now(tz='Asia/Kolkata'))
-        symbols = sorted(set(self.platform._universe_symbols()) - INDEX_FUTURES)
+        symbols = sorted(set(self.platform._universe_symbols() if selected_symbols is None else selected_symbols) - INDEX_FUTURES)
         if not symbols:
             raise DataUnavailableError('No configured NSE futures stock universe is available')
         self.context_cache.clear()

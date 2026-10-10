@@ -3964,6 +3964,8 @@ def main() -> None:
             "Watchlists & alerts": "Watchlists", "Report history": "History",
             "System & diagnostics": "System",
         }
+        if os.getenv("FUTURES_WORKSPACE_ENABLED", "false").lower() in ("true", "1"):
+            navigation["Futures Trading"] = "Futures Trading"
         with st.form("command-palette", clear_on_submit=True):
             command = st.text_input("Quick command", placeholder="Analyze RELIANCE or open History")
             run_command = st.form_submit_button("Run", width="stretch")
@@ -4047,6 +4049,9 @@ def main() -> None:
         analyze_page(platform)
     elif page == "Bearish options":
         bearish_options_page(platform, database)
+    elif page == "Futures Trading":
+        from src.futures_workspace.ui import render
+        render(platform, database)
     elif page == "Futures LONG / SHORT":
         futures_opportunities_page(platform)
     elif page == "AI Assistant":

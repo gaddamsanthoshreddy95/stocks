@@ -1025,3 +1025,32 @@ approvals. Historical preparation/probability publication was not performed in
 this correction phase. Existing technical simulations analyze directions
 independently; they are not a calibrated portfolio simulation of a global
 two-entry manual trading day or unavailable historical research/depth gates.
+
+## Futures Trading workspace
+
+The optional **Futures Trading** workspace adds automatic full-universe weekly
+stock-Futures discovery and two independently persisted watchlists:
+`SHORTING_STOCKS` and `RECOVERING_STOCKS`. Set
+`FUTURES_WORKSPACE_ENABLED=true` in `.env`, restart, and open **Futures Trading**.
+The first visit schedules initialization; **Weekly Rotation → Run Full Universe
+Scan** can also start it. **Daily Trading → SCAN SELECTED STOCKS** evaluates only
+active members of both lists in one job, with separate LONG, SHORT, and nontrade
+results. It never initializes or discovers a full universe.
+
+On Windows, start with `run_ui.bat`. For automatic maintenance while the UI is
+closed, configure Windows Task Scheduler to run
+`run_futures_workspace_schedule.bat` daily at 09:00 IST. The default weekly
+rotation is Saturday 09:00 IST; completed schedule keys prevent repeated weekly
+rotation. Scheduled work also checks periodically while this workspace is open.
+Daily scans remain user initiated. Kite's daily access token must be renewed.
+
+Existing scanner weights, Reports A–E, execution ledger and default deadlines
+are preserved. Only this workspace applies a 15:00 entry cutoff and a 15:10
+**manual** flat-position deadline (or stricter existing deadlines). It never
+places or closes broker orders. Weekly discovery uses the existing Yahoo
+adjusted equity provider by default; unavailable adjustment evidence, quotes,
+fundamentals or news are recorded honestly. Experimental fundamentals/news
+scores and Market Bias adjustments are report-only by default.
+
+See [the implementation and operating guide](docs/futures_trading_workspace.md)
+for configuration, API routes, schema, scheduling, research replay and limitations.
