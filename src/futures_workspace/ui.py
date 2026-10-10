@@ -63,6 +63,19 @@ def details_and_export(label,payload,key,filename):
             st.caption('Full evidence is available in the JSON export.')
         st.download_button('Download full report JSON',json.dumps(payload,indent=2),file_name=filename,key=key+'-export')
 
+def daily_watchlist_result(member,daily):
+    side='SHORT' if member['category']==LISTS[0] else 'LONG'
+    result=next((row for bucket in ('long','short','other') for row in (daily or {}).get(bucket,[])
+                 if row.get('symbol')==member['symbol'] and row.get('side')==side
+                 and row.get('watchlist')==member['category']),None)
+    if result is None:
+        return {'Latest daily score':None,'Daily score status':'Not scanned',
+                'Latest daily decision':'Not scanned','Latest daily scan':'Not scanned'}
+    score=result.get('original_daily_score')
+    return {'Latest daily score':score,'Daily score status':'Available' if score is not None else 'Unavailable',
+            'Latest daily decision':result.get('workspace_decision') or result.get('final_decision','UNKNOWN_DATA'),
+            'Latest daily scan':daily.get('generated_at','UNKNOWN')}
+
 def result_rows(items):
     rows=[]
     for r in items:
@@ -147,7 +160,7 @@ def render(platform,database):
         daily=None; rotation=None; members=[]
     else:
         members=store.members()
-        daily=latest(store,'DAILY_TRADING') if section in ('Overview','Daily Trading') else None
+        daily=latest(store,'DAILY_TRADING') if section in ('Overview','Daily Trading','Shorting Stocks','Recovering Stocks') else None
         rotation=latest(store,'WEEKLY_ROTATION') if section in ('Overview','Weekly Rotation') else None
     if section=='Overview':
         cols=st.columns(3)
@@ -177,6 +190,7 @@ def render(platform,database):
         selected=[m for m in members if m['category']==category]
         rows=[{'Symbol':m['symbol'],'Status':m['status'],'Enabled':bool(m['enabled']),'Pinned':bool(m['pinned']),
             'Added':m['added_at'],'Evaluated':m['evaluated_at'],'Weekly score':m['evidence'].get('discovery',{}).get('ranking_score'),
+            **daily_watchlist_result(m,daily),
             'Confidence':m['evidence'].get('confidence'),'Recovery':m['evidence'].get('recovery_status'),
             '52-week low':m['evidence'].get('metrics',{}).get('low_52w'),
             'Distance from 52-week low %':m['evidence'].get('metrics',{}).get('distance_52w_low_percent'),
@@ -185,6 +199,7 @@ def render(platform,database):
             'Daily execution liquidity':'Requires fresh live checks',
             'Reason':', '.join(m['evidence'].get('reason_codes',[]))} for m in selected]
         st.dataframe(pd.DataFrame(rows),hide_index=True,width='stretch')
+        st.caption('Daily values come from the latest completed combined scan and are historical snapshots. Stocks absent from that scan show Not scanned; weekly selection scores remain separate.')
         with st.form('ft-management-'+category):
             symbol=st.text_input('NSE stock symbol')
             action=st.selectbox('Action',('add','remove','enable','disable','pin','unpin'))

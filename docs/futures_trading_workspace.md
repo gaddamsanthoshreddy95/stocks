@@ -14,6 +14,12 @@ after its explicit control is selected, and full reports are downloadable on
 request. Settings reads no scan payloads; latest results select one database row,
 and Rotation History reads 50 lightweight version headers per page and only the
 selected version's payload. Existing evidence and historical versions are retained.
+Both watchlist tables also show the latest completed combined scan's original
+daily score, score availability, final workspace decision and timestamp beside
+the separate weekly discovery score. Nontrade/unknown/conflict results are included.
+Rows absent from that scan, or transferred to the opposite directional category,
+show Not scanned; a missing score is Unavailable, while a real zero stays zero.
+These are dated snapshots and viewing a watchlist never initiates a scan.
 Focused manual-mode/UI regression checks passed 79 tests, including navigation
 with a large 213-stock archived report, one-stock evidence loading, Settings with
 report reads forbidden, and disabled automatic maintenance for empty, completed,
