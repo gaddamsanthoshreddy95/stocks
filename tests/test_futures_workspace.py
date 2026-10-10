@@ -364,7 +364,7 @@ def test_scheduler_separate_refresh_weekly_idempotency_no_daily(workspace):
 def test_scheduled_rotation_reports_progress_before_slow_sources(workspace):
     progress=Mock()
     def fundamentals(symbol,now):
-        assert progress.call_args.args[2]==symbol+': fundamental data'
+        assert any(call.args[2]==symbol+': fundamental data' for call in progress.call_args_list)
         return {'status':'UNKNOWN','bullish_score':None,'bearish_score':None}
     workspace.adapter.fundamentals=fundamentals
     with patch('src.futures_workspace.service.technical',return_value=evaluation(LISTS[0])):

@@ -498,5 +498,66 @@ Focused validation passed 134 tests covering this behavior and daily execution
 regressions. The final full suite passed **991 tests and 16 subtests** in 146.67
 seconds; compilation and whitespace checks passed. These changes reduce redundant context requests, but no production
 runtime estimate has been validated. Network outages and slow history providers
-can still extend full-universe scan times; parallel fetching and resumable scans
-were not added in this change.
+can still extend full-universe scan times. Adaptive parallel fetching is described
+below; cross-process resumable scans have not been added.
+
+### Automatic retry loop corrected
+
+The UI previously scheduled its next maintenance check five minutes after job
+submission, and the scheduler skipped only COMPLETED weekly attempts. A long
+rotation ending INCOMPLETE/FAILED could therefore trigger a new full scan as soon
+as it finished. The check timer now starts at completion. A terminal weekly
+attempt (COMPLETED, INCOMPLETE or FAILED) consumes that weekly cycle; failed or
+incomplete attempts return AUTO_RETRY_PAUSED with their saved reason. Manual full
+rotations in the current cycle also prevent an unsolicited scheduled duplicate.
+Failed daily metadata refreshes are not retried repeatedly that same day.
+
+Manual **Run Full Universe Scan** remains available for retries, and a new weekly
+cycle still runs automatically. The Weekly Rotation/status UI keeps the incomplete
+or failed reason visible. Focused scheduler, workspace, post-market discovery and
+background-job validation passed 90 tests, including restart persistence,
+next-week scheduling, manual retries and a long-operation completion timer.
+
+### Adaptive parallel weekly processing
+
+Technical screening and shortlisted research now use parallel worker batches,
+each starting at 2. Skipped candidates do not promote worker capacity. After
+three full healthy batches, capacity doubles: 2, 4, 8, 16,
+32, and onward to the configured resource ceiling. Set
+`FUTURES_WORKSPACE_MAXIMUM_WORKERS` (default 32, supported 2–128) and
+`FUTURES_WORKSPACE_HEALTHY_PARALLEL_BATCHES` (default 3), or save these in Settings.
+Eight is not a fixed ceiling. Actual submitted work is bounded by pending stocks.
+
+Timeout, network and rate-limit failures trigger a short cooldown and step back
+to the actual previous capacity. Failed stocks have at most two additional
+attempts. Completed stocks are never rerun by this worker controller. Successful
+context stages are cached per stock, so a news retry does not repeat already
+completed fundamentals or liquidity reads. Permanent data failures do not retry
+or promote worker capacity; exhausted transient failures produce UNKNOWN_DATA
+and preserve the previous membership for review. Some upstream providers return
+UNKNOWN without exposing their transport error; this cannot establish healthy
+technical data and does not justify capacity growth.
+
+Shared history reads are guarded per symbol, the existing Yahoo request-start
+pacing is synchronized, and event/provider initialization and mutable event
+assessment are protected. Legacy provider/index reads remain serialized where
+thread safety is not established. News network fetching and independent adjusted
+stock histories may overlap. The unchanged Kite gateway retains its shared
+per-API pacing, timeout and retry controls; more stock workers never raise its
+permitted request rate. Shared benchmark and sector histories are reused.
+
+Workers return evidence to one coordinator. SQLite evidence writes, membership
+rotation and atomic version publication remain coordinated under the existing
+crash-safe workspace job lock. The UI reports worker capacity in completion
+updates; rotation exports retain growth/fallback/error events and final capacity.
+Daily Trading, its execution validation, scores and Reports A–E are unchanged.
+
+Validation covers growth through 64 workers,
+timeouts with fallback from 8 to 4, a non-power-of-two resource ceiling,
+retry exhaustion, permanent invalid data, completed-stage reuse and parallel
+shared-history deduplication. Production speed gains are unmeasured and depend
+on data-source limits and availability.
+The final regression suite passed **1005 tests and 16 subtests** in 146.80
+seconds, including the safeguard that resets each phase to two workers and
+prevents skipped items from promoting capacity. Compilation and whitespace
+checks passed.

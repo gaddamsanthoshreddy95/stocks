@@ -2,6 +2,7 @@
 from dataclasses import asdict
 import json
 import os
+from threading import RLock, Lock
 from pathlib import Path
 import pandas as pd
 from src.futures.sessions import ist, normalise_candles
@@ -25,6 +26,11 @@ class RepositoryAdapter:
         self._events=None
         self._event_context=None
         self.history_cache={}
+        self._initialization_lock=RLock()
+        self._history_locks={}
+        self._provider_lock=RLock()
+        self._adjusted_pacing=Lock()
+        self._event_assessment_lock=Lock()
 
     def begin(self,now):
         self.history_cache={}
@@ -91,12 +97,19 @@ class RepositoryAdapter:
         return result
 
     def history(self,symbol):
+        with self._initialization_lock:
+            lock=self._history_locks.setdefault(symbol,RLock())
+        with lock:
+            return self._history(symbol)
+
+    def _history(self,symbol):
         if symbol not in self.history_cache:
             if self.config.weekly_history_source=='yahoo_adjusted' and symbol not in {'NIFTY 50',*SectorStrength.KITE_INDEX_SYMBOLS.values()}:
                 frame=self.adjusted_history(symbol)
             else:
                 getter=getattr(self.provider,'get_annual_history',self.provider.get_data)
-                frame=getter(symbol)
+                with self._provider_lock:
+                    frame=getter(symbol)
             if frame is not None:
                 frame=frame.copy()
                 # Optional verified, per-security adjustment evidence, never a blanket assertion.
@@ -135,10 +148,11 @@ class RepositoryAdapter:
                     return cached
             except (OSError,ValueError):
                 pass
-        delay=max(0,.35-(time.monotonic()-getattr(self,'last_adjusted_request',0)))
-        if delay:
-            time.sleep(delay)
-        self.last_adjusted_request=time.monotonic()
+        with self._adjusted_pacing:
+            delay=max(0,.35-(time.monotonic()-getattr(self,'last_adjusted_request',0)))
+            if delay:
+                time.sleep(delay)
+            self.last_adjusted_request=time.monotonic()
         frame=YahooProvider().get_historical_data(symbol,period='2y',interval='1d')
         if frame is None or frame.empty:
             raise ValueError('Adjusted equity history unavailable')
@@ -156,21 +170,27 @@ class RepositoryAdapter:
         return self.history(key) if key else None
 
     def fundamentals(self,symbol,now):
-        if self._fundamentals is None:
-            from src.quality.public_fundamentals import PublicFundamentalProvider
-            self._fundamentals=PublicFundamentalProvider()
+        with self._initialization_lock:
+            if self._fundamentals is None:
+                from src.quality.public_fundamentals import PublicFundamentalProvider
+                self._fundamentals=PublicFundamentalProvider()
         return fundamental_context(self._fundamentals.get_fundamentals(symbol),self.sector(symbol),now)
 
     def news(self,symbol,now):
         from src.news.analysis_service import NewsAnalysisService
         from src.event_risk.service import EventRiskService
-        if self._events is None:
-            self._events=EventRiskService(self.platform.settings)
-        if self._event_context is None:
-            self._event_context=self._events.build_daily_context(as_of=ist(now).to_pydatetime())
+        with self._initialization_lock:
+            if self._events is None:
+                self._events=EventRiskService(self.platform.settings)
+            if self._event_context is None:
+                self._event_context=self._events.build_daily_context(as_of=ist(now).to_pydatetime())
         raw=NewsAnalysisService.analyze(symbol,force_refresh=False,limit=16)
-        event=self._events.assess_candidate({'symbol':symbol,'sector':self.sector(symbol)},self._event_context,
-            news_context=raw,as_of=ist(now).to_pydatetime()).to_dict()
+        if raw.get('fetch_failed'):
+            from requests.exceptions import ConnectionError
+            raise ConnectionError('Weekly news fetch failed: '+'; '.join(raw.get('reasons',[])))
+        with self._event_assessment_lock:
+            event=self._events.assess_candidate({'symbol':symbol,'sector':self.sector(symbol)},self._event_context,
+                news_context=raw,as_of=ist(now).to_pydatetime()).to_dict()
         # Model headline sentiment is context, not a verified corporate disclosure.
         return {'status':'CONTEXT_ONLY','bullish_score':None,'bearish_score':None,'source':'EXISTING_NEWS_AND_EVENT_SERVICES',
                 'retrieved_at':ist(now).isoformat(),'news':raw,'events':event,

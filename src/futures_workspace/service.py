@@ -13,6 +13,7 @@ from src.futures_workspace.discovery import universe, technical, unknown, discov
 from src.futures_workspace.adapter import RepositoryAdapter
 from src.futures_workspace.bias import MarketBias
 from src.futures_workspace.liquidity import closing_volume
+from src.futures_workspace.parallel import AdaptiveRunner, transient
 
 class FuturesWorkspace:
     def __init__(self,platform,store=None,config=None,adapter=None,scanner_factory=None):
@@ -90,10 +91,9 @@ class FuturesWorkspace:
                     benchmark=self.adapter.history('NIFTY 50')
                 except Exception:
                     benchmark=None
-                evaluations={}
-                for i,symbol in enumerate(symbols):
-                    if progress:
-                        progress(i,len(symbols),symbol+': historical and sector data')
+                parallel=AdaptiveRunner(self.config.maximum_workers,self.config.healthy_parallel_batches)
+                def screen(symbol):
+                    parallel.stage(symbol+': historical and sector data')
                     contract=contracts.get(symbol)
                     if contract is None:
                         item=unknown('ACTIVE_CONTRACT_MISSING_REVIEW_REQUIRED')
@@ -101,13 +101,20 @@ class FuturesWorkspace:
                         try:
                             item=deepcopy(technical(self.adapter.history(symbol),self.config,now,benchmark,self.adapter.sector_history(symbol)))
                         except Exception as exc:
+                            if transient(exc):
+                                raise
                             item=unknown('HISTORY_FETCH_FAILED:'+type(exc).__name__)
                     item.update({'symbol':symbol,'contract':contract,'evaluated_at':now.isoformat(),
                                  'sector':self.adapter.sector(symbol)})
                     item['technical_classification']=item['classification']
-                    evaluations[symbol]=item
-                    if progress:
-                        progress(i+1,len(symbols),symbol+': technical screening complete')
+                    return item
+                def failed_screen(symbol,exc):
+                    item=unknown('HISTORY_FETCH_FAILED:'+type(exc).__name__)
+                    item.update({'symbol':symbol,'contract':contracts.get(symbol),'evaluated_at':now.isoformat(),
+                                 'sector':self.adapter.sector(symbol),'technical_classification':'UNKNOWN_DATA'})
+                    return item
+                evaluations=parallel.run(symbols,screen,failed_screen,
+                    (lambda c,t,label:progress(c,t,'Technical screening: '+label)) if progress else None)
                 # The full universe is screened technically before expensive context reads.
                 # Enrich twice each list's capacity plus every existing member.
                 shortlist=set(existing)
@@ -121,7 +128,14 @@ class FuturesWorkspace:
                     quotes=self.adapter.quotes({s:contracts[s] for s in shortlist if s in contracts}) if shortlist else {}
                 except Exception:
                     quotes={}
-                for i,(symbol,item) in enumerate(evaluations.items()):
+                context_cache={s:{} for s in symbols}
+                def read_context(symbol,kind,operation):
+                    cache=context_cache[symbol]
+                    if kind not in cache:
+                        cache[kind]=operation()
+                    return deepcopy(cache[kind])
+                def enrich(symbol):
+                    item=deepcopy(evaluations[symbol])
                     contract=item['contract']
                     enriched=symbol in shortlist and contract is not None
                     item['eligible_for_admission']=enriched
@@ -131,30 +145,33 @@ class FuturesWorkspace:
                     q={'status':'UNKNOWN','basis':'NOT_FETCHED_OUTSIDE_TECHNICAL_SHORTLIST',
                        'execution_liquidity':'UNVERIFIED_REQUIRES_DAILY_LIVE_CHECKS'}
                     try:
-                        if enriched and progress:
-                            progress(i,len(symbols),symbol+': completed Futures liquidity')
                         if enriched:
                             reader=getattr(self.adapter,'weekly_liquidity',None)
                             if reader:
-                                q=reader(contract,now)
+                                parallel.stage(symbol+': completed Futures liquidity')
+                                q=read_context(symbol,'liquidity',lambda:reader(contract,now))
                             if q['status']=='UNKNOWN':
                                 q=closing_volume(quotes.get('NFO:'+contract['tradingsymbol'],{}),self.config,now)
-                    except Exception:
+                    except Exception as exc:
+                        if transient(exc):
+                            raise
                         q=closing_volume(quotes.get('NFO:'+contract['tradingsymbol'],{}),self.config,now)
                     item['futures_quality']=q
                     try:
-                        if enriched and progress:
-                            progress(i,len(symbols),symbol+': fundamental data')
                         if enriched:
-                            fundamental=self.adapter.fundamentals(symbol,now)
+                            parallel.stage(symbol+': fundamental data')
+                            fundamental=read_context(symbol,'fundamentals',lambda:self.adapter.fundamentals(symbol,now))
                     except Exception as exc:
+                        if transient(exc):
+                            raise
                         fundamental={'status':'UNKNOWN','bullish_score':None,'bearish_score':None,'reason':type(exc).__name__}
                     try:
-                        if enriched and progress:
-                            progress(i,len(symbols),symbol+': news and events')
                         if enriched:
-                            news=self.adapter.news(symbol,now)
+                            parallel.stage(symbol+': news and events')
+                            news=read_context(symbol,'news',lambda:self.adapter.news(symbol,now))
                     except Exception as exc:
+                        if transient(exc):
+                            raise
                         news={'status':'UNKNOWN','bullish_score':None,'bearish_score':None,'reason':type(exc).__name__}
                     item['fundamentals']=fundamental; item['news_events']=news
                     event=news.get('events') or {}
@@ -168,11 +185,19 @@ class FuturesWorkspace:
                         item['reason_codes'].append('COMPLETED_FUTURES_VOLUME_BELOW_THRESHOLD_REVIEW_REQUIRED')
                     elif enriched and q['status']=='UNKNOWN':
                         item['reason_codes'].append('WEEKLY_EXECUTION_LIQUIDITY_UNVERIFIED_DAILY_CHECK_REQUIRED')
-                    evaluations[symbol]=item
-                    for evidence_kind,payload in (('DISCOVERY',item),('FUNDAMENTAL',fundamental),('NEWS_EVENT',news)):
+                    return item
+                def failed_context(symbol,exc):
+                    item=deepcopy(evaluations[symbol])
+                    item.update({'classification':'UNKNOWN_DATA','eligible_for_admission':False,
+                        'futures_quality':{'status':'UNKNOWN'},'fundamentals':{'status':'UNKNOWN'},'news_events':{'status':'UNKNOWN'}})
+                    item['reason_codes'].append('CONTEXT_FETCH_FAILED:'+type(exc).__name__)
+                    item['discovery']=discovery_score(item,item['fundamentals'],item['news_events'],self.config)
+                    return item
+                evaluations=parallel.run(symbols,enrich,failed_context,
+                    (lambda c,t,label:progress(c,t,'Candidate context: '+label)) if progress else None)
+                for symbol,item in evaluations.items():
+                    for evidence_kind,payload in (('DISCOVERY',item),('FUNDAMENTAL',item['fundamentals']),('NEWS_EVENT',item['news_events'])):
                         self.store.record(job_id,symbol,evidence_kind,payload)
-                    if progress:
-                        progress(i+1,len(symbols),symbol)
                 if not any(e['classification'] not in ('UNKNOWN_DATA','TRANSITION') or 'VERIFIED_MAJOR_EVENT_RISK_REVIEW_REQUIRED' in e.get('reason_codes',[]) for e in evaluations.values()):
                     # Persist an incomplete attempt but never publish a destructive empty version.
                     output.update({'status':'INCOMPLETE','eligible_universe_size':len(contracts),'evaluated_count':len(evaluations),
@@ -184,7 +209,7 @@ class FuturesWorkspace:
                         'data_quality_failures':[s for s,e in evaluations.items() if e['classification']=='UNKNOWN_DATA'],
                         'technical_evaluated_count':len(evaluations),'context_evaluated_count':sum(e['eligible_for_admission'] for e in evaluations.values()),
                         'weekly_liquidity_policy':'COMPLETED_VOLUME_CONTEXT_LIVE_DEPTH_RESERVED_FOR_DAILY'})
-                output.update({'elapsed_seconds':round(perf_counter()-started,2),
+                output.update({'elapsed_seconds':round(perf_counter()-started,2),'parallel_events':parallel.events,'parallel_workers_final':parallel.workers,
                     'context_shortlist':sorted(s for s,e in evaluations.items() if e['eligible_for_admission']),
                     'context_policy':'TOP_TWICE_LIST_CAPACITY_PER_DIRECTION_PLUS_EXISTING_MEMBERS',
                     'execution_liquidity_unverified':[s for s,e in evaluations.items() if e['futures_quality']['status']=='UNKNOWN' and e['eligible_for_admission']]})

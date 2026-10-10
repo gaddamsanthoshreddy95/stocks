@@ -8,6 +8,8 @@ class WorkspaceConfig:
     enabled: bool = False
     minimum_score: float = 60
     maximum_per_list: int = 25
+    maximum_workers: int = 32
+    healthy_parallel_batches: int = 3
     confirmation_sessions: int = 3
     hysteresis: float = 8
     recovery_decline_percent: float = 15
@@ -41,9 +43,11 @@ class WorkspaceConfig:
             raise ValueError('weekly_history_source must be yahoo_adjusted or kite')
         if abs(self.technical_weight+self.fundamental_weight+self.news_weight-1)>1e-8:
             raise ValueError('Discovery weights must sum to one')
-        for name in ('maximum_per_list', 'confirmation_sessions'):
+        for name in ('maximum_per_list', 'confirmation_sessions','maximum_workers','healthy_parallel_batches'):
             if getattr(self, name)<1 or int(getattr(self,name))!=getattr(self,name):
                 raise ValueError(f'{name} must be a positive integer')
+        if not 2<=self.maximum_workers<=128:
+            raise ValueError('maximum_workers must be within 2..128')
         if self.confirmation_sessions < 2:
             raise ValueError('Recovery requires multiple completed sessions')
         if self.weekly_day>6 or any(getattr(self,n)>23 for n in ('weekly_hour','entry_cutoff_hour','flat_hour')) or any(getattr(self,n)>59 for n in ('weekly_minute','entry_cutoff_minute','flat_minute')):

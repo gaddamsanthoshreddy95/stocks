@@ -30,8 +30,14 @@ class JobController:
                 return False
             self.label=label; self.progress=(0,0,'')
             self.started_at=self.updated_at=time.monotonic()
-            self.next_schedule=time.monotonic()+300
-            self.future=self.pool.submit(operation)
+            self.next_schedule=float('inf')
+            def run():
+                try:
+                    return operation()
+                finally:
+                    with self.lock:
+                        self.next_schedule=time.monotonic()+300
+            self.future=self.pool.submit(run)
         return True
 
     def update(self,current,total,symbol):
@@ -124,6 +130,8 @@ def render(platform,database):
                 try:
                     output=jobs.future.result()
                     st.caption(f'Last job: {jobs.label} — {output.get("status","completed")}')
+                    if output.get('status')=='AUTO_RETRY_PAUSED':
+                        st.warning('Automatic full-scan retries are paused. '+str(output.get('reason') or 'The weekly cycle was already attempted.')+' Use Weekly Rotation to retry manually.')
                 except Exception as exc:
                     st.error(f'{jobs.label}: {exc}')
         if st.button('Refresh workspace view',key='ft-refresh'):
@@ -187,6 +195,11 @@ def render(platform,database):
             st.json([{'version':v['id'],'members':[m for m in v['snapshot'] if m['category']==category]} for v in store.versions()])
     elif section=='Weekly Rotation':
         st.caption('Post-market discovery uses completed sessions. Live spread and depth are checked during Daily Trading. Fundamentals and news are fetched for shortlisted candidates and existing members.')
+        attempts=store.jobs('WEEKLY_ROTATION')
+        if attempts and attempts[0]['status'] in ('INCOMPLETE','FAILED'):
+            last=attempts[0]
+            reason=last.get('error') or (last.get('result') or {}).get('reason','Data unavailable')
+            st.warning(f'Last rotation: {last["status"]}. {reason}. Automatic retries are paused for this weekly cycle. Use Run Full Universe Scan to retry when ready.')
         if st.button('Run Full Universe Scan',disabled=busy,type='primary'):
             submit('Full universe weekly rotation',lambda:new_workspace().rotate(progress=jobs.update))
             st.rerun()
@@ -231,6 +244,8 @@ def render(platform,database):
         with st.form('ft-settings'):
             minimum=st.number_input('Minimum weekly score',0.,100.,float(config.minimum_score))
             count=st.number_input('Maximum stocks per list',1,200,int(config.maximum_per_list))
+            workers=st.number_input('Adaptive worker resource limit',2,128,int(config.maximum_workers))
+            healthy_batches=st.number_input('Healthy batches before doubling workers',1,20,int(config.healthy_parallel_batches))
             confirmation=st.number_input('Confirmation sessions',2,20,int(config.confirmation_sessions))
             hysteresis=st.number_input('Hysteresis points',0.,100.,float(config.hysteresis))
             decline=st.number_input('Recovery six-month decline %',0.,100.,float(config.recovery_decline_percent))
@@ -244,6 +259,7 @@ def render(platform,database):
             adjusted=st.checkbox('Require verified corporate-action-adjusted history',value=config.require_adjusted_history)
             if st.form_submit_button('Save workspace settings',disabled=busy):
                 payload={**store.settings(),'minimum_score':minimum,'maximum_per_list':count,'confirmation_sessions':confirmation,
+                    'maximum_workers':workers,'healthy_parallel_batches':healthy_batches,
                     'hysteresis':hysteresis,'recovery_decline_percent':decline,'recovery_drawdown_percent':drawdown,
                     'bias_directional_threshold':bias_directional,'bias_strong_threshold':bias_strong,
                     'weekly_day':day,'weekly_hour':hour,'weekly_minute':minute,'require_adjusted_history':adjusted,'weekly_history_source':history_source}
