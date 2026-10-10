@@ -1,5 +1,29 @@
 # Futures Trading: implementation and operating guide
 
+**Current operating mode: manual only.** Opening the workspace never starts a
+scan. Use **Weekly Rotation → Run Full Universe Scan**, **Recheck Selected
+Watchlists**, or **Daily Trading → SCAN SELECTED STOCKS** explicitly. The old
+`schedule` CLI command now returns MANUAL_MODE without constructing market-data
+services. This supersedes the original automatic-scheduling requirement at the
+user's request. Existing host tasks invoking `schedule` therefore do not start
+scans; disable any separately configured host task that invokes `rotate` directly.
+
+The UI now shows small summaries on initial navigation. Full 213-stock JSON
+trees are not rendered inside collapsed expanders. Stock evidence loads only
+after its explicit control is selected, and full reports are downloadable on
+request. Settings reads no scan payloads; latest results select one database row,
+and Rotation History reads 50 lightweight version headers per page and only the
+selected version's payload. Existing evidence and historical versions are retained.
+Focused manual-mode/UI regression checks passed 79 tests, including navigation
+with a large 213-stock archived report, one-stock evidence loading, Settings with
+report reads forbidden, and disabled automatic maintenance for empty, completed,
+failed and incomplete prior states. Full-suite results for this change appear below.
+The final full regression run passed **1006 tests and 16 subtests** in 141.90
+seconds. Compilation and whitespace checks passed. Existing failed/incomplete
+records remain in history and are labelled saved results; they do not launch
+new jobs. Native browser performance on the user's Windows machine has not been
+measured here.
+
 ## Verification and hardening on 10 October 2026
 
 The requested workspace was already present in the clean repository at the start
@@ -227,7 +251,7 @@ run_ui.bat
 ```
 
 Open http://localhost:8501, choose Futures Trading, then Weekly Rotation. First
-visit also schedules initialization automatically. Once lists contain ACTIVE
+initialization requires clicking Run Full Universe Scan. Once lists contain ACTIVE
 members, Daily Trading's single SCAN SELECTED STOCKS button generates the combined
 result. Independent watchlist pages provide add/remove, enable/disable and
 pin/unpin; Rotation History restores versions and exports audit JSON.
@@ -243,14 +267,11 @@ CLI commands from the project folder:
 .venv\Scripts\python.exe scripts\run_futures_workspace.py schedule
 ```
 
-Default weekly schedule: Saturday 09:00 Asia/Kolkata. The UI checks scheduled
-maintenance every five minutes while this workspace is open. Use Windows Task
-Scheduler to run the absolute path to `run_futures_workspace_schedule.bat` daily
-at 09:00 IST when the UI is closed. The wrapper sets the project working directory.
-The schedule command runs a distinct daily instrument refresh, then the latest
-due weekly rotation. Successful weekly keys are idempotent; incomplete attempts
-can retry. It does not schedule daily recommendations. No machine-level task was
-installed on the user's laptop from this remote workspace.
+Saved weekly schedule values are retained for compatibility, but no UI scheduling
+or first-visit catch-up is enabled. `run_futures_workspace_schedule.bat` now returns
+MANUAL_MODE through the disabled `schedule` command. No machine-level task was
+installed or edited on the user's laptop from this remote workspace. Manual jobs
+still prevent overlapping scans and apply validated watchlist changes atomically.
 
 Managed worker locks are automatically released by the OS after a crash; their
 saved leases are recovered on the next status read or job start. For a legacy
@@ -378,10 +399,8 @@ Use the existing credential configuration (`KITE_API_KEY`, `KITE_ACCESS_TOKEN`),
 broker authorization through the established login flow. Open Futures Trading,
 let first-run initialization finish or run Weekly Rotation, then use Daily
 Trading's **SCAN SELECTED STOCKS** for the combined selected-only result.
-For maintenance while the UI is closed, schedule
-`.venv/bin/python scripts/run_futures_workspace.py schedule` through your existing
-host scheduler, using Asia/Kolkata. The configured weekly default remains
-Saturday 09:00; the command never schedules daily recommendations or broker orders.
+For maintenance while the UI is closed, explicitly run `rotate`, `recheck`, or
+`refresh-universe` from the CLI. `schedule` performs no work in manual mode.
 
 ### Workspace appears stuck or scan buttons stay disabled
 

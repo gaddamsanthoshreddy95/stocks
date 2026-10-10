@@ -15,6 +15,9 @@ def main():
     parser.add_argument('--job-id')
     parser.add_argument('--worker-stopped',action='store_true')
     args=parser.parse_args()
+    if args.command=='schedule':
+        print(json.dumps({'status':'MANUAL_MODE','reason':'Automatic jobs are disabled. Run rotate, recheck or refresh-universe explicitly.'}))
+        return
     from src.futures_workspace.store import WorkspaceStore
     store=WorkspaceStore(args.database)
     if args.command in ('status','recover-job'):

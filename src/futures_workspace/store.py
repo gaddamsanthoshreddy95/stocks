@@ -78,10 +78,35 @@ class WorkspaceStore:
         with closing(self.connect()) as c:
             return [{**dict(r),'snapshot':json.loads(r['snapshot']),'report':json.loads(r['report'])} for r in c.execute('SELECT * FROM ft_versions ORDER BY id DESC')]
 
-    def jobs(self,kind=None):
+    def version_headers(self,offset=0):
         with closing(self.connect()) as c:
-            rows=c.execute('SELECT * FROM ft_jobs'+(' WHERE kind=?' if kind else '')+' ORDER BY started_at DESC', (kind,) if kind else ()).fetchall()
+            return [dict(r) for r in c.execute('SELECT id,created_at,kind,previous_version,json_array_length(snapshot) AS member_count FROM ft_versions ORDER BY id DESC LIMIT 50 OFFSET ?',(int(offset),))]
+
+    def version_count(self):
+        with closing(self.connect()) as c:
+            return c.execute('SELECT COUNT(*) FROM ft_versions').fetchone()[0]
+
+    def version(self,version):
+        with closing(self.connect()) as c:
+            row=c.execute('SELECT * FROM ft_versions WHERE id=?',(version,)).fetchone()
+            return {**dict(row),'snapshot':json.loads(row['snapshot']),'report':json.loads(row['report'])} if row else None
+
+    def jobs(self,kind=None,*,limit=None,include_results=True):
+        with closing(self.connect()) as c:
+            columns='*' if include_results else 'id,kind,job_key,status,started_at,completed_at,error'
+            params=(kind,) if kind else ()
+            query='SELECT '+columns+' FROM ft_jobs'+(' WHERE kind=?' if kind else '')+' ORDER BY started_at DESC'
+            if limit is not None:
+                query+=' LIMIT ?'; params+= (int(limit),)
+            rows=c.execute(query,params).fetchall()
+            if not include_results:
+                return [dict(r) for r in rows]
             return [{**dict(r),'result':json.loads(r['result']) if r['result'] else None} for r in rows]
+
+    def latest_result(self,kind):
+        with closing(self.connect()) as c:
+            row=c.execute("SELECT result FROM ft_jobs WHERE kind=? AND status IN ('COMPLETED','INCOMPLETE') ORDER BY started_at DESC LIMIT 1",(kind,)).fetchone()
+            return json.loads(row['result']) if row and row['result'] else None
 
     def settings(self):
         with closing(self.connect()) as c:

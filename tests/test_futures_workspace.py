@@ -351,14 +351,9 @@ def test_feature_disabled_no_data_reads(workspace):
 
 
 def test_scheduler_separate_refresh_weekly_idempotency_no_daily(workspace):
-    with patch.object(workspace,'rotate',wraps=workspace.rotate) as run:
-        with patch('src.futures_workspace.service.technical',return_value=evaluation(LISTS[0])):
-            scheduler=WorkspaceScheduler(workspace)
-            scheduler.tick(NOW)
-            scheduler.tick(NOW)
-        assert run.call_count==1
-    assert not workspace.store.jobs('DAILY_TRADING')
-    assert len(workspace.store.jobs('UNIVERSE_REFRESH'))==1
+    assert WorkspaceScheduler(workspace).tick(NOW)['status']=='MANUAL_MODE'
+    assert not workspace.store.jobs()
+    assert workspace.adapter.counts=={}
 
 
 def test_scheduled_rotation_reports_progress_before_slow_sources(workspace):
@@ -368,9 +363,9 @@ def test_scheduled_rotation_reports_progress_before_slow_sources(workspace):
         return {'status':'UNKNOWN','bullish_score':None,'bearish_score':None}
     workspace.adapter.fundamentals=fundamentals
     with patch('src.futures_workspace.service.technical',return_value=evaluation(LISTS[0])):
-        WorkspaceScheduler(workspace).tick(NOW,progress=progress)
+        workspace.rotate(NOW,progress=progress)
     stages=[call.args[2] for call in progress.call_args_list]
-    assert stages[0]=='Refreshing Futures instrument universe'
+    assert stages[0]=='Starting weekly rotation'
     assert 'Loading Futures instrument metadata' in stages
     assert any(stage.endswith(': historical and sector data') for stage in stages)
     assert any(stage.endswith(': news and events') for stage in stages)

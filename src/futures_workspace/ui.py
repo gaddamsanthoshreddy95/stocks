@@ -50,7 +50,18 @@ def controller(path):
     return JobController()
 
 def latest(store,kind):
-    return next((j['result'] for j in store.jobs(kind) if j['status'] in ('COMPLETED','INCOMPLETE')),None)
+    return store.latest_result(kind)
+
+def details_and_export(label,payload,key,filename):
+    # Expander contents are still rendered by Streamlit. Use an explicit control
+    # so large nested reports never reach the browser on initial navigation.
+    if st.checkbox(label,key=key):
+        if isinstance(payload,dict) and payload.get('evaluations'):
+            symbol=st.selectbox('Stock evidence',sorted(payload['evaluations']),key=key+'-symbol')
+            st.json(payload['evaluations'][symbol])
+        else:
+            st.caption('Full evidence is available in the JSON export.')
+        st.download_button('Download full report JSON',json.dumps(payload,indent=2),file_name=filename,key=key+'-export')
 
 def result_rows(items):
     rows=[]
@@ -88,11 +99,6 @@ def render(platform,database):
         return FuturesWorkspace(TradingPlatform(settings=platform.settings),WorkspaceStore(store.path))
     def submit(label,operation):
         jobs.submit(label,operation)
-    # Scheduled catch-up runs while the workspace is open. External scheduler supports closed UI.
-    if jobs.future is None and time.monotonic()>=jobs.next_schedule and store.locked_job() is None:
-        from src.futures_workspace.scheduler import WorkspaceScheduler
-        submit('Scheduled initialization / weekly rotation',lambda:WorkspaceScheduler(new_workspace()).tick(progress=jobs.update))
-
     @st.fragment(run_every='2s')
     def job_status():
         saved_job=store.locked_job()
@@ -106,9 +112,6 @@ def render(platform,database):
                 jobs.future=None
                 jobs.next_schedule=time.monotonic()+300
                 st.rerun(scope='app')
-        if not saved_job and (jobs.future is None or jobs.future.done()) and time.monotonic()>=jobs.next_schedule:
-            from src.futures_workspace.scheduler import WorkspaceScheduler
-            submit('Scheduled universe / weekly maintenance',lambda:WorkspaceScheduler(new_workspace()).tick(progress=jobs.update))
         if jobs.future:
             future=jobs.future
             if not jobs.future.done():
@@ -139,9 +142,13 @@ def render(platform,database):
     job_status()
     busy=bool(jobs.future and not jobs.future.done()) or store.locked_job() is not None
     section=st.radio('Futures Trading section',SECTIONS,horizontal=True,key='ft-section')
-    members=store.members()
-    daily=latest(store,'DAILY_TRADING')
-    rotation=latest(store,'WEEKLY_ROTATION')
+    st.caption('Manual mode: scans run only when you click their buttons.')
+    if section=='Settings':
+        daily=None; rotation=None; members=[]
+    else:
+        members=store.members()
+        daily=latest(store,'DAILY_TRADING') if section in ('Overview','Daily Trading') else None
+        rotation=latest(store,'WEEKLY_ROTATION') if section in ('Overview','Weekly Rotation') else None
     if section=='Overview':
         cols=st.columns(3)
         cols[0].metric('Eligible stock Futures',rotation.get('eligible_universe_size',0) if rotation else 0)
@@ -162,9 +169,7 @@ def render(platform,database):
             for key,title in (('long','Futures LONG Opportunities'),('short','Futures SHORT Opportunities'),('other','NO TRADE / REJECTED / UNKNOWN')):
                 st.subheader(title)
                 st.dataframe(pd.DataFrame(result_rows(daily.get(key,[]))),hide_index=True,width='stretch')
-            with st.expander('Complete retained evidence and Reports A–E'):
-                st.json(daily)
-            st.download_button('Export combined scan JSON',json.dumps(daily,indent=2),file_name='futures_daily_scan.json')
+            details_and_export('Prepare full scan export including Reports A–E',daily,'ft-daily-details','futures_daily_scan.json')
         else:
             st.info('Initialize both watchlists with Weekly Rotation, then run one combined daily scan.')
     elif section in ('Shorting Stocks','Recovering Stocks'):
@@ -190,16 +195,16 @@ def render(platform,database):
                 st.rerun()
             except Exception as exc:
                 st.error(str(exc))
-        with st.expander('Selection evidence and historical memberships'):
-            st.json(selected)
-            st.json([{'version':v['id'],'members':[m for m in v['snapshot'] if m['category']==category]} for v in store.versions()])
+        if selected and st.checkbox('Show individual selection evidence',key='ft-member-details-'+category):
+            symbol=st.selectbox('Stock', [m['symbol'] for m in selected],key='ft-member-symbol-'+category)
+            st.json(next(m for m in selected if m['symbol']==symbol))
     elif section=='Weekly Rotation':
         st.caption('Post-market discovery uses completed sessions. Live spread and depth are checked during Daily Trading. Fundamentals and news are fetched for shortlisted candidates and existing members.')
-        attempts=store.jobs('WEEKLY_ROTATION')
+        attempts=store.jobs('WEEKLY_ROTATION',limit=1,include_results=False)
         if attempts and attempts[0]['status'] in ('INCOMPLETE','FAILED'):
             last=attempts[0]
-            reason=last.get('error') or (last.get('result') or {}).get('reason','Data unavailable')
-            st.warning(f'Last rotation: {last["status"]}. {reason}. Automatic retries are paused for this weekly cycle. Use Run Full Universe Scan to retry when ready.')
+            reason=last.get('error') or (rotation or {}).get('reason','Data unavailable')
+            st.warning(f'Saved rotation result: {last["status"]}. {reason}. No automatic retry will run. Use Run Full Universe Scan when ready.')
         if st.button('Run Full Universe Scan',disabled=busy,type='primary'):
             submit('Full universe weekly rotation',lambda:new_workspace().rotate(progress=jobs.update))
             st.rerun()
@@ -207,22 +212,24 @@ def render(platform,database):
             submit('Selected watchlist recheck',lambda:new_workspace().rotate(selected_only=True,progress=jobs.update))
             st.rerun()
         if rotation:
-            st.write({k:v for k,v in rotation.items() if k not in ('evaluations','changes')})
+            st.caption('Last saved rotation result')
+            st.write({k:rotation.get(k) for k in ('status','eligible_universe_size','evaluated_count','technical_evaluated_count','context_evaluated_count','elapsed_seconds','as_of','reason') if k in rotation})
             st.dataframe(pd.DataFrame(rotation.get('changes',[])),hide_index=True,width='stretch')
-            with st.expander('Evaluations and data-quality failures'):
-                st.json(rotation.get('evaluations',{}))
+            details_and_export('Show individual stock evidence and export',rotation,'ft-rotation-details','futures_weekly_rotation.json')
         st.caption('Routine changes apply automatically. Unknown data preserves the last version or marks membership REVIEW_REQUIRED.')
     elif section=='Rotation History':
-        versions=store.versions()
-        st.dataframe(pd.DataFrame([{'Version':v['id'],'Created':v['created_at'],'Kind':v['kind'],'Previous version':v['previous_version'],'Members':len(v['snapshot'])} for v in versions]),hide_index=True)
+        count=store.version_count()
+        page=st.number_input('History page',1,max(1,(count+49)//50),1)
+        versions=store.version_headers((page-1)*50)
+        st.dataframe(pd.DataFrame([{'Version':v['id'],'Created':v['created_at'],'Kind':v['kind'],'Previous version':v['previous_version'],'Members':v['member_count']} for v in versions]),hide_index=True)
         if versions:
             choice=st.selectbox('Historical version',[v['id'] for v in versions])
-            version=next(v for v in versions if v['id']==choice)
-            st.json(version)
+            version=store.version(choice)
+            st.write({'Version':version['id'],'Created':version['created_at'],'Members':len(version['snapshot'])})
             if st.button('Restore this watchlist version',disabled=busy):
                 store.rollback(choice)
                 st.rerun()
-            st.download_button('Export version JSON',json.dumps(version,indent=2),file_name=f'futures_watchlists_{choice}.json')
+            details_and_export('Prepare version export',version,'ft-version-details',f'futures_watchlists_{choice}.json')
             st.caption('Restored members require a recheck. Rollback never changes broker execution history.')
     elif section=='Analysis & Performance':
         st.json(FuturesWorkspace(platform,store,config=config).performance())
@@ -236,11 +243,11 @@ def render(platform,database):
                 st.error(str(exc))
         replay_result=latest(store,'RESEARCH_REPLAY')
         if replay_result:
-            st.json(replay_result)
-            st.download_button('Export research replay JSON',json.dumps(replay_result,indent=2),file_name='futures_research_replay.json')
+            st.write({k:replay_result.get(k) for k in ('status','selection_count','futures_metrics','cost_status') if k in replay_result})
+            details_and_export('Prepare full replay export',replay_result,'ft-replay-details','futures_research_replay.json')
         st.info('Win rates and expectancy remain UNKNOWN until linked manual fills and point-in-time out-of-sample evidence exist. Existing technical backtests remain in Reports A–E.')
     else:
-        st.caption('Experimental discovery settings are independent of existing daily strategy weights. All schedules use Asia/Kolkata.')
+        st.caption('Experimental discovery settings are independent of daily strategy weights. All jobs are manual; saved schedule values are inactive.')
         with st.form('ft-settings'):
             minimum=st.number_input('Minimum weekly score',0.,100.,float(config.minimum_score))
             count=st.number_input('Maximum stocks per list',1,200,int(config.maximum_per_list))
@@ -252,9 +259,6 @@ def render(platform,database):
             drawdown=st.number_input('Recovery high drawdown %',0.,100.,float(config.recovery_drawdown_percent))
             bias_directional=st.number_input('Market Bias directional threshold',1.,99.,float(config.bias_directional_threshold))
             bias_strong=st.number_input('Market Bias strong threshold',2.,100.,float(config.bias_strong_threshold))
-            day=st.selectbox('Weekly day',range(7),index=config.weekly_day,format_func=lambda d:('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday')[d])
-            hour=st.number_input('Weekly hour IST',0,23,config.weekly_hour)
-            minute=st.number_input('Weekly minute IST',0,59,config.weekly_minute)
             history_source=st.selectbox('Weekly adjusted equity history',('yahoo_adjusted','kite'),index=0 if config.weekly_history_source=='yahoo_adjusted' else 1)
             adjusted=st.checkbox('Require verified corporate-action-adjusted history',value=config.require_adjusted_history)
             if st.form_submit_button('Save workspace settings',disabled=busy):
@@ -262,7 +266,7 @@ def render(platform,database):
                     'maximum_workers':workers,'healthy_parallel_batches':healthy_batches,
                     'hysteresis':hysteresis,'recovery_decline_percent':decline,'recovery_drawdown_percent':drawdown,
                     'bias_directional_threshold':bias_directional,'bias_strong_threshold':bias_strong,
-                    'weekly_day':day,'weekly_hour':hour,'weekly_minute':minute,'require_adjusted_history':adjusted,'weekly_history_source':history_source}
+                    'require_adjusted_history':adjusted,'weekly_history_source':history_source}
                 try:
                     replace(config,**payload)
                     store.save_settings(payload)
@@ -271,4 +275,4 @@ def render(platform,database):
                 else:
                     st.rerun()
         st.json(asdict(config))
-        st.caption('Run scripts/run_futures_workspace.py schedule with Windows Task Scheduler to rotate while the UI is closed. Daily Trading remains user initiated.')
+        st.caption('Use Weekly Rotation and Daily Trading buttons to start jobs. The schedule command is disabled.')
