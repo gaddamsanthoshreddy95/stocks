@@ -45,6 +45,7 @@ class WorkspaceStore:
             CREATE TABLE IF NOT EXISTS ft_managed_workers(job_id TEXT PRIMARY KEY REFERENCES ft_jobs(id));
             CREATE TABLE IF NOT EXISTS ft_evidence(id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL REFERENCES ft_jobs(id), symbol TEXT NOT NULL, kind TEXT NOT NULL, retrieved_at TEXT NOT NULL, payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS ft_settings(id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS ft_view_columns(view TEXT PRIMARY KEY, columns_json TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS ft_evidence_symbol ON ft_evidence(symbol,id);
             ''')
             c.commit()
@@ -112,6 +113,15 @@ class WorkspaceStore:
         with closing(self.connect()) as c:
             row=c.execute('SELECT payload FROM ft_settings WHERE id=1').fetchone()
             return json.loads(row[0]) if row else {}
+
+    def view_columns(self,view):
+        with closing(self.connect()) as c:
+            row=c.execute('SELECT columns_json FROM ft_view_columns WHERE view=?',(view,)).fetchone()
+            return json.loads(row[0]) if row else None
+
+    def save_view_columns(self,view,columns):
+        with self.transaction() as c:
+            c.execute('INSERT OR REPLACE INTO ft_view_columns VALUES(?,?)',(view,dumps(list(columns))))
 
     def locked_job(self):
         """Saved lease owner; RUNNING is a persisted status, not a liveness check."""

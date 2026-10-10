@@ -20,6 +20,31 @@ the separate weekly discovery score. Nontrade/unknown/conflict results are inclu
 Rows absent from that scan, or transferred to the opposite directional category,
 show Not scanned; a missing score is Unavailable, while a real zero stays zero.
 These are dated snapshots and viewing a watchlist never initiates a scan.
+
+All Futures Trading daily/watchlist tables and the existing Futures LONG / SHORT
+reviewed-stock and Reports A–C tables now share selectable stock-context columns.
+These include saved relevant headlines, news status/source/HTTP(S) article links,
+publication/check timestamps, P/E, sector P/E, ROE/ROCE, available financial
+metrics, Futures VWAP versus signal VWAP, RSI/ADX/MACD, ATR, volume, candle
+structure, EMA/support/resistance and measured execution-check factors. Weekly
+indicators have a Weekly prefix; live-session values are not inferred from them.
+Optional one-stock news details expose up to 20 saved headlines and source links
+without fetching network data or rendering the entire report.
+
+Use **Choose visible columns → Visible columns → Save column selection** in
+each table. Preferences persist independently in the additive `ft_view_columns`
+table in the existing UI database. Missing fields are ignored when applying old
+preferences, and an empty selection can be changed in the same control. Existing
+reports/scoring/risk checks and manual-only scan behavior remain intact.
+Weekly fetched headlines are retained when only AI sentiment analysis failed;
+this does not make unavailable sentiment a verified directional signal. Missing
+news distinguishes fetch failure, not checked, and no relevant headlines found.
+Numeric gaps remain unavailable rather than being replaced with zeros.
+Validation: 142 focused tests passed, including the existing Reports A–E UI
+compatibility checks. The final full suite passed **1025 tests and 16 subtests**
+in 148.57 seconds; compilation and whitespace checks passed. Column persistence,
+daily/weekly context precedence, failed-versus-empty news, numeric zero values,
+unsafe URL filtering and legacy daily-score fallback are covered offline.
 Focused manual-mode/UI regression checks passed 79 tests, including navigation
 with a large 213-stock archived report, one-stock evidence loading, Settings with
 report reads forbidden, and disabled automatic maintenance for empty, completed,

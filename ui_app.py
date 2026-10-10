@@ -322,7 +322,7 @@ def feature_is_running(feature: str) -> bool:
     return future is not None and not future.done()
 
 
-def futures_opportunities_page(platform: TradingPlatform) -> None:
+def futures_opportunities_page(platform: TradingPlatform, database=None) -> None:
     st.subheader("Intraday futures · LONG and SHORT")
     st.caption("Independent discovery across the configured futures stock universe. Target 0.3%, stop 0.2%; execution approval includes costs and event checks.")
     limit = st.number_input("Candidates per report", min_value=1, max_value=50, value=5, key="futures_scan_limit")
@@ -364,8 +364,19 @@ def futures_opportunities_page(platform: TradingPlatform) -> None:
         st.caption(f"Executed-entry reconciliation: {safety.get('reconciliation', {}).get('status', 'UNKNOWN')}; entries today: {safety.get('reconciliation', {}).get('executed_entries')} / 2.")
         if window.get('manual_exit_warning_active'):
             st.warning(window['manual_exit_warning'])
+    from src.ui.stock_tables import context_columns, render_stock_table
+    from src.futures_workspace.ui import result_rows
+    from src.futures_workspace.store import WorkspaceStore
+    stock_table_store=WorkspaceStore(database.path) if database is not None else WorkspaceStore()
+    st.subheader('All reviewed stocks · news and measurements')
+    reviewed=report.get('reviewed',[])
+    render_stock_table([{**row,**context_columns(candidate)} for row,candidate in zip(result_rows(reviewed),reviewed)],
+                       'legacy-futures-reviewed',stock_table_store)
     for tab, key in zip(st.tabs(["A · Bullish", "B · Bearish", "C · Combined approved"]), ('report_a', 'report_b', 'report_c')):
         with tab:
+            candidates=report[key]
+            table_rows=[{**row,**context_columns(candidate)} for row,candidate in zip(result_rows(candidates),candidates)]
+            render_stock_table(table_rows,'legacy-futures-'+key,stock_table_store)
             if not report[key]:
                 st.info("No eligible opportunities in this report.")
             for candidate in report[key]:
@@ -4053,7 +4064,7 @@ def main() -> None:
         from src.futures_workspace.ui import render
         render(platform, database)
     elif page == "Futures LONG / SHORT":
-        futures_opportunities_page(platform)
+        futures_opportunities_page(platform,database)
     elif page == "AI Assistant":
         ai_assistant_page(database)
     elif page == "Codex":

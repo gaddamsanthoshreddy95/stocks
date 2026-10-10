@@ -10,6 +10,7 @@ from src.futures_workspace.config import WorkspaceConfig
 from src.futures_workspace.store import WorkspaceStore, LISTS
 from src.futures_workspace.service import FuturesWorkspace
 from src.application.platform import TradingPlatform
+from src.ui.stock_tables import context_columns, matching_daily, render_stock_table
 
 SECTIONS=('Overview','Daily Trading','Shorting Stocks','Recovering Stocks','Weekly Rotation','Rotation History','Analysis & Performance','Settings')
 
@@ -85,7 +86,7 @@ def result_rows(items):
         freshness=(r.get('scan_gates') or {}).get('final_futures_quote_freshness',{}).get('status','UNKNOWN')
         rows.append({'Symbol':r['symbol'],'Watchlist':r.get('watchlist'),'Direction':r.get('side'),
             'Contract':contract.get('tradingsymbol'),'Expiry':contract.get('expiry'),'Price':quote.get('last_price',evidence.get('price')),
-            'Strategy':r.get('setup_type'),'Daily score':r.get('original_daily_score'),'Weekly score':r.get('weekly_discovery_score'),
+            'Strategy':r.get('setup_type'),'Daily score':r.get('original_daily_score',r.get('technical_score')),'Weekly score':r.get('weekly_discovery_score'),
             'Sector':r.get('sector'),'Sector strength':(evidence.get('sector_relative') or {}).get('excess_percentage_points'),
             'Market Bias':r.get('market_bias',{}).get('classification'),'Counter trend':r.get('counter_trend'),
             'VWAP':factors('futures_vwap_quality').get('vwap',evidence.get('vwap')),
@@ -181,7 +182,9 @@ def render(platform,database):
             st.caption('Persisted scan results are historical snapshots; scan again to evaluate current quotes and entry conditions.')
             for key,title in (('long','Futures LONG Opportunities'),('short','Futures SHORT Opportunities'),('other','NO TRADE / REJECTED / UNKNOWN')):
                 st.subheader(title)
-                st.dataframe(pd.DataFrame(result_rows(daily.get(key,[]))),hide_index=True,width='stretch')
+                items=daily.get(key,[])
+                rows=[{**base,**context_columns(item)} for base,item in zip(result_rows(items),items)]
+                render_stock_table(rows,'workspace-daily-'+key,store)
             details_and_export('Prepare full scan export including Reports A–E',daily,'ft-daily-details','futures_daily_scan.json')
         else:
             st.info('Initialize both watchlists with Weekly Rotation, then run one combined daily scan.')
@@ -198,7 +201,8 @@ def render(platform,database):
             'Weekly volume evidence':m['evidence'].get('futures_quality',{}).get('status','UNKNOWN'),
             'Daily execution liquidity':'Requires fresh live checks',
             'Reason':', '.join(m['evidence'].get('reason_codes',[]))} for m in selected]
-        st.dataframe(pd.DataFrame(rows),hide_index=True,width='stretch')
+        rows=[{**row,**context_columns(matching_daily(member,daily),member['evidence'])} for row,member in zip(rows,selected)]
+        render_stock_table(rows,'workspace-'+category,store)
         st.caption('Daily values come from the latest completed combined scan and are historical snapshots. Stocks absent from that scan show Not scanned; weekly selection scores remain separate.')
         with st.form('ft-management-'+category):
             symbol=st.text_input('NSE stock symbol')

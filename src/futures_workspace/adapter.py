@@ -196,7 +196,7 @@ class RepositoryAdapter:
             if self._event_context is None:
                 self._event_context=self._events.build_daily_context(as_of=ist(now).to_pydatetime())
         raw=NewsAnalysisService.analyze(symbol,force_refresh=False,limit=16)
-        if raw.get('fetch_failed'):
+        if raw.get('fetch_failed') and raw.get('collection_state')!='FETCHED':
             from requests.exceptions import ConnectionError
             raise ConnectionError('Weekly news fetch failed: '+'; '.join(raw.get('reasons',[])))
         with self._event_assessment_lock:
