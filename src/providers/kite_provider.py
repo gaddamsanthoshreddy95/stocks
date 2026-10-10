@@ -3,6 +3,7 @@ Kite Market Data Provider
 """
 
 from datetime import date, timedelta
+import os
 from math import isfinite
 from pathlib import Path
 from threading import Lock
@@ -24,11 +25,11 @@ class KiteProvider(BaseProvider):
     def __init__(self):
 
         self.kite = KiteConnect(
-            api_key=Secrets.KITE_API_KEY
+            api_key=(os.getenv('KITE_API_KEY',Secrets.KITE_API_KEY) or '').strip()
         )
 
         self.kite.set_access_token(
-            Secrets.KITE_ACCESS_TOKEN
+            (os.getenv('KITE_ACCESS_TOKEN',Secrets.KITE_ACCESS_TOKEN) or '').strip()
         )
         self._historical_lock = Lock()
         self._last_historical_request = 0.0

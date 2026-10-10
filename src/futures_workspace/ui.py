@@ -245,6 +245,12 @@ def render(platform,database):
             if failures:
                 st.subheader('Why data could not be used')
                 st.dataframe(pd.DataFrame([{'Reason':reason,'Stocks':count} for reason,count in sorted(failures.items(),key=lambda v:-v[1])]),hide_index=True)
+            unresolved=rotation.get('unresolved_failures',{})
+            if unresolved:
+                st.subheader('Unresolved recovery failures')
+                st.dataframe(pd.DataFrame([{'Stock':symbol,'Stage':failure.get('stage'),
+                    'Error':failure.get('error_type') or failure.get('sector_error') or ', '.join(failure.get('reason_codes',[]))}
+                    for symbol,failure in unresolved.items()]),hide_index=True)
             st.dataframe(pd.DataFrame(rotation.get('changes',[])),hide_index=True,width='stretch')
             details_and_export('Show individual stock evidence and export',rotation,'ft-rotation-details','futures_weekly_rotation.json')
         st.caption('Routine changes apply automatically. Unknown data preserves the last version or marks membership REVIEW_REQUIRED.')

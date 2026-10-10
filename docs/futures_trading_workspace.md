@@ -8,6 +8,35 @@ services. This supersedes the original automatic-scheduling requirement at the
 user's request. Existing host tasks invoking `schedule` therefore do not start
 scans; disable any separately configured host task that invokes `rotate` directly.
 
+**Recovery inside a requested Weekly Rotation is automatic.** That same job
+retries only failed securities (up to two recovery attempts), revalidates their
+history and evaluates them again before building the shortlist. Healthy securities
+are not rescanned and no second full-universe job is launched. Failed/stale
+per-security caches are bypassed; broker history recovery requests fresh data
+instead of trusting the same cached frame. Prices and adjustment provenance are
+still subject to the unchanged strict validators and scoring rules.
+
+A TokenException can trigger one coordinated reload of credentials already
+supplied in the environment, followed by the failed request's retry. This does
+not issue a token, renew authorization or bypass broker permissions. Persistent
+token errors, recovery errors, invalid/stale history and failed optional feed
+attempts are recorded in recovery evidence and `unresolved_failures`.
+
+Any unresolved fetch/validation failures keep the rotation/job **INCOMPLETE**,
+even if a validated subset is published atomically. Unknown securities preserve
+their prior membership for review; if no reliable classifications exist, no
+watchlist version is published. Expected missing optional financial information
+still permits explicitly labelled technical-only research under existing policy.
+Validated recovered securities enter the same rankings and membership decisions
+as the healthy securities. The UI exposes unresolved failures without rendering
+full raw histories.
+Recovery regression validation passed **1042 tests and 16 subtests** in 144.26
+seconds. New cases cover invalid/stale per-stock history recovery, unchanged
+healthy-stock fetch counts, one universe refresh/job, recovered shortlist
+admission, unresolved invalid data, failed recovery hooks, recoverable and
+persistent TokenException, and forced cache bypass. Scoring, thresholds, approved
+targets/stops, ledger semantics and manual-only job initiation are unchanged.
+
 The UI now shows small summaries on initial navigation. Full 213-stock JSON
 trees are not rendered inside collapsed expanders. Stock evidence loads only
 after its explicit control is selected, and full reports are downloadable on

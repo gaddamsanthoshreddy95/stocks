@@ -37,7 +37,7 @@ def test_exhausted_optional_news_retries_keep_technical_candidates(workspace):
     workspace.adapter.news=Mock(side_effect=TimeoutError('news unavailable'))
     with patch('src.futures_workspace.parallel.sleep'):
         result=rotate(workspace)
-    assert result['status']=='COMPLETE'
+    assert result['status']=='INCOMPLETE'
     assert len(workspace.store.members())==2
     assert all(e['news_events']['status']=='UNKNOWN' for s,e in result['evaluations'].items() if s in ('BEAR','RECOVER'))
     assert any('OPTIONAL_CONTEXT_UNAVAILABLE' in r for r in result['evaluations']['BEAR']['reason_codes'])

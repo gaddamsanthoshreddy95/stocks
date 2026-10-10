@@ -6,7 +6,9 @@ from zoneinfo import ZoneInfo
 import math
 from collections import Counter
 from time import perf_counter
+from threading import Lock
 import pandas as pd
+from kiteconnect.exceptions import TokenException
 from src.futures.sessions import ist, trading_day
 from src.futures_workspace.config import WorkspaceConfig
 from src.futures_workspace.store import WorkspaceStore, LISTS, timestamp
@@ -15,6 +17,8 @@ from src.futures_workspace.adapter import RepositoryAdapter
 from src.futures_workspace.bias import MarketBias
 from src.futures_workspace.liquidity import closing_volume
 from src.futures_workspace.parallel import AdaptiveRunner, transient
+from src.futures_workspace.validation import HistoryValidationError
+from src.sector.sector_strength import SectorStrength
 
 class FuturesWorkspace:
     def __init__(self,platform,store=None,config=None,adapter=None,scanner_factory=None):
@@ -59,7 +63,14 @@ class FuturesWorkspace:
         with self.store.job('UNIVERSE_REFRESH') as (job_id,output):
             self.adapter.begin(now)
             try:
-                contracts=universe(self.adapter.instruments(),now)
+                try:
+                    master=self.adapter.instruments()
+                except TokenException:
+                    refresh=getattr(self.adapter,'refresh_credentials',None)
+                    if not refresh or not refresh():
+                        raise
+                    master=self.adapter.instruments()
+                contracts=universe(master,now)
                 if not contracts:
                     raise ValueError('No eligible stock Futures found; last state retained')
                 output.update({'contracts':contracts,'eligible_universe_size':len(contracts),'as_of':now.isoformat()})
@@ -83,7 +94,14 @@ class FuturesWorkspace:
             try:
                 if progress:
                     progress(0,0,'Loading Futures instrument metadata')
-                contracts=universe(self.adapter.instruments(),now)
+                try:
+                    master=self.adapter.instruments()
+                except TokenException:
+                    refresh=getattr(self.adapter,'refresh_credentials',None)
+                    if not refresh or not refresh():
+                        raise
+                    master=self.adapter.instruments()
+                contracts=universe(master,now)
                 if not contracts:
                     raise ValueError('Instrument universe unavailable; prior lists preserved')
                 existing={m['symbol']:m for m in self.store.members()}
@@ -96,7 +114,18 @@ class FuturesWorkspace:
                     benchmark=None
                     benchmark_quality={'status':'UNKNOWN','error_type':type(exc).__name__,'rows':0}
                 parallel=AdaptiveRunner(self.config.maximum_workers,self.config.healthy_parallel_batches)
-                def screen(symbol):
+                recoveries={}; unresolved={}
+                auth_lock=Lock(); auth_attempted=False
+                def recover_auth():
+                    nonlocal auth_attempted
+                    with auth_lock:
+                        if auth_attempted:
+                            return
+                        auth_attempted=True
+                        refresh=getattr(self.adapter,'refresh_credentials',None)
+                        if refresh:
+                            refresh()
+                def screen_once(symbol):
                     parallel.stage(symbol+': historical and sector data')
                     contract=contracts.get(symbol)
                     if contract is None:
@@ -117,15 +146,53 @@ class FuturesWorkspace:
                         except Exception as exc:
                             if transient(exc):
                                 raise
-                            item=unknown('HISTORY_FETCH_FAILED:'+type(exc).__name__)
+                            item=unknown('HISTORY_INVALID',exc.details) if isinstance(exc,HistoryValidationError) else unknown('HISTORY_FETCH_FAILED:'+type(exc).__name__)
                     item.update({'symbol':symbol,'contract':contract,'evaluated_at':now.isoformat(),
                                  'sector':self.adapter.sector(symbol)})
                     item['technical_classification']=item['classification']
+                    return item
+                def screen(symbol):
+                    events=[]
+                    for attempt in range(3):
+                        item=screen_once(symbol)
+                        failed=item['classification']=='UNKNOWN_DATA'
+                        sector_failed=item.get('sector_context_error')
+                        if not failed and not sector_failed:
+                            if events:
+                                events.append({'action':'RECOVERED','attempt':attempt+1})
+                            recoveries[symbol]=events
+                            return item
+                        events.append({'action':'VALIDATION_FAILED','attempt':attempt+1,
+                                       'reason_codes':item.get('reason_codes',[]),'history_quality':item.get('history_quality'),
+                                       'sector_error':sector_failed})
+                        if attempt==2 or contracts.get(symbol) is None:
+                            break
+                        parallel.stage(symbol+': recovering failed data')
+                        auth=sector_failed=='TokenException' or any('TokenException' in reason for reason in item.get('reason_codes',[]))
+                        try:
+                            if auth:
+                                recover_auth()
+                            recover=getattr(self.adapter,'recover_history',None)
+                            if recover:
+                                if failed:
+                                    recover(symbol,now)
+                                if sector_failed:
+                                    sector=self.adapter.sector(symbol)
+                                    sector_key=SectorStrength.SECTOR_INDEX_SYMBOLS.get(sector) if self.config.weekly_history_source=='yahoo_adjusted' else SectorStrength.KITE_INDEX_SYMBOLS.get(sector)
+                                    if sector_key:
+                                        recover(sector_key,now)
+                        except Exception as exc:
+                            events.append({'action':'RECOVERY_FAILED','error_type':type(exc).__name__})
+                            break
+                    recoveries[symbol]=events
+                    unresolved[symbol]={'stage':'TECHNICAL_OR_SECTOR','reason_codes':item.get('reason_codes',[]),
+                                        'sector_error':sector_failed,'attempts':len(events)}
                     return item
                 def failed_screen(symbol,exc):
                     item=unknown('HISTORY_FETCH_FAILED:'+type(exc).__name__)
                     item.update({'symbol':symbol,'contract':contracts.get(symbol),'evaluated_at':now.isoformat(),
                                  'sector':self.adapter.sector(symbol),'technical_classification':'UNKNOWN_DATA'})
+                    unresolved[symbol]={'stage':'HISTORY_FETCH','error_type':type(exc).__name__}
                     return item
                 evaluations=parallel.run(symbols,screen,failed_screen,
                     (lambda c,t,label:progress(c,t,'Technical screening: '+label)) if progress else None)
@@ -140,6 +207,13 @@ class FuturesWorkspace:
                     progress(0,len(shortlist),'Technical screen complete; fetching closing-session volume snapshots')
                 try:
                     quotes=self.adapter.quotes({s:contracts[s] for s in shortlist if s in contracts}) if shortlist else {}
+                except TokenException:
+                    try:
+                        recover_auth()
+                        quotes=self.adapter.quotes({s:contracts[s] for s in shortlist if s in contracts}) if shortlist else {}
+                    except Exception as exc:
+                        quotes={}
+                        unresolved['*FUTURES_QUOTES']={'stage':'CLOSING_QUOTES','error_type':type(exc).__name__}
                 except Exception:
                     quotes={}
                 context_cache={s:{} for s in symbols}
@@ -151,7 +225,11 @@ class FuturesWorkspace:
                             cache[kind]={'status':'UNKNOWN','reason':'OPTIONAL_CONTEXT_UNAVAILABLE:'+context_failures[symbol],
                                          'bullish_score':None,'bearish_score':None}
                         else:
-                            cache[kind]=operation()
+                            try:
+                                cache[kind]=operation()
+                            except TokenException:
+                                recover_auth()
+                                cache[kind]=operation()
                     return deepcopy(cache[kind])
                 def enrich(symbol):
                     item=deepcopy(evaluations[symbol])
@@ -174,6 +252,7 @@ class FuturesWorkspace:
                     except Exception as exc:
                         if transient(exc):
                             raise
+                        unresolved[symbol]={'stage':'FUTURES_LIQUIDITY','error_type':type(exc).__name__}
                         q=closing_volume(quotes.get('NFO:'+contract['tradingsymbol'],{}),self.config,now)
                     item['futures_quality']=q
                     try:
@@ -183,6 +262,7 @@ class FuturesWorkspace:
                     except Exception as exc:
                         if transient(exc):
                             raise
+                        unresolved[symbol]={'stage':'FUNDAMENTALS','error_type':type(exc).__name__}
                         fundamental={'status':'UNKNOWN','bullish_score':None,'bearish_score':None,'reason':type(exc).__name__}
                     try:
                         if enriched:
@@ -191,6 +271,7 @@ class FuturesWorkspace:
                     except Exception as exc:
                         if transient(exc):
                             raise
+                        unresolved[symbol]={'stage':'NEWS_EVENTS','error_type':type(exc).__name__}
                         news={'status':'UNKNOWN','bullish_score':None,'bearish_score':None,'reason':type(exc).__name__}
                     item['fundamentals']=fundamental; item['news_events']=news
                     event=news.get('events') or {}
@@ -211,13 +292,16 @@ class FuturesWorkspace:
                     context_failures[symbol]=type(exc).__name__
                     item=enrich(symbol)
                     item['reason_codes'].append('OPTIONAL_CONTEXT_UNAVAILABLE:'+type(exc).__name__)
+                    unresolved[symbol]={'stage':'OPTIONAL_CONTEXT','error_type':type(exc).__name__}
                     return item
                 evaluations=parallel.run(symbols,enrich,failed_context,
                     (lambda c,t,label:progress(c,t,'Candidate context: '+label)) if progress else None)
                 for symbol,item in evaluations.items():
                     for evidence_kind,payload in (('DISCOVERY',item),('FUNDAMENTAL',item['fundamentals']),('NEWS_EVENT',item['news_events'])):
                         self.store.record(job_id,symbol,evidence_kind,payload)
-                if not any(e['classification'] not in ('UNKNOWN_DATA','TRANSITION') or 'VERIFIED_MAJOR_EVENT_RISK_REVIEW_REQUIRED' in e.get('reason_codes',[]) for e in evaluations.values()):
+                self.store.record(job_id,'*','RECOVERY',{'history':{s:e for s,e in recoveries.items() if e},'unresolved':unresolved})
+                publishable=any(e['classification'] not in ('UNKNOWN_DATA','TRANSITION') or 'VERIFIED_MAJOR_EVENT_RISK_REVIEW_REQUIRED' in e.get('reason_codes',[]) for e in evaluations.values())
+                if not publishable:
                     # Persist an incomplete attempt but never publish a destructive empty version.
                     output.update({'status':'INCOMPLETE','eligible_universe_size':len(contracts),'evaluated_count':len(evaluations),
                         'evaluations':evaluations,'changes':[],'as_of':now.isoformat(),'reason':'NO_RELIABLE_CLASSIFICATIONS_LAST_VERSION_PRESERVED'})
@@ -229,6 +313,7 @@ class FuturesWorkspace:
                         'technical_evaluated_count':len(evaluations),'context_evaluated_count':sum(e['eligible_for_admission'] for e in evaluations.values()),
                         'weekly_liquidity_policy':'COMPLETED_VOLUME_CONTEXT_LIVE_DEPTH_RESERVED_FOR_DAILY'})
                 output.update({'elapsed_seconds':round(perf_counter()-started,2),'parallel_events':parallel.events,'parallel_workers_final':parallel.workers,
+                    'recovery_history':{s:events for s,events in recoveries.items() if events},'unresolved_failures':unresolved,
                     'classification_counts':dict(Counter(e['classification'] for e in evaluations.values())),
                     'technical_classification_counts':dict(Counter(e['technical_classification'] for e in evaluations.values())),
                     'data_failure_reasons':dict(Counter(reason for e in evaluations.values() if e['classification']=='UNKNOWN_DATA' for reason in e['reason_codes'] if reason not in (*LISTS,'UNKNOWN_DATA','NOT_RECOVERY','NONE','TRANSITION','MULTI_SESSION_CONFIRMED','NOT_CONFIRMED','RECOVERY_WATCH','RECOVERY_CONFIRMED','RECOVERY_INVALIDATED'))),
@@ -240,12 +325,15 @@ class FuturesWorkspace:
                     'context_shortlist':sorted(s for s,e in evaluations.items() if e['eligible_for_admission']),
                     'context_policy':'TOP_TWICE_LIST_CAPACITY_PER_DIRECTION_PLUS_EXISTING_MEMBERS',
                     'execution_liquidity_unverified':[s for s,e in evaluations.items() if e['futures_quality']['status']=='UNKNOWN' and e['eligible_for_admission']]})
+                if unresolved:
+                    output['status']='INCOMPLETE'
+                    output['reason']='UNRESOLVED_DATA_FAILURES'
                 self.store.record(job_id,'*','ELIGIBILITY',{'contracts':contracts,'as_of':now.isoformat()})
             finally:
                 self.adapter.end()
             # Finish evidence writes and provider cleanup before publishing membership.
             # A failure in either must leave the previous version authoritative.
-            if output.get('status')=='COMPLETE':
+            if publishable:
                 with self.store.transaction() as c:
                     output['version']=self.store.publish(c,members,kind,output)
         return output

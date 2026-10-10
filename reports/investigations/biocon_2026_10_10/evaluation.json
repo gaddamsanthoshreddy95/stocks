@@ -1,0 +1,130 @@
+{
+  "symbol": "BIOCON",
+  "as_of": "2026-10-10T16:00:00+05:30",
+  "history_path": "/tmp/biocon-investigation/BIOCON.parquet",
+  "history_rows": 497,
+  "price_adjustment": "ADJUSTED",
+  "ohlcv_validation": {
+    "rows": 496,
+    "violations": []
+  },
+  "evaluation": {
+    "classification": "SHORTING_STOCKS",
+    "recovery_status": "RECOVERY_INVALIDATED",
+    "technical_score": 90,
+    "bearish_score": 90,
+    "recovery_score": 10,
+    "metrics": {
+      "return_5d_percent": -5.745890911557638,
+      "return_20d_percent": -11.544305342662186,
+      "return_21d_percent": -10.935507323830018,
+      "return_63d_percent": -16.51135151816383,
+      "return_126d_percent": 0.005101080442027062,
+      "drawdown_52w_percent": -21.860673450580258,
+      "low_52w": 337.29663028287246,
+      "distance_52w_low_percent": 3.5883440648255105,
+      "distance_6m_low_percent": 3.4964077808375293,
+      "sma20": 377.2024978637695,
+      "sma50": 399.6959991455078,
+      "sma200": 394.0348324584961,
+      "rsi": 23.74228000880173,
+      "macd": -12.34435367347345,
+      "macd_signal": -10.043552547467451,
+      "atr": 9.105917585191408,
+      "trend_slope_percent": -0.5243467672596489,
+      "support": 347.20001220703125,
+      "resistance": 403.95001220703125,
+      "relative_volume": 0.5436124472835293,
+      "volatility_20d_percent": 1.5055094023202402,
+      "volume_trend_percent": -7.673097180989707,
+      "price": 349.3999938964844,
+      "history_as_of": "2026-10-09T00:00:00+05:30",
+      "price_adjustment": "ADJUSTED",
+      "relative_strength_nifty": {
+        "stock_return_percent": -11.544305342662186,
+        "benchmark_return_percent": -3.888145365213491,
+        "excess_percentage_points": -7.656159977448695,
+        "sessions": 20,
+        "as_of": "2026-10-09T00:00:00+05:30"
+      },
+      "relative_strength_sector": {
+        "stock_return_percent": -11.544305342662186,
+        "benchmark_return_percent": -2.733985638438541,
+        "excess_percentage_points": -8.810319704223645,
+        "sessions": 20,
+        "as_of": "2026-10-09T00:00:00+05:30"
+      },
+      "higher_high_higher_low": false,
+      "lower_high_lower_low": true,
+      "breakout": false,
+      "breakdown": false,
+      "bearish_confirmation": true,
+      "recovery_confirmation": false,
+      "confirmation_sessions": 3,
+      "recovery_start_date": null
+    },
+    "confidence": 100,
+    "data_completeness": 100,
+    "reason_codes": [
+      "SHORTING_STOCKS",
+      "RECOVERY_INVALIDATED",
+      "MULTI_SESSION_CONFIRMED"
+    ]
+  },
+  "directional_shortlist_candidate": true,
+  "full_universe_shortlist_rank": 4,
+  "production_watchlists_modified": false,
+  "cached_contract_evidence": {
+    "source": "LOCAL_KITE_INSTRUMENT_MASTER_2026_10_09",
+    "contract": {
+      "instrument_token": 12485378,
+      "exchange_token": "48771",
+      "tradingsymbol": "BIOCON26OCTFUT",
+      "name": "BIOCON",
+      "last_price": 0.0,
+      "expiry": "2026-10-27",
+      "strike": 0.0,
+      "tick_size": 0.05,
+      "lot_size": 2500,
+      "instrument_type": "FUT",
+      "segment": "NFO-FUT",
+      "exchange": "NFO",
+      "security_id": "NSE:BIOCON"
+    },
+    "live_eligibility_refresh": "UNAVAILABLE_TOKEN_EXCEPTION"
+  },
+  "evaluation_without_sector": {
+    "bearish_score": 80,
+    "classification": "SHORTING_STOCKS"
+  },
+  "fresh_contract_evidence": {
+    "source": "AUTHENTICATED_FRESH_KITE_NFO_AND_NSE_MASTERS",
+    "eligible_universe_count": 213,
+    "contract": {
+      "instrument_token": 12485378,
+      "exchange_token": "48771",
+      "tradingsymbol": "BIOCON26OCTFUT",
+      "name": "BIOCON",
+      "last_price": 0.0,
+      "expiry": "2026-10-27",
+      "strike": 0.0,
+      "tick_size": 0.05,
+      "lot_size": 2500,
+      "instrument_type": "FUT",
+      "segment": "NFO-FUT",
+      "exchange": "NFO",
+      "underlying_instrument_token": 2911489,
+      "eligibility_source": "FRESH_KITE_NFO_AND_NSE_EQUITY_MASTERS",
+      "security_id": "NSE:BIOCON"
+    }
+  },
+  "current_kite_authentication": "AUTHENTICATED",
+  "technical_shortlist_evidence": {
+    "universe_size": 213,
+    "bearish_count": 122,
+    "bearish_rank": 4,
+    "shortlist_capacity": 50,
+    "in_new_bearish_context_shortlist": true,
+    "scope": "Technical full-universe ranking only; event/liquidity admission has not been rerun."
+  }
+}

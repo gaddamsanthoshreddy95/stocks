@@ -7,6 +7,7 @@ from src.futures.sessions import ist, normalise_candles, trading_day
 from src.futures.scoring import prepare, relative_returns
 from src.news.today import INDEX_FUTURES
 from src.futures_workspace.store import LISTS
+from src.futures_workspace.validation import ohlcv_diagnostics
 
 
 def universe(instruments,now):
@@ -79,14 +80,9 @@ def technical(frame,config,now,benchmark=None,sector=None):
         if not gaps.empty:
             return unknown('HISTORY_MISSING_SESSIONS',{'missing_session_count':len(gaps),'sample_missing_sessions':[day.isoformat() for day in gaps[:10]],
                 'fetched_rows':len(frame),'completed_rows':len(data),'first_session':data.index[0].isoformat(),'latest_session':data.index[-1].isoformat()})
-        columns=['Open','High','Low','Close','Volume']
-        values=data[columns].apply(pd.to_numeric,errors='coerce')
-        if (not np.isfinite(values.to_numpy()).all()
-                or (values[['Open','High','Low','Close']]<=0).any().any()
-                or (values.Volume<0).any()
-                or (values.High<values[['Open','Low','Close']].max(axis=1)).any()
-                or (values.Low>values[['Open','High','Close']].min(axis=1)).any()):
-            return unknown('HISTORY_INVALID')
+        validation=ohlcv_diagnostics(data)
+        if validation['violations']:
+            return unknown('HISTORY_INVALID',validation)
         p=prepare(data)
         c=p.Close; last=p.iloc[-1]
         ret=lambda n:float((c.iloc[-1]/c.iloc[-n-1]-1)*100)

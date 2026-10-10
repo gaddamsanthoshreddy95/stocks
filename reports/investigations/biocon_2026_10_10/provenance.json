@@ -1,0 +1,19 @@
+{
+  "source": "Yahoo Finance via existing YahooProvider, auto_adjust=True",
+  "symbols": [
+    "BIOCON.NS",
+    "^NSEI",
+    "^CNXPHARMA"
+  ],
+  "as_of": "2026-10-10T16:00:00+05:30",
+  "raw_biocon_rows": 497,
+  "completed_session_biocon_rows": 496,
+  "original_failed_user_cache_available": false,
+  "fresh_data_validation_failures": [],
+  "kite_auth_check": "TokenException; no tokens/account data retained",
+  "files": {
+    "BIOCON.parquet": "2427994e63c059d1dcd83daa1b48eb9ba2ee9e3d142c26553cdcb98a2e23cb87",
+    "NSEI.parquet": "512105f8d37b0029f3ae07198d5f075580f9991f64203b0dcd16eef350f54913",
+    "CNXPHARMA.parquet": "bd6e8e7c10c218e3a79dd4e2a647a96bec4a1bc6e693d88a8849ba5055dd2d3f"
+  }
+}

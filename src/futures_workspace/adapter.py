@@ -3,12 +3,14 @@ from dataclasses import asdict
 import json
 import os
 from threading import RLock, Lock
+from kiteconnect.exceptions import TokenException
 from pathlib import Path
 import pandas as pd
 from src.futures.sessions import ist, normalise_candles
 from src.futures_workspace.discovery import fundamental_context, universe
 from src.futures_workspace.bias import MarketBias
 from src.futures_workspace.liquidity import completed_day, historical_volume
+from src.futures_workspace.validation import require_valid_ohlcv, HistoryValidationError
 from src.futures.gateway import KiteGateway
 from src.futures.runtime import ScanRuntime
 from src.sector.sector_mapper import SectorMapper
@@ -31,6 +33,29 @@ class RepositoryAdapter:
         self._provider_lock=RLock()
         self._adjusted_pacing=Lock()
         self._event_assessment_lock=Lock()
+        self._force_history=set()
+
+    def refresh_credentials(self):
+        """Reload supplied credentials; never generate or bypass authorization."""
+        with self._provider_lock:
+            client=getattr(getattr(self.provider,'provider',None),'kite',None)
+            key=os.getenv('KITE_API_KEY','').strip()
+            token=os.getenv('KITE_ACCESS_TOKEN','').strip()
+            if client is None or not key or not token:
+                return False
+            client.api_key=key
+            client.set_access_token(token)
+            self.gateway=None
+            return True
+
+    def recover_history(self,symbol,now):
+        with self._initialization_lock:
+            lock=self._history_locks.setdefault(symbol,RLock())
+        with lock:
+            self.history_cache.pop(symbol,None)
+            self._force_history.add(symbol)
+            if symbol=='NIFTY 50':
+                self._force_history.add('^NSEI')
 
     def begin(self,now):
         self.history_cache={}
@@ -120,7 +145,12 @@ class RepositoryAdapter:
             else:
                 getter=getattr(self.provider,'get_annual_history',self.provider.get_data)
                 with self._provider_lock:
-                    frame=getter(symbol)
+                    if symbol in self._force_history:
+                        self._force_history.discard(symbol)
+                        direct=getattr(getattr(self.provider,'provider',None),'get_historical_data',None)
+                        frame=direct(symbol,period='2y') if direct else getter(symbol)
+                    else:
+                        frame=getter(symbol)
             if frame is not None:
                 frame=frame.copy()
                 # Optional verified, per-security adjustment evidence, never a blanket assertion.
@@ -151,12 +181,22 @@ class RepositoryAdapter:
         folder.mkdir(parents=True,exist_ok=True)
         key=hashlib.sha256(symbol.encode()).hexdigest()
         path=folder/(key+'.parquet')
-        if path.exists():
+        cache_rejection=None
+        with self._initialization_lock:
+            force=symbol in self._force_history
+            self._force_history.discard(symbol)
+        if path.exists() and not force:
             try:
                 cached=pd.read_parquet(path)
                 normalized=normalise_candles(cached,'day',self.now)
                 if not normalized.empty and normalized.index[-1].normalize()==completed_day(self.now):
+                    require_valid_ohlcv(normalized)
                     return cached
+            except HistoryValidationError as exc:
+                cache_rejection={'rejected_at':self.now.isoformat(),'validation':exc.details}
+                # Preserve the original offending bytes for reproducible audits.
+                path.with_suffix('.rejected.parquet').write_bytes(path.read_bytes())
+                path.with_suffix('.rejected.json').write_text(json.dumps(cache_rejection))
             except (OSError,ValueError):
                 pass
         with self._adjusted_pacing:
@@ -170,6 +210,9 @@ class RepositoryAdapter:
         frame.attrs['price_adjustment']='ADJUSTED'
         frame.attrs['adjustment_evidence']={'source':'EXISTING_YAHOO_PROVIDER_AUTO_ADJUST_TRUE','retrieved_at':self.now.isoformat(),
             'publication_time_adjustments':'UNKNOWN_NOT_POINT_IN_TIME_BACKTEST_EVIDENCE'}
+        if cache_rejection:
+            frame.attrs['cache_rejection']=cache_rejection
+        require_valid_ohlcv(normalise_candles(frame,'day',self.now))
         frame.to_parquet(path)
         return frame
 
@@ -177,6 +220,11 @@ class RepositoryAdapter:
         return self.mapper.get_sector(symbol)
 
     def sector_history(self,symbol):
+        if self.config.weekly_history_source=='yahoo_adjusted':
+            sector=self.sector(symbol)
+            key=SectorStrength.SECTOR_INDEX_SYMBOLS.get(sector)
+            if key and key.startswith('^'):
+                return self.history(key)
         key=SectorStrength.KITE_INDEX_SYMBOLS.get(self.sector(symbol))
         return self.history(key) if key else None
 
