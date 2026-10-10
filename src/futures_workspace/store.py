@@ -12,6 +12,7 @@ import sqlite3
 import uuid
 import math
 from numbers import Real
+from src.futures_workspace.lease import worker_lock
 
 LISTS=('SHORTING_STOCKS','RECOVERING_STOCKS')
 
@@ -41,6 +42,7 @@ class WorkspaceStore:
             CREATE TABLE IF NOT EXISTS ft_jobs(id TEXT PRIMARY KEY, kind TEXT NOT NULL, job_key TEXT, status TEXT NOT NULL, started_at TEXT NOT NULL, completed_at TEXT, result TEXT, error TEXT);
             CREATE UNIQUE INDEX IF NOT EXISTS ft_job_success_key ON ft_jobs(kind,job_key) WHERE status='COMPLETED' AND job_key IS NOT NULL;
             CREATE TABLE IF NOT EXISTS ft_lease(name TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES ft_jobs(id));
+            CREATE TABLE IF NOT EXISTS ft_managed_workers(job_id TEXT PRIMARY KEY REFERENCES ft_jobs(id));
             CREATE TABLE IF NOT EXISTS ft_evidence(id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL REFERENCES ft_jobs(id), symbol TEXT NOT NULL, kind TEXT NOT NULL, retrieved_at TEXT NOT NULL, payload TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS ft_settings(id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS ft_evidence_symbol ON ft_evidence(symbol,id);
@@ -88,9 +90,21 @@ class WorkspaceStore:
 
     def locked_job(self):
         """Saved lease owner; RUNNING is a persisted status, not a liveness check."""
+        with worker_lock(self.path) as acquired:
+            if acquired:
+                with self.transaction() as c:
+                    self._recover_abandoned(c)
         with closing(self.connect()) as c:
             row=c.execute("SELECT j.id,j.kind,j.status,j.started_at FROM ft_lease l JOIN ft_jobs j ON j.id=l.owner WHERE l.name='workspace'").fetchone()
             return dict(row) if row else None
+
+    def _recover_abandoned(self,c):
+        # Only managed jobs are covered by the kernel lock. Legacy workers may
+        # still run old code, so they require the existing explicit recovery.
+        row=c.execute("SELECT l.owner FROM ft_lease l JOIN ft_managed_workers w ON w.job_id=l.owner WHERE l.name='workspace'").fetchone()
+        if row:
+            c.execute("UPDATE ft_jobs SET status='FAILED',completed_at=?,error='Automatically recovered exited worker' WHERE id=? AND status='RUNNING'",(timestamp(),row['owner']))
+            c.execute('DELETE FROM ft_lease WHERE owner=?',(row['owner'],))
 
     def save_settings(self,payload):
         with self.transaction() as c:
@@ -98,6 +112,16 @@ class WorkspaceStore:
 
     @contextmanager
     def job(self,kind,key=None):
+        with worker_lock(self.path) as acquired:
+            if not acquired:
+                raise RuntimeError('Another workspace job is running (active worker)')
+            with self.transaction() as c:
+                self._recover_abandoned(c)
+            with self._job(kind,key) as value:
+                yield value
+
+    @contextmanager
+    def _job(self,kind,key=None):
         job_id=uuid.uuid4().hex
         with self.transaction() as c:
             if c.execute("SELECT 1 FROM ft_jobs WHERE kind=? AND job_key=? AND status='COMPLETED'",(kind,key)).fetchone():
@@ -106,6 +130,7 @@ class WorkspaceStore:
                 raise RuntimeError('Another workspace job is running; inspect persisted job status')
             c.execute('INSERT INTO ft_jobs(id,kind,job_key,status,started_at) VALUES(?,?,?,?,?)',(job_id,kind,key,'RUNNING',timestamp()))
             c.execute("INSERT INTO ft_lease VALUES('workspace',?)",(job_id,))
+            c.execute('INSERT INTO ft_managed_workers VALUES(?)',(job_id,))
         output={}
         try:
             yield job_id,output
@@ -183,6 +208,12 @@ class WorkspaceStore:
         """Explicit operator recovery after stopping a crashed/abandoned worker."""
         if not worker_stopped:
             raise ValueError('Stop the original worker before recovering its lease')
+        with worker_lock(self.path) as acquired:
+            if not acquired:
+                raise RuntimeError('Cannot recover an active workspace worker')
+            return self._recover_job(job_id)
+
+    def _recover_job(self,job_id):
         with self.transaction() as c:
             row=c.execute("SELECT status FROM ft_jobs WHERE id=?",(job_id,)).fetchone()
             if not row or row['status']!='RUNNING':

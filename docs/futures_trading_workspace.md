@@ -100,6 +100,7 @@ report/watchlist tables and the Futures execution ledger are untouched.
 | `ft_versions` | Immutable membership snapshots, previous/new version, changes |
 | `ft_jobs` | Kind, schedule key, running/completed/incomplete/failed, result/error |
 | `ft_lease` | One cross-process workspace writer/scan lease |
+| `ft_managed_workers` | Jobs protected by the crash-safe native worker lock |
 | `ft_evidence` | Universe, discovery, fundamental, news/event, bias and replay snapshots |
 | `ft_settings` | Workspace-specific validated overrides |
 
@@ -250,8 +251,10 @@ due weekly rotation. Successful weekly keys are idempotent; incomplete attempts
 can retry. It does not schedule daily recommendations. No machine-level task was
 installed on the user's laptop from this remote workspace.
 
-Job leases persist through crashes, conservatively preventing another writer.
-If a worker crashes, first stop that worker/process, inspect `status`, then run:
+Managed worker locks are automatically released by the OS after a crash; their
+saved leases are recovered on the next status read or job start. For a legacy
+abandoned job from older code, first stop that worker/process, inspect `status`,
+then run:
 
 ```cmd
 .venv\Scripts\python.exe scripts\run_futures_workspace.py recover-job --job-id JOB_ID --worker-stopped
@@ -405,3 +408,49 @@ manual scan controls are available and automatic maintenance waits five minutes.
 CLI `status` and `recover-job` now read the database directly without constructing
 market-data services or requiring broker credentials. The saved-lock recovery UI
 and existing workspace/background-job tests pass (72 tests).
+
+### Crash-safe job locks and Windows environment repair
+
+Jobs now hold a kernel file lock beside the SQLite database for their complete
+lifetime: `msvcrt` byte locking on Windows and `flock` on Linux. The OS releases
+it when a process dies. An additive `ft_managed_workers` table identifies jobs
+using this mechanism. When no process holds the kernel lock, their abandoned
+database leases are automatically marked FAILED and released. A live worker
+blocks duplicate scans and cannot be recovered even with `--worker-stopped`.
+Age alone never determines liveness, so a long full-universe scan keeps its lock.
+
+Locks from older code lack this proof of ownership and require one explicit
+recovery after stopping the previous Streamlit/scheduler workers. From PowerShell
+in the project directory, after updating the code:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\run_futures_workspace.py recover-job --worker-stopped
+.\run_ui.bat
+```
+
+Alternatively, after stopping the previous workers, use the single launcher
+command `.\run_ui.bat --recover-stopped`. It repairs an unusable Windows
+environment if necessary, recovers the stopped job, and launches Streamlit.
+An active managed worker causes recovery to fail and the launcher to stop.
+
+The recovery command now finds the saved job automatically, so no job ID needs
+to be copied. It preserves existing watchlists, versions and execution history.
+If no lock remains, it returns NO_LOCK. Never delete the `.workspace.lock` file
+while any worker is active; all workers sharing this database must use the new
+code. Use a local database/file system so native process-lock semantics apply.
+
+`run_ui.bat` checks that the Windows environment actually runs. If it is missing
+or unusable, it calls `setup_windows.bat`. Setup preserves a copied Linux/broken
+environment in a uniquely named `.venv_backup_*` folder, creates the existing
+Python 3.12 Windows environment and installs requirements. It preserves `.env`
+and application data. A local Python 3.12 installation and working dependency
+downloads remain necessary. Native Windows execution is unavailable in this
+Linux workspace; Windows locking is covered by mocked branch tests, and actual
+process crashes/duplicate exclusion are tested on Linux.
+
+The targeted regression run passed 79 workspace/background-job tests, including
+actual process death, live-worker protection, finalization failure, legacy
+recovery without broker initialization, and Windows lock acquire/release.
+The final full regression run passed **979 tests and 16 subtests** in 138.37
+seconds. Compilation and `git diff --check` passed. Native Windows launcher
+execution and live broker/data-provider operation have not been verified here.

@@ -18,8 +18,11 @@ def main():
     from src.futures_workspace.store import WorkspaceStore
     store=WorkspaceStore(args.database)
     if args.command in ('status','recover-job'):
+        saved=store.locked_job()
+        job_id=args.job_id or (saved['id'] if saved else None)
         result=({'memberships':store.members(),'jobs':store.jobs(),'saved_lock':store.locked_job()}
-                if args.command=='status' else store.recover_job(args.job_id,worker_stopped=args.worker_stopped))
+                if args.command=='status' else store.recover_job(job_id,worker_stopped=args.worker_stopped)
+                if job_id else {'status':'NO_LOCK','watchlist_versions_preserved':True})
         print(json.dumps(result,indent=2,default=str))
         return
     from src.application.platform import TradingPlatform
