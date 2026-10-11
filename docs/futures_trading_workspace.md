@@ -204,8 +204,8 @@ Stock Futures names must map to NSE-segment EQ underlying securities; index
 instruments are excluded. Contracts must have the correct exchange/segment/type,
 positive token/lot size, a symbol and an unexpired expiry. The nearest valid
 contract supplies mapping, expiry and lot size. No permanent stock list is used.
-Weekly liquidity uses completed Futures volume or a closing-session volume
-snapshot; live quote/depth/spread checks are reserved for Daily Trading. Historical
+Weekly admission uses completed underlying-stock volume. Futures volume is
+separate execution context; live quote/depth/spread checks are reserved for Daily Trading. Historical
 quality is validated per security. Metadata eligibility count is distinct from the count
 with sufficient research data.
 
@@ -546,19 +546,34 @@ research; they are not automatically admitted without that context attempt.
 The rotation summary records the technical count, context count, shortlist,
 execution-liquidity unknowns, policy and elapsed seconds.
 
-Weekly liquidity evidence uses the nearest valid exact Futures contract's last
+Weekly stock participation uses the last five completed underlying-stock daily
+volumes, with at least three valid sessions and freshness checks. The separate
+`FUTURES_WORKSPACE_MINIMUM_STOCK_VOLUME` floor defaults to 1,000 shares per
+session and is configurable in Settings. It is a minimal participation floor,
+not an independently calibrated liquidity or profitability estimate. Stock
+volume below this floor or unavailable required stock evidence blocks weekly
+admission. It contributes no new technical points and changes no scoring weights.
+The existing validated equity history supplies these observations without a
+second universe scan or a duplicate stock-history fetch.
+
+Optional weekly Futures context uses the nearest valid exact contract's last
 five completed daily volumes, with at least three usable sessions, freshness
 checks and the existing minimum-volume setting. The dated volume average is
 cached separately per contract, token and completed session; cached observations
 are re-evaluated against the current threshold. If historical volume is
 unavailable, a recent near-close volume snapshot can provide context. Partial
 intraday, stale and future snapshots cannot pass. Neither bid/ask prices nor
-spread are weekly admission gates.
+spread nor Futures-volume thresholds are weekly admission gates. A zero quote
+volume without completed-candle verification remains UNKNOWN; verified zero
+historical Futures volume remains FAIL in the separate context field.
 
-Unknown weekly volume does not erase reliable technical classification; the
+Unknown weekly Futures volume does not erase reliable technical classification; the
 candidate is labelled execution-liquidity unverified and requires Daily Trading's
-live checks. Observed low completed volume marks the candidate UNKNOWN_DATA and
-preserves an existing membership for review; wholly unreliable rotations retain
+live checks. Observed low Futures volume stays visible as context and does not
+remove an otherwise valid stock candidate. Failed requests retain their errors
+and leave the run INCOMPLETE while reliable candidates follow the existing
+partial-publication policy. Low or unverified required stock volume marks a
+candidate UNKNOWN_DATA and preserves an existing membership for review; wholly unreliable rotations retain
 the preceding version. Verified major-event blocks still require review.
 
 Adjusted equity history is reused across jobs/weekends while its latest completed
@@ -664,8 +679,9 @@ window, rather than identical start dates across unused older cache history.
 Sector-history outages are optional context and no longer discard valid stock
 history. After bounded optional-context retries exhaust, the coordinator reuses
 completed stages and keeps reliable technical classifications with missing
-fundamentals/news labelled UNKNOWN. Confirmed low Futures volume and verified
-major events still require review. Daily Trading's mandatory live gates and
+fundamentals/news labelled UNKNOWN. Confirmed low underlying-stock volume and verified
+major events still require review. Futures context cannot certify Daily Trading approval.
+Daily Trading's mandatory live gates and
 manual-only operation remain unchanged.
 
 Final focused validation passed 100 tests covering aligned benchmark fetching/fallback,

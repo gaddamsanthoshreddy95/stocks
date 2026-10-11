@@ -269,7 +269,7 @@ def render(platform,database):
             symbol=st.selectbox('Stock', [m['symbol'] for m in selected],key='ft-member-symbol-'+category)
             st.json(next(m for m in selected if m['symbol']==symbol))
     elif section=='Weekly Rotation':
-        st.caption('Post-market discovery uses completed sessions. Live spread and depth are checked during Daily Trading. Fundamentals and news are fetched for shortlisted candidates and existing members.')
+        st.caption('Weekly admission uses completed underlying-stock volume. Futures volume is context only; Daily Trading requires verified Futures execution checks. Fundamentals and news are fetched for shortlisted candidates and existing members.')
         attempts=store.jobs('WEEKLY_ROTATION',limit=1,include_results=False)
         if attempts and attempts[0]['status'] in ('INCOMPLETE','FAILED'):
             last=attempts[0]
@@ -346,6 +346,7 @@ def render(platform,database):
         with st.form('ft-settings'):
             minimum=st.number_input('Minimum weekly score',0.,100.,float(config.minimum_score))
             count=st.number_input('Maximum stocks per list',1,200,int(config.maximum_per_list))
+            stock_floor=st.number_input('Minimum weekly average stock volume (shares)',1,1000000000,int(config.minimum_stock_volume))
             context_limit=st.number_input('Maximum detailed research candidates per direction',1,500,int(config.maximum_context_per_direction))
             workers=st.number_input('Adaptive worker resource limit',2,128,int(config.maximum_workers))
             healthy_batches=st.number_input('Healthy batches before doubling workers',1,20,int(config.healthy_parallel_batches))
@@ -359,6 +360,7 @@ def render(platform,database):
             adjusted=st.checkbox('Require verified corporate-action-adjusted history',value=config.require_adjusted_history)
             if st.form_submit_button('Save workspace settings',disabled=busy):
                 payload={**store.settings(),'minimum_score':minimum,'maximum_per_list':count,'confirmation_sessions':confirmation,
+                    'minimum_stock_volume':stock_floor,
                     'maximum_context_per_direction':context_limit,
                     'maximum_workers':workers,'healthy_parallel_batches':healthy_batches,
                     'hysteresis':hysteresis,'recovery_decline_percent':decline,'recovery_drawdown_percent':drawdown,

@@ -46,6 +46,10 @@ def context_columns(row,weekly=None):
     else:
         state='Not checked / unknown'
     columns={'Sector':row.get('sector') or weekly.get('sector','UNKNOWN'),
+        'Stock volume status':(weekly.get('stock_quality') or {}).get('status','UNKNOWN'),
+        'Stock average volume':(weekly.get('stock_quality') or {}).get('average_volume'),
+        'Stock volume as of':(weekly.get('stock_quality') or {}).get('as_of'),
+        'Futures liquidity context':(weekly.get('futures_quality') or {}).get('status','UNKNOWN'),
         'Sector identity status':(weekly.get('sector_identity') or {}).get('status','UNKNOWN'),
         'Sector identity source':(weekly.get('sector_identity') or {}).get('source','UNKNOWN'),
         'Sector benchmark':(weekly.get('sector_benchmark') or {}).get('index'),
@@ -112,6 +116,7 @@ def render_stock_table(rows,view,store):
                'Daily score','Decision','Sector','P/E','Sector P/E','Futures VWAP','RSI','Relative volume',
                'Relevant news','News status','News link','News published','News checked']
     preferred+=['News source','News snapshot','Fundamental source','Fundamentals as of']
+    preferred+=['Stock volume status','Stock average volume','Futures liquidity context']
     preferred+=['Sector identity status','Sector identity source','Sector benchmark','Sector benchmark status',
                 'bearish confirmed_score','bearish possible_score','bearish coverage_percent',
                 'recovery confirmed_score','recovery possible_score','recovery coverage_percent']

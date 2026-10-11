@@ -8,14 +8,14 @@ from collections import Counter
 from time import perf_counter
 from threading import Lock
 import pandas as pd
-from kiteconnect.exceptions import TokenException
+from kiteconnect.exceptions import TokenException,InputException
 from src.futures.sessions import ist, trading_day
 from src.futures_workspace.config import WorkspaceConfig
 from src.futures_workspace.store import WorkspaceStore, LISTS, timestamp
 from src.futures_workspace.discovery import universe, technical, unknown, discovery_score
 from src.futures_workspace.adapter import RepositoryAdapter
 from src.futures_workspace.bias import MarketBias
-from src.futures_workspace.liquidity import closing_volume
+from src.futures_workspace.liquidity import closing_volume,completed_day,stock_volume
 from src.futures_workspace.parallel import AdaptiveRunner, transient
 from src.futures_workspace.validation import HistoryValidationError
 from src.sector.sector_strength import SectorStrength
@@ -149,6 +149,8 @@ class FuturesWorkspace:
                             item['sector_recovery_priority']='HIGH_IMPACT' if needs_context else 'DEFERRED_NO_ELIGIBILITY_IMPACT'
                             item['history_rows']=len(history) if history is not None else 0
                             item['history_source']=self.config.weekly_history_source
+                            item['stock_quality']=stock_volume(history,self.config,now)
+                            item['stock_quality']['source']=self.config.weekly_history_source
                             if sector_error:
                                 item['sector_context_error']=sector_error
                             if sector_identity:
@@ -273,8 +275,17 @@ class FuturesWorkspace:
                         if transient(exc):
                             raise
                         unresolved[symbol]={'stage':'FUTURES_LIQUIDITY','error_type':type(exc).__name__}
+                        if isinstance(exc,InputException):
+                            day=completed_day(now)
+                            unresolved[symbol].update({'error_message':str(exc)[:1000],
+                                'request':{'instrument_token':contract['instrument_token'],
+                                    'tradingsymbol':contract['tradingsymbol'],'interval':'day',
+                                    'from':(day-pd.Timedelta(days=20)).isoformat(),
+                                    'to':(day+pd.Timedelta(hours=15,minutes=30)).isoformat()}})
                         q=closing_volume(quotes.get('NFO:'+contract['tradingsymbol'],{}),self.config,now)
+                        q['historical_fetch_error']=deepcopy(unresolved[symbol])
                     item['futures_quality']=q
+                    item['futures_quality']['admission_role']='CONTEXT_ONLY_REQUIRES_DAILY_EXECUTION_VALIDATION'
                     try:
                         if enriched:
                             parallel.stage(symbol+': fundamental data')
@@ -300,11 +311,14 @@ class FuturesWorkspace:
                         item['reason_codes'].append('VERIFIED_MAJOR_EVENT_RISK_REVIEW_REQUIRED')
                     item['discovery']=discovery_score(item,fundamental,news,self.config)
                     item['discovery_mode']='TECHNICAL_ONLY' if fundamental.get('status')=='UNKNOWN' else 'TECHNICAL_WITH_CONTEXT'
-                    if q['status']=='FAIL' and item['classification'] not in ('UNKNOWN_DATA','TRANSITION'):
+                    stock=item.get('stock_quality') or {'status':'UNKNOWN'}
+                    if enriched and stock['status']!='PASS' and item['classification'] not in ('UNKNOWN_DATA','TRANSITION'):
                         item['classification']='UNKNOWN_DATA'
-                        item['reason_codes'].append('COMPLETED_FUTURES_VOLUME_BELOW_THRESHOLD_REVIEW_REQUIRED')
-                    elif enriched and q['status']=='UNKNOWN':
+                        item['reason_codes'].append('STOCK_VOLUME_BELOW_THRESHOLD_REVIEW_REQUIRED' if stock['status']=='FAIL' else 'STOCK_VOLUME_UNVERIFIED_REVIEW_REQUIRED')
+                        if stock['status']=='UNKNOWN':unresolved[symbol]={'stage':'STOCK_LIQUIDITY','reason':'COMPLETED_STOCK_VOLUME_UNAVAILABLE'}
+                    if enriched and q['status']!='PASS':
                         item['reason_codes'].append('WEEKLY_EXECUTION_LIQUIDITY_UNVERIFIED_DAILY_CHECK_REQUIRED')
+                        if q['status']=='FAIL':item['reason_codes'].append('FUTURES_VOLUME_BELOW_THRESHOLD_CONTEXT_ONLY')
                     return item
                 def failed_context(symbol,exc):
                     # Optional research outages must not erase valid technical
@@ -331,7 +345,7 @@ class FuturesWorkspace:
                         'evaluations':evaluations,'changes':changes,'as_of':now.isoformat(),'data_sources':['KITE','ADJUSTED_EQUITY_HISTORY:'+self.config.weekly_history_source,'KITE_COMPLETED_FUTURES_VOLUME','EXISTING_PUBLIC_FUNDAMENTALS','EXISTING_NEWS_EVENTS'],
                         'data_quality_failures':[s for s,e in evaluations.items() if e['classification']=='UNKNOWN_DATA'],
                         'technical_evaluated_count':len(evaluations),'context_evaluated_count':sum(e['eligible_for_admission'] for e in evaluations.values()),
-                        'weekly_liquidity_policy':'COMPLETED_VOLUME_CONTEXT_LIVE_DEPTH_RESERVED_FOR_DAILY'})
+                        'weekly_liquidity_policy':'UNDERLYING_STOCK_VOLUME_ADMISSION_FUTURES_CONTEXT_ONLY_DAILY_GATES_UNCHANGED'})
                 output.update({'elapsed_seconds':round(perf_counter()-started,2),'parallel_events':parallel.events,'parallel_workers_final':parallel.workers,
                     'recovery_history':{s:events for s,events in recoveries.items() if events},'unresolved_failures':unresolved,
                     'classification_counts':dict(Counter(e['classification'] for e in evaluations.values())),
@@ -347,7 +361,7 @@ class FuturesWorkspace:
                     'ranking_shadow_comparison':shadow_comparison(evaluations,self.config.maximum_per_list),
                     'sector_coverage':dict(Counter((e.get('sector_identity',{}).get('sector','UNKNOWN')+':'+e.get('sector_benchmark',{}).get('status','NOT_REQUESTED')) for e in evaluations.values())),
                     'context_policy':'TOP_TWICE_LIST_CAPACITY_WITH_BOUNDARY_TIES_AND_UNCERTAINTY_WITHIN_CONTEXT_BUDGET_PLUS_EXISTING_MEMBERS',
-                    'execution_liquidity_unverified':[s for s,e in evaluations.items() if e['futures_quality']['status']=='UNKNOWN' and e['eligible_for_admission']]})
+                    'execution_liquidity_unverified':[s for s,e in evaluations.items() if e['futures_quality']['status']!='PASS' and e['eligible_for_admission']]})
                 if unresolved:
                     output['status']='INCOMPLETE'
                     output['reason']='UNRESOLVED_DATA_FAILURES'

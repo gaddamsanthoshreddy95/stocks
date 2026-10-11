@@ -17,6 +17,7 @@ class WorkspaceConfig:
     recovery_drawdown_percent: float = 20
     maximum_history_age_sessions: int = 2
     maximum_membership_age_days: int = 8
+    minimum_stock_volume: int = 1000
     technical_weight: float = .7
     fundamental_weight: float = .2
     news_weight: float = .1
@@ -44,7 +45,7 @@ class WorkspaceConfig:
             raise ValueError('weekly_history_source must be yahoo_adjusted or kite')
         if abs(self.technical_weight+self.fundamental_weight+self.news_weight-1)>1e-8:
             raise ValueError('Discovery weights must sum to one')
-        for name in ('maximum_per_list','maximum_context_per_direction', 'confirmation_sessions','maximum_workers','healthy_parallel_batches'):
+        for name in ('minimum_stock_volume','maximum_per_list','maximum_context_per_direction', 'confirmation_sessions','maximum_workers','healthy_parallel_batches'):
             if getattr(self, name)<1 or int(getattr(self,name))!=getattr(self,name):
                 raise ValueError(f'{name} must be a positive integer')
         if not 2<=self.maximum_workers<=128:

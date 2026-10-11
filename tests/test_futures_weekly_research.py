@@ -29,6 +29,36 @@ def test_closing_volume_ignores_spread_and_depth():
     assert closing_volume(quote,CFG,NOW)['status']=='FAIL'
 
 
+def test_zero_quote_requires_history_but_verified_zero_history_fails():
+    quote={'volume':0,'timestamp':'2026-10-09 16:52:45+05:30'}
+    assert closing_volume(quote,CFG,NOW)['status']=='UNKNOWN'
+    data=frame(np.linspace(220,100,280));data['Volume']=0
+    assert historical_volume(data,CFG,NOW)['status']=='FAIL'
+
+
+def test_input_failure_and_zero_quote_retain_request_error_without_low_volume_claim(workspace):
+    from kiteconnect.exceptions import InputException
+    workspace.adapter.weekly_liquidity=Mock(side_effect=InputException('Invalid from_date fixture'))
+    original=workspace.adapter.quotes
+    def quotes(contracts):
+        values=original(contracts)
+        for quote in values.values():quote['volume']=0
+        return values
+    workspace.adapter.quotes=quotes
+    result=workspace.rotate(NOW)
+    failure=result['unresolved_failures']['BEAR']
+    assert failure['error_message']=='Invalid from_date fixture'
+    assert failure['request']['interval']=='day'
+    assert failure['request']['instrument_token']==result['evaluations']['BEAR']['contract']['instrument_token']
+    item=result['evaluations']['BEAR']
+    assert item['futures_quality']['status']=='UNKNOWN'
+    assert item['futures_quality']['historical_fetch_error']==failure
+    assert 'COMPLETED_FUTURES_VOLUME_BELOW_THRESHOLD_REVIEW_REQUIRED' not in item['reason_codes']
+    assert item['classification']=='SHORTING_STOCKS'
+    assert item['stock_quality']['status']=='PASS'
+    assert result['status']=='INCOMPLETE'
+
+
 @pytest.mark.parametrize('stamp',['2026-10-09 10:00+05:30','2026-09-01 15:29+05:30','2026-10-12 15:29+05:30'])
 def test_partial_stale_future_closing_volume_unknown(stamp):
     assert closing_volume({'volume':2000,'timestamp':stamp},CFG,NOW)['status']=='UNKNOWN'
@@ -69,13 +99,24 @@ def test_existing_nonqualifier_still_receives_event_context(workspace):
     assert {c.args[0] for c in workspace.adapter.news.call_args_list}=={'BEAR','RECOVER'}
 
 
-def test_confirmed_low_volume_retains_existing_for_review(workspace):
+def test_confirmed_low_futures_volume_preserves_weekly_stock_candidates(workspace):
     rotate(workspace)
     workspace.adapter.weekly_liquidity=Mock(return_value={'status':'FAIL','average_volume':1})
     result=rotate(workspace)
-    assert result['status']=='INCOMPLETE' or all(m['status']=='REVIEW_REQUIRED' for m in workspace.store.members())
+    assert all(m['status']=='ACTIVE' for m in workspace.store.members())
     assert len(workspace.store.members())==2
+    assert result['evaluations']['BEAR']['classification']=='SHORTING_STOCKS'
+    assert result['evaluations']['BEAR']['futures_quality']['status']=='FAIL'
+    assert 'FUTURES_VOLUME_BELOW_THRESHOLD_CONTEXT_ONLY' in result['evaluations']['BEAR']['reason_codes']
+
+
+def test_confirmed_low_stock_volume_still_blocks_weekly_admission(workspace):
+    for symbol in ('BEAR','RECOVER'):
+        workspace.adapter.frames[symbol]['Volume']=1
+    result=rotate(workspace)
+    assert result['evaluations']['BEAR']['stock_quality']['status']=='FAIL'
     assert result['evaluations']['BEAR']['classification']=='UNKNOWN_DATA'
+    assert not workspace.store.members(active=True)
 
 
 def test_context_shortlist_capacity_bounds_requests(workspace):
