@@ -219,6 +219,18 @@ order submission.
 5. Double-click `run_ui.bat`, or run it from Command Prompt.
 6. Open `http://localhost:8501` if the browser does not open automatically.
 
+The setup script tries `py -3.12`, `py -3`, `python`, then `python3`; the
+Windows `py` launcher is optional. It checks for Python 3.12 or newer and
+preserves incompatible virtual environments as backups. If Python is installed
+outside PATH, specify its executable in PowerShell before starting:
+
+```powershell
+$env:STOCKS_PYTHON = 'C:\path\to\Python312\python.exe'
+.\run_ui.bat
+```
+
+Keep your existing `.env` when updating the project.
+
 For an offline demonstration, set `MARKET_DATA_SOURCE=cache` in `.env`. Cache
 mode cannot provide live relative strength, sector indices, news, quotes, or
 option-chain validation and reports those inputs as unavailable.
