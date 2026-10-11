@@ -200,7 +200,7 @@ class KiteProvider(BaseProvider):
 
     @classmethod
     def _instrument_token(cls, symbol: str) -> int:
-        """Resolve an NSE equity token from the instrument-master reference file."""
+        """Resolve NSE equities and indices from the instrument-master file."""
         clean_symbol = symbol.upper().removesuffix(".NS")
         instrument_file = Path(__file__).resolve().parents[2] / "data" / "instruments.csv"
         if not instrument_file.exists():
@@ -212,11 +212,12 @@ class KiteProvider(BaseProvider):
                 if cls._instrument_tokens is None:
                     instruments = pd.read_csv(
                         instrument_file,
-                        usecols=["instrument_token", "tradingsymbol", "exchange", "instrument_type"],
+                        usecols=["instrument_token", "tradingsymbol", "exchange", "instrument_type", "segment"],
                     )
                     equities = instruments[
                         (instruments["exchange"] == "NSE")
-                        & (instruments["instrument_type"] == "EQ")
+                        & ((instruments["instrument_type"] == "EQ")
+                           | (instruments["segment"] == "INDICES"))
                     ]
                     cls._instrument_tokens = dict(zip(
                         equities["tradingsymbol"].astype(str).str.upper(),
@@ -224,7 +225,7 @@ class KiteProvider(BaseProvider):
                     ))
         token = cls._instrument_tokens.get(clean_symbol)
         if token is None:
-            raise ValueError(f"No NSE equity instrument token found for {clean_symbol}")
+            raise ValueError(f"No NSE equity or index instrument token found for {clean_symbol}")
         return token
 
     # -----------------------------------------------------

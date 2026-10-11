@@ -4,6 +4,7 @@ from dataclasses import asdict, replace
 from threading import Lock
 import json
 import time
+import logging
 import streamlit as st
 import pandas as pd
 from src.futures_workspace.config import WorkspaceConfig
@@ -35,6 +36,9 @@ class JobController:
             def run():
                 try:
                     return operation()
+                except Exception:
+                    logging.getLogger(__name__).exception('Futures workspace background job failed: %s',label)
+                    raise
                 finally:
                     with self.lock:
                         self.next_schedule=time.monotonic()+300
@@ -52,6 +56,14 @@ def controller(path):
 
 def latest(store,kind):
     return store.latest_result(kind)
+
+
+def create_job_workspace(settings,path):
+    """Use a new job-local provider, bound to the saved broker pair."""
+    workspace=FuturesWorkspace(TradingPlatform(settings=settings),WorkspaceStore(path))
+    if settings.market_data_source=='kite':
+        workspace.adapter.refresh_credentials()
+    return workspace
 
 def details_and_export(label,payload,key,filename):
     # Expander contents are still rendered by Streamlit. Use an explicit control
@@ -110,7 +122,7 @@ def render(platform,database):
     jobs=controller(str(store.path))
     def new_workspace():
         jobs.update(0,0,'Initializing market-data services')
-        return FuturesWorkspace(TradingPlatform(settings=platform.settings),WorkspaceStore(store.path))
+        return create_job_workspace(platform.settings,store.path)
     def submit(label,operation):
         jobs.submit(label,operation)
     @st.fragment(run_every='2s')
