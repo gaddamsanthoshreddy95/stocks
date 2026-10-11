@@ -31,6 +31,11 @@ def test_failed_stock_recovers_inside_one_job_and_joins_rankings(workspace,failu
     assert 'BEAR' in result['context_shortlist']
     assert any(m['symbol']=='BEAR' for m in workspace.store.members())
     assert result['recovery_history']['BEAR'][-1]['action']=='RECOVERED'
+    if failure=='invalid':
+        saved=workspace.store.latest_result('WEEKLY_ROTATION')['recovery_history']['BEAR'][0]['history_quality']
+        assert saved['fetched_rows']==280
+        assert saved['violations'][0]['rule']=='HIGH_BELOW_OHLC'
+        assert saved['violations'][0]['samples'][0]['observed']['High']==1
 
 
 def test_unresolved_invalid_stock_cannot_be_marked_complete(workspace):
@@ -44,6 +49,7 @@ def test_unresolved_invalid_stock_cannot_be_marked_complete(workspace):
     assert workspace.store.jobs('WEEKLY_ROTATION')[0]['status']=='INCOMPLETE'
     assert next(m for m in workspace.store.members() if m['symbol']=='BEAR')['status']=='REVIEW_REQUIRED'
     assert workspace.adapter.recover_history.call_count==2
+    assert result['unresolved_failures']['BEAR']['history_quality']['violations'][0]['rule']=='HIGH_BELOW_OHLC'
     assert workspace.adapter.counts['instruments']==2 # one initialization + this job
 
 

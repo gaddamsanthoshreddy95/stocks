@@ -286,6 +286,7 @@ def render(platform,database):
             if unresolved:
                 st.subheader('Unresolved recovery failures')
                 st.dataframe(pd.DataFrame([{'Stock':symbol,'Stage':failure.get('stage'),
+                    'Failed validations':', '.join(v['rule'] for v in (failure.get('history_quality') or {}).get('violations',[])),
                     'Error':failure.get('error_type') or failure.get('sector_error') or ', '.join(failure.get('reason_codes',[]))}
                     for symbol,failure in unresolved.items()]),hide_index=True)
             st.dataframe(pd.DataFrame(rotation.get('changes',[])),hide_index=True,width='stretch')

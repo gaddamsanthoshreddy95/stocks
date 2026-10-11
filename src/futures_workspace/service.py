@@ -163,6 +163,8 @@ class FuturesWorkspace:
                             if transient(exc):
                                 raise
                             item=unknown('HISTORY_INVALID',exc.details) if isinstance(exc,HistoryValidationError) else unknown('HISTORY_FETCH_FAILED:'+type(exc).__name__)
+                            if isinstance(exc,HistoryValidationError):
+                                item['history_rows']=exc.details.get('rows',0)
                     item.update({'symbol':symbol,'contract':contract,'evaluated_at':now.isoformat(),
                                  'sector':self.adapter.sector(symbol)})
                     item['technical_classification']=item['classification']
@@ -206,7 +208,8 @@ class FuturesWorkspace:
                             break
                     recoveries[symbol]=events
                     unresolved[symbol]={'stage':'TECHNICAL_OR_SECTOR','reason_codes':item.get('reason_codes',[]),
-                                        'sector_error':sector_failed,'attempts':len(events)}
+                                        'sector_error':sector_failed,'attempts':len(events),
+                                        'history_quality':item.get('history_quality')}
                     return item
                 def failed_screen(symbol,exc):
                     item=unknown('HISTORY_FETCH_FAILED:'+type(exc).__name__)

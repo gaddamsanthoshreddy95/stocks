@@ -36,8 +36,8 @@ def universe(instruments,now):
 def unknown(reason,details=None):
     result={'classification':'UNKNOWN_DATA','recovery_status':'UNKNOWN','reason_codes':[reason],
             'technical_score':None,'confidence':0,'data_completeness':0}
-    if details:
-        result['history_quality']=details
+    if details is not None or reason.startswith('HISTORY_'):
+        result['history_quality']={'status':'FAILED','reason':reason,**(details or {})}
     return result
 
 
@@ -47,6 +47,7 @@ def technical(frame,config,now,benchmark=None,sector=None):
     basis=frame.attrs.get('price_adjustment','UNKNOWN')
     if config.require_adjusted_history and basis not in ('ADJUSTED','CORPORATE_ACTION_VALIDATED'):
         return unknown('CORPORATE_ACTION_ADJUSTMENT_UNVERIFIED')
+    stage='HISTORY_NORMALIZATION'
     try:
         data=normalise_candles(frame,'day',now)
         if len(data)<253:
@@ -83,8 +84,11 @@ def technical(frame,config,now,benchmark=None,sector=None):
                 'fetched_rows':len(frame),'completed_rows':len(data),'first_session':data.index[0].isoformat(),'latest_session':data.index[-1].isoformat()})
         validation=ohlcv_diagnostics(data)
         if validation['violations']:
-            return unknown('HISTORY_INVALID',validation)
+            return unknown('HISTORY_INVALID',{**validation,'stage':'OHLCV_VALIDATION',
+                'fetched_rows':len(frame),'completed_rows':len(data)})
+        stage='INDICATOR_PREPARATION'
         p=prepare(data)
+        stage='TECHNICAL_SCORING'
         c=p.Close; last=p.iloc[-1]
         ret=lambda n:float((c.iloc[-1]/c.iloc[-n-1]-1)*100)
         metrics={f'return_{n}d_percent':ret(n) for n in (5,20,21,63,126)}
@@ -138,7 +142,8 @@ def technical(frame,config,now,benchmark=None,sector=None):
             'bearish_score':bearish,'recovery_score':recovery,'metrics':metrics,'confidence':completeness,
             'data_completeness':completeness,'reason_codes':[classification,recovery_state,'MULTI_SESSION_CONFIRMED' if short_ok or recovery_ok else 'NOT_CONFIRMED']}
     except (ValueError,KeyError,TypeError,IndexError) as exc:
-        return unknown('HISTORY_INVALID:'+type(exc).__name__)
+        return unknown('HISTORY_INVALID:'+type(exc).__name__,{'stage':stage,'fetched_rows':len(frame),
+            'violations':[{'rule':'PROCESSING_EXCEPTION','error_type':type(exc).__name__,'message':str(exc)}]})
 
 
 def fundamental_context(snapshot,sector,now):
