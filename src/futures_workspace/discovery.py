@@ -8,6 +8,7 @@ from src.futures.scoring import prepare, relative_returns
 from src.news.today import INDEX_FUTURES
 from src.futures_workspace.store import LISTS
 from src.futures_workspace.validation import ohlcv_diagnostics
+from src.futures_workspace.ranking import evidence_score
 
 
 def universe(instruments,now):
@@ -117,8 +118,8 @@ def technical(frame,config,now,benchmark=None,sector=None):
         rs=metrics['relative_strength_nifty']; sr=metrics['relative_strength_sector']
         weak=(rs is not None and rs['excess_percentage_points']<0)
         strong=(rs is not None and rs['excess_percentage_points']>0)
-        short_checks=[ret(20)<0,ret(5)<0,lower,c.iloc[-1]<metrics['sma20'],c.iloc[-1]<metrics['sma50'],last.MACD_HISTOGRAM<0,metrics['rsi']<45,metrics['breakdown'],weak,sr is not None and sr['excess_percentage_points']<0]
-        recovery_checks=[beaten,ret(5)>0,higher,c.iloc[-1]>metrics['sma20'],last.MACD_HISTOGRAM>0,metrics['rsi']>50,recovery_confirmation,metrics['breakout'],strong,sr is not None and sr['excess_percentage_points']>0]
+        short_checks=[ret(20)<0,ret(5)<0,lower,c.iloc[-1]<metrics['sma20'],c.iloc[-1]<metrics['sma50'],last.MACD_HISTOGRAM<0,metrics['rsi']<45,metrics['breakdown'],weak if rs is not None else None,sr['excess_percentage_points']<0 if sr is not None else None]
+        recovery_checks=[beaten,ret(5)>0,higher,c.iloc[-1]>metrics['sma20'],last.MACD_HISTOGRAM>0,metrics['rsi']>50,recovery_confirmation,metrics['breakout'],strong if rs is not None else None,sr['excess_percentage_points']>0 if sr is not None else None]
         bearish=10*sum(bool(x) for x in short_checks)
         recovery=10*sum(bool(x) for x in recovery_checks)
         short_ok=bearish_confirmation and bearish>=config.minimum_score
@@ -132,6 +133,8 @@ def technical(frame,config,now,benchmark=None,sector=None):
             return unknown('INDICATORS_UNAVAILABLE')
         completeness=70+15*int(rs is not None)+15*int(sr is not None)
         return {'classification':classification,'recovery_status':recovery_state,'technical_score':score,
+            'score_evidence':{'bearish':evidence_score(short_checks,['return20','return5','lower_structure','below_sma20','below_sma50','macd','rsi','breakdown','nifty_relative','sector_relative']),
+                              'recovery':evidence_score(recovery_checks,['historical_decline','return5','higher_structure','above_sma20','macd','rsi','confirmation','breakout','nifty_relative','sector_relative'])},
             'bearish_score':bearish,'recovery_score':recovery,'metrics':metrics,'confidence':completeness,
             'data_completeness':completeness,'reason_codes':[classification,recovery_state,'MULTI_SESSION_CONFIRMED' if short_ok or recovery_ok else 'NOT_CONFIRMED']}
     except (ValueError,KeyError,TypeError,IndexError) as exc:

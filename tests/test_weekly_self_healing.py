@@ -85,3 +85,42 @@ def test_forced_recovery_bypasses_stale_adjusted_disk_cache(tmp_path,monkeypatch
         adapter.recover_history('BEAR',NOW)
         adapter.history('BEAR')
         assert source.call_count==2
+
+
+def test_captured_benchmark_token_error_reloads_once_and_recovers_specific_sector(workspace):
+    calls=Counter()
+    adapter=workspace.adapter
+    adapter.resolve_sector=lambda symbol,now:{'sector':'POWER','status':'VERIFIED'}
+    adapter.benchmark_evidence={}
+    def sector(symbol):
+        calls[symbol]+=1
+        failed=symbol=='BEAR' and calls[symbol]==1
+        adapter.benchmark_evidence[symbol]={'status':'UNKNOWN' if failed else 'AVAILABLE',
+            'errors':[{'source':'KITE','error_type':'TokenException'}] if failed else []}
+        return None
+    adapter.sector_history=sector
+    adapter.refresh_credentials=Mock(return_value=True)
+    adapter.recover_history=Mock()
+    adapter.recover_sector=Mock()
+    result=workspace.rotate(NOW)
+    assert result['status']=='COMPLETE'
+    adapter.refresh_credentials.assert_called_once()
+    adapter.recover_sector.assert_called_once_with('BEAR',NOW)
+    adapter.recover_history.assert_not_called()
+    assert adapter.counts['instruments']==1
+
+
+def test_proxy_context_cannot_certify_complete_exact_sector_comparison(workspace):
+    adapter=workspace.adapter
+    adapter.resolve_sector=lambda symbol,now:{'sector':'ASSET_MANAGEMENT','status':'VERIFIED'}
+    adapter.benchmark_evidence={}
+    def sector(symbol):
+        adapter.benchmark_evidence[symbol]={'status':'PROXY_CONTEXT_ONLY'}
+        return None
+    adapter.sector_history=sector
+    adapter.recover_history=Mock()
+    adapter.recover_sector=Mock()
+    result=workspace.rotate(NOW)
+    assert result['status']=='INCOMPLETE'
+    assert result['unresolved_failures']['BEAR']['sector_error']=='SECTOR_COMPARISON_UNAVAILABLE'
+    assert adapter.counts['instruments']==1

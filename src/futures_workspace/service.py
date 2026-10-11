@@ -19,6 +19,7 @@ from src.futures_workspace.liquidity import closing_volume
 from src.futures_workspace.parallel import AdaptiveRunner, transient
 from src.futures_workspace.validation import HistoryValidationError
 from src.sector.sector_strength import SectorStrength
+from src.futures_workspace.ranking import research_selection, stable_key, shadow_comparison
 
 class FuturesWorkspace:
     def __init__(self,platform,store=None,config=None,adapter=None,scanner_factory=None):
@@ -133,16 +134,31 @@ class FuturesWorkspace:
                     else:
                         try:
                             history=self.adapter.history(symbol)
+                            preliminary=technical(history,self.config,now,benchmark,None)
+                            assessments=preliminary.get('score_evidence',{})
+                            potential=max((a.get('possible_score',0) for a in assessments.values()),default=preliminary.get('technical_score') or 0)
+                            needs_context=symbol in existing or potential>=self.config.minimum_score
+                            resolve=getattr(self.adapter,'resolve_sector',None)
+                            sector_identity=resolve(symbol,now) if resolve and needs_context else None
                             sector_error=None
                             try:
-                                sector_history=self.adapter.sector_history(symbol)
+                                sector_history=self.adapter.sector_history(symbol) if needs_context else None
                             except Exception as exc:
                                 sector_history=None; sector_error=type(exc).__name__
-                            item=deepcopy(technical(history,self.config,now,benchmark,sector_history))
+                            item=deepcopy(technical(history,self.config,now,benchmark,sector_history)) if sector_history is not None else deepcopy(preliminary)
+                            item['sector_recovery_priority']='HIGH_IMPACT' if needs_context else 'DEFERRED_NO_ELIGIBILITY_IMPACT'
                             item['history_rows']=len(history) if history is not None else 0
                             item['history_source']=self.config.weekly_history_source
                             if sector_error:
                                 item['sector_context_error']=sector_error
+                            if sector_identity:
+                                item['sector_identity']=sector_identity
+                                item['sector_benchmark']=deepcopy(getattr(self.adapter,'benchmark_evidence',{}).get(symbol,{}))
+                                if item['sector_benchmark'].get('status') in ('UNKNOWN','PROXY_CONTEXT_ONLY'):
+                                    item['sector_context_error']='SECTOR_COMPARISON_UNAVAILABLE'
+                                if sector_identity['status']=='REVIEW_REQUIRED':
+                                    item['classification']='TRANSITION'
+                                    item['reason_codes'].append('CONFLICTING_SECTOR_IDENTITY_REVIEW_REQUIRED')
                         except Exception as exc:
                             if transient(exc):
                                 raise
@@ -168,7 +184,8 @@ class FuturesWorkspace:
                         if attempt==2 or contracts.get(symbol) is None:
                             break
                         parallel.stage(symbol+': recovering failed data')
-                        auth=sector_failed=='TokenException' or any('TokenException' in reason for reason in item.get('reason_codes',[]))
+                        source_errors=item.get('sector_benchmark',{}).get('errors',[])
+                        auth=sector_failed=='TokenException' or any(e.get('error_type')=='TokenException' for e in source_errors) or any('TokenException' in reason for reason in item.get('reason_codes',[]))
                         try:
                             if auth:
                                 recover_auth()
@@ -177,10 +194,13 @@ class FuturesWorkspace:
                                 if failed:
                                     recover(symbol,now)
                                 if sector_failed:
-                                    sector=self.adapter.sector(symbol)
-                                    sector_key=SectorStrength.SECTOR_INDEX_SYMBOLS.get(sector) if self.config.weekly_history_source=='yahoo_adjusted' else SectorStrength.KITE_INDEX_SYMBOLS.get(sector)
-                                    if sector_key:
-                                        recover(sector_key,now)
+                                    recover_sector=getattr(self.adapter,'recover_sector',None)
+                                    if recover_sector:
+                                        recover_sector(symbol,now)
+                                    else:
+                                        sector=self.adapter.sector(symbol)
+                                        sector_key=SectorStrength.SECTOR_INDEX_SYMBOLS.get(sector) if self.config.weekly_history_source=='yahoo_adjusted' else SectorStrength.KITE_INDEX_SYMBOLS.get(sector)
+                                        if sector_key:recover(sector_key,now)
                         except Exception as exc:
                             events.append({'action':'RECOVERY_FAILED','error_type':type(exc).__name__})
                             break
@@ -198,11 +218,8 @@ class FuturesWorkspace:
                     (lambda c,t,label:progress(c,t,'Technical screening: '+label)) if progress else None)
                 # The full universe is screened technically before expensive context reads.
                 # Enrich twice each list's capacity plus every existing member.
-                shortlist=set(existing)
-                for category in LISTS:
-                    ranked=sorted((e for e in evaluations.values() if e['classification']==category),
-                        key=lambda e: (-(e.get('technical_score') or 0),e['symbol']))
-                    shortlist.update(e['symbol'] for e in ranked[:self.config.maximum_per_list*2])
+                shortlist,review_queue=research_selection(evaluations,self.config.maximum_per_list*2,
+                    self.config.maximum_context_per_direction,existing,self.config.minimum_score)
                 if progress:
                     progress(0,len(shortlist),'Technical screen complete; fetching closing-session volume snapshots')
                 try:
@@ -323,7 +340,10 @@ class FuturesWorkspace:
                     'optional_context_unavailable_count':sum(any(r.startswith('OPTIONAL_CONTEXT_UNAVAILABLE') for r in e['reason_codes']) for e in evaluations.values()),
                     'history_source':self.config.weekly_history_source,'benchmark_quality':benchmark_quality,
                     'context_shortlist':sorted(s for s,e in evaluations.items() if e['eligible_for_admission']),
-                    'context_policy':'TOP_TWICE_LIST_CAPACITY_PER_DIRECTION_PLUS_EXISTING_MEMBERS',
+                    'review_queue':review_queue,
+                    'ranking_shadow_comparison':shadow_comparison(evaluations,self.config.maximum_per_list),
+                    'sector_coverage':dict(Counter((e.get('sector_identity',{}).get('sector','UNKNOWN')+':'+e.get('sector_benchmark',{}).get('status','NOT_REQUESTED')) for e in evaluations.values())),
+                    'context_policy':'TOP_TWICE_LIST_CAPACITY_WITH_BOUNDARY_TIES_AND_UNCERTAINTY_WITHIN_CONTEXT_BUDGET_PLUS_EXISTING_MEMBERS',
                     'execution_liquidity_unverified':[s for s,e in evaluations.items() if e['futures_quality']['status']=='UNKNOWN' and e['eligible_for_admission']]})
                 if unresolved:
                     output['status']='INCOMPLETE'
@@ -363,7 +383,8 @@ class FuturesWorkspace:
                 changes.append({'symbol':symbol,'action':'HYSTERESIS_RETAINED','from':old['category'],'to':old['category']})
             # Strong confirmed transfer or removal is handled by the ranked admission below.
         for category in LISTS:
-            candidates=sorted((e for e in evaluations.values() if e['classification']==category and e.get('eligible_for_admission',True)),key=lambda e:e['discovery']['ranking_score'] or 0,reverse=True)
+            candidates=sorted((e for e in evaluations.values() if e['classification']==category and e.get('eligible_for_admission',True)),
+                key=lambda e:(-(e['discovery']['ranking_score'] or 0),*stable_key(e)[1:]))
             if selected_only:
                 candidates=[e for e in candidates if e['symbol'] in existing]
             pinned=sum(m['category']==category and m['pinned'] for m in next_members.values())

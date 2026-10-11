@@ -79,7 +79,7 @@ def test_confirmed_low_volume_retains_existing_for_review(workspace):
 
 
 def test_context_shortlist_capacity_bounds_requests(workspace):
-    workspace.config=replace(CFG,maximum_per_list=1)
+    workspace.config=replace(CFG,maximum_per_list=1,maximum_context_per_direction=2)
     workspace.adapter.fundamentals=Mock(return_value={'status':'UNKNOWN'})
     result=rotate(workspace,{s:evaluation(LISTS[0],80) for s in ('BEAR','RECOVER','UNSELECTED')})
     assert result['technical_evaluated_count']==3 and result['context_evaluated_count']==2

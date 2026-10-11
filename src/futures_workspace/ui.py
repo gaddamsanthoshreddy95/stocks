@@ -252,6 +252,12 @@ def render(platform,database):
                     'Error':failure.get('error_type') or failure.get('sector_error') or ', '.join(failure.get('reason_codes',[]))}
                     for symbol,failure in unresolved.items()]),hide_index=True)
             st.dataframe(pd.DataFrame(rotation.get('changes',[])),hide_index=True,width='stretch')
+            st.subheader('Candidates requiring review')
+            st.dataframe(pd.DataFrame(rotation.get('review_queue',[])),hide_index=True,width='stretch')
+            with st.expander('Sector benchmark coverage'):
+                st.json(rotation.get('sector_coverage',{}))
+            if st.checkbox('Compare original and coverage-aware research rankings',key='ft-shadow-rankings'):
+                st.json(rotation.get('ranking_shadow_comparison',{'status':'NOT_EVALUATED'}))
             details_and_export('Show individual stock evidence and export',rotation,'ft-rotation-details','futures_weekly_rotation.json')
         st.caption('Routine changes apply automatically. Unknown data preserves the last version or marks membership REVIEW_REQUIRED.')
     elif section=='Rotation History':
@@ -288,6 +294,7 @@ def render(platform,database):
         with st.form('ft-settings'):
             minimum=st.number_input('Minimum weekly score',0.,100.,float(config.minimum_score))
             count=st.number_input('Maximum stocks per list',1,200,int(config.maximum_per_list))
+            context_limit=st.number_input('Maximum detailed research candidates per direction',1,500,int(config.maximum_context_per_direction))
             workers=st.number_input('Adaptive worker resource limit',2,128,int(config.maximum_workers))
             healthy_batches=st.number_input('Healthy batches before doubling workers',1,20,int(config.healthy_parallel_batches))
             confirmation=st.number_input('Confirmation sessions',2,20,int(config.confirmation_sessions))
@@ -300,6 +307,7 @@ def render(platform,database):
             adjusted=st.checkbox('Require verified corporate-action-adjusted history',value=config.require_adjusted_history)
             if st.form_submit_button('Save workspace settings',disabled=busy):
                 payload={**store.settings(),'minimum_score':minimum,'maximum_per_list':count,'confirmation_sessions':confirmation,
+                    'maximum_context_per_direction':context_limit,
                     'maximum_workers':workers,'healthy_parallel_batches':healthy_batches,
                     'hysteresis':hysteresis,'recovery_decline_percent':decline,'recovery_drawdown_percent':drawdown,
                     'bias_directional_threshold':bias_directional,'bias_strong_threshold':bias_strong,

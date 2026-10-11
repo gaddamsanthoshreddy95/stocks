@@ -7,10 +7,12 @@ from kiteconnect.exceptions import TokenException
 from pathlib import Path
 import pandas as pd
 from src.futures.sessions import ist, normalise_candles
+from src.futures.sessions import trading_day
 from src.futures_workspace.discovery import fundamental_context, universe
 from src.futures_workspace.bias import MarketBias
 from src.futures_workspace.liquidity import completed_day, historical_volume
 from src.futures_workspace.validation import require_valid_ohlcv, HistoryValidationError
+from src.futures_workspace.sectors import SectorResolver, CATALOG, PROXIES, benchmark_quality
 from src.futures.gateway import KiteGateway
 from src.futures.runtime import ScanRuntime
 from src.sector.sector_mapper import SectorMapper
@@ -34,6 +36,8 @@ class RepositoryAdapter:
         self._adjusted_pacing=Lock()
         self._event_assessment_lock=Lock()
         self._force_history=set()
+        self.sector_resolver=SectorResolver(dict(zip(self.mapper.df.Symbol,self.mapper.df.Sector)))
+        self.sector_evidence={};self.benchmark_evidence={};self._sector_frames={};self._index_archive_frames={}
 
     def refresh_credentials(self):
         """Reload supplied credentials; never generate or bypass authorization."""
@@ -59,12 +63,35 @@ class RepositoryAdapter:
 
     def begin(self,now):
         self.history_cache={}
+        self._sector_frames={}
+        self._index_archive_frames={}
+        self.sector_evidence={}
+        self.benchmark_evidence={}
+        with self.sector_resolver.lock:
+            self.sector_resolver.blocked.clear()
+            self.sector_resolver.isins=None
         self._event_context=None
         self.now=ist(now)
         begin=getattr(self.provider,'begin_live_refresh',None)
         self.started=bool(begin and not getattr(self.provider,'live_refresh_active',False))
         if self.started:
             begin([])
+
+    def recover_sector(self,symbol,now):
+        """Invalidate only this failed context, preserving healthy stock histories."""
+        sector=self.sector(symbol)
+        mapping=CATALOG.get(sector) or CATALOG.get(PROXIES.get(sector))
+        if mapping:
+            name,yahoo=mapping
+            with self._initialization_lock:
+                self._sector_frames.pop(name,None)
+            if yahoo:self.recover_history(yahoo,now)
+        identity=self.sector_evidence.get(symbol,{})
+        if identity.get('status')!='VERIFIED':self.sector_evidence.pop(symbol,None)
+        # Only failed archive reads may be retried; valid daily tables are shared.
+        with self._initialization_lock:
+            self._index_archive_frames={k:v for k,v in self._index_archive_frames.items() if v is not None}
+        self.benchmark_evidence.pop(symbol,None)
 
     def end(self):
         if getattr(self,'started',False):
@@ -83,6 +110,7 @@ class RepositoryAdapter:
             raise ValueError('NSE underlying equity master unavailable')
         stocks={str(r.get('tradingsymbol','')).upper():r for r in equities if r.get('exchange')=='NSE' and r.get('segment')=='NSE' and r.get('instrument_type')=='EQ' and r.get('instrument_token')}
         return [{**r,'underlying_instrument_token':stocks[str(r.get('name','')).upper()]['instrument_token'],
+                 'underlying_symbol':str(r.get('name','')).upper(),
                  'eligibility_source':'FRESH_KITE_NFO_AND_NSE_EQUITY_MASTERS'}
                 for r in master if str(r.get('name','')).upper() in stocks]
 
@@ -217,16 +245,80 @@ class RepositoryAdapter:
         return frame
 
     def sector(self,symbol):
-        return self.mapper.get_sector(symbol)
+        if symbol in self.sector_evidence:
+            return self.sector_evidence[symbol]['sector']
+        # No automatic DIVERSIFIED fallback in the weekly workspace.
+        known=self.mapper.df.loc[self.mapper.df.Symbol==symbol,'Sector']
+        return known.iloc[0] if not known.empty else 'UNKNOWN'
+
+    def resolve_sector(self,symbol,now):
+        if symbol not in self.sector_evidence:
+            self.sector_evidence[symbol]=self.sector_resolver.resolve(symbol,now)
+        return self.sector_evidence[symbol]
 
     def sector_history(self,symbol):
-        if self.config.weekly_history_source=='yahoo_adjusted':
-            sector=self.sector(symbol)
-            key=SectorStrength.SECTOR_INDEX_SYMBOLS.get(sector)
-            if key and key.startswith('^'):
-                return self.history(key)
-        key=SectorStrength.KITE_INDEX_SYMBOLS.get(self.sector(symbol))
-        return self.history(key) if key else None
+        context_now=getattr(self,'now',pd.Timestamp.now(tz='Asia/Kolkata'))
+        sector=self.sector(symbol)
+        identity=self.sector_evidence.get(symbol,{})
+        if identity.get('status') in ('REVIEW_REQUIRED','STALE_CONTEXT_ONLY','LOCAL_UNVERIFIED','UNKNOWN'):
+            self.benchmark_evidence[symbol]={'status':'UNKNOWN','reason':'SECTOR_IDENTITY_REQUIRES_REVIEW'}
+            return None
+        exact=CATALOG.get(sector)
+        candidates=[(exact,False)] if exact else []
+        if sector in PROXIES:candidates.append((CATALOG.get(PROXIES[sector]),True))
+        errors=[]
+        for mapping,proxy in candidates:
+            if not mapping:continue
+            name,yahoo=mapping
+            with self._initialization_lock:
+                lock=self._history_locks.setdefault('sector:'+name,RLock())
+            with lock:
+                if name not in self._sector_frames:
+                    attempts=[];data=None
+                    # Exact broker name avoids guessing a nonexistent Yahoo ticker.
+                    if yahoo:attempts.append(('YAHOO',lambda:self.history(yahoo)))
+                    direct=getattr(getattr(self.provider,'provider',None),'get_historical_data',None)
+                    if direct:
+                        attempts.append(('KITE',lambda:self.gateway.request('history',lambda:direct(name,period='2y')) if self.gateway else direct(name,period='2y')))
+                    attempts.append(('NSE_ARCHIVES',lambda:self.index_archives(name)))
+                    for source,read in attempts:
+                        try:
+                            candidate=read()
+                            context_now=getattr(self,'now',pd.Timestamp.now(tz='Asia/Kolkata'))
+                            data=benchmark_quality(candidate,context_now,self.config.maximum_history_age_sessions,self.history_cache.get('NIFTY 50'))
+                            self._sector_frames[name]=(data,source)
+                            break
+                        except Exception as exc:errors.append({'source':source,'error_type':type(exc).__name__,'reason':str(exc) if isinstance(exc,ValueError) else 'SOURCE_UNAVAILABLE'})
+                found=self._sector_frames.get(name)
+            if found:
+                data,source=found
+                self.benchmark_evidence[symbol]={'status':'PROXY_CONTEXT_ONLY' if proxy else 'AVAILABLE','index':name,'source':source,
+                    'proxy':proxy,'rows':len(data),'as_of':data.index[-1].isoformat(),'retrieved_at':context_now.isoformat(),'errors':errors}
+                return None if proxy else data
+        self.benchmark_evidence[symbol]={'status':'UNKNOWN','sector':sector,'errors':errors,'reason':'NO_VALID_21_SESSION_BENCHMARK'}
+        return None
+
+    def index_archives(self,name):
+        """Shared official daily CSV archives; unavailable dates are not filled."""
+        from io import StringIO
+        rows=[];end=completed_day(self.now)
+        for day in pd.date_range(end-pd.Timedelta(days=45),end,freq='D'):
+            if not trading_day(day):continue
+            key=day.strftime('%d%m%Y')
+            with self._initialization_lock:
+                if key not in self._index_archive_frames:
+                    try:self._index_archive_frames[key]=pd.read_csv(StringIO(self.sector_resolver.fetch('https://nsearchives.nseindia.com/content/indices/ind_close_all_'+key+'.csv')))
+                    except Exception:self._index_archive_frames[key]=None
+                table=self._index_archive_frames[key]
+            if table is None:continue
+            aliases={'NIFTY CONSR DURBL':'NIFTY CONSUMER DURABLES','NIFTY FIN SERVICE':'NIFTY FINANCIAL SERVICES',
+                     'NIFTY HOUSING FIN':'NIFTY HOUSING FINANCE','NIFTY INFRA':'NIFTY INFRASTRUCTURE','NIFTY TELECOM':'NIFTY TELECOMMUNICATIONS'}
+            selected=table.loc[table['Index Name'].astype(str).str.upper().str.strip()==aliases.get(name,name)]
+            if selected.empty:continue
+            row=selected.iloc[0]
+            rows.append({'date':day,'Open':row.get('Open Index Value'),'High':row.get('High Index Value'),
+                         'Low':row.get('Low Index Value'),'Close':row.get('Closing Index Value'),'Volume':row.get('Volume')})
+        return pd.DataFrame(rows).set_index('date') if rows else pd.DataFrame()
 
     def fundamentals(self,symbol,now):
         with self._initialization_lock:

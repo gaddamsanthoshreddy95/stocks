@@ -46,6 +46,12 @@ def context_columns(row,weekly=None):
     else:
         state='Not checked / unknown'
     columns={'Sector':row.get('sector') or weekly.get('sector','UNKNOWN'),
+        'Sector identity status':(weekly.get('sector_identity') or {}).get('status','UNKNOWN'),
+        'Sector identity source':(weekly.get('sector_identity') or {}).get('source','UNKNOWN'),
+        'Sector benchmark':(weekly.get('sector_benchmark') or {}).get('index'),
+        'Sector benchmark status':(weekly.get('sector_benchmark') or {}).get('status','UNKNOWN'),
+        'Sector benchmark source':(weekly.get('sector_benchmark') or {}).get('source','UNKNOWN'),
+        'Sector benchmark as of':(weekly.get('sector_benchmark') or {}).get('as_of'),
         'P/E':fundamental.get('pe_ratio'),'Sector P/E':fundamental.get('sector_pe'),
         'ROE %':fundamental.get('roe'),'ROCE %':fundamental.get('roce'),
         'Debt/equity':fundamental.get('debt_to_equity'),'Revenue growth':fundamental.get('revenue_growth'),
@@ -82,6 +88,9 @@ def context_columns(row,weekly=None):
             columns['Fundamental '+k]=v
         elif isinstance(v,(list,tuple)):
             columns['Fundamental '+k]=', '.join(str(x) for x in v)
+    for direction,assessment in (weekly.get('score_evidence') or {}).items():
+        for name in ('confirmed_score','possible_score','coverage_percent','observed_condition_score'):
+            columns[direction+' '+name]=assessment.get(name)
     # Preserve every additional measured execution factor as a selectable field.
     for name,check in checks.items():
         columns[name+' status']=check.get('status','UNKNOWN')
@@ -103,6 +112,9 @@ def render_stock_table(rows,view,store):
                'Daily score','Decision','Sector','P/E','Sector P/E','Futures VWAP','RSI','Relative volume',
                'Relevant news','News status','News link','News published','News checked']
     preferred+=['News source','News snapshot','Fundamental source','Fundamentals as of']
+    preferred+=['Sector identity status','Sector identity source','Sector benchmark','Sector benchmark status',
+                'bearish confirmed_score','bearish possible_score','bearish coverage_percent',
+                'recovery confirmed_score','recovery possible_score','recovery coverage_percent']
     defaults=[c for c in preferred if c in available]
     saved=store.view_columns(view)
     initial=[c for c in (saved if saved is not None else defaults) if c in available]

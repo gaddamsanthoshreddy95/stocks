@@ -8,6 +8,7 @@ class WorkspaceConfig:
     enabled: bool = False
     minimum_score: float = 60
     maximum_per_list: int = 25
+    maximum_context_per_direction: int = 100
     maximum_workers: int = 32
     healthy_parallel_batches: int = 3
     confirmation_sessions: int = 3
@@ -43,7 +44,7 @@ class WorkspaceConfig:
             raise ValueError('weekly_history_source must be yahoo_adjusted or kite')
         if abs(self.technical_weight+self.fundamental_weight+self.news_weight-1)>1e-8:
             raise ValueError('Discovery weights must sum to one')
-        for name in ('maximum_per_list', 'confirmation_sessions','maximum_workers','healthy_parallel_batches'):
+        for name in ('maximum_per_list','maximum_context_per_direction', 'confirmation_sessions','maximum_workers','healthy_parallel_batches'):
             if getattr(self, name)<1 or int(getattr(self,name))!=getattr(self,name):
                 raise ValueError(f'{name} must be a positive integer')
         if not 2<=self.maximum_workers<=128:
