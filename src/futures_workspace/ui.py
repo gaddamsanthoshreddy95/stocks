@@ -24,13 +24,17 @@ class JobController:
         self.next_schedule=0.
         self.started_at=0.
         self.updated_at=0.
+        self.requested_by=None
+        self.requested_at=None
         self.lock=Lock()
 
-    def submit(self,label,operation):
+    def submit(self,label,operation,requested_by=None):
         with self.lock:
             if self.future and not self.future.done():
                 return False
             self.label=label; self.progress=(0,0,'')
+            self.requested_by=requested_by
+            self.requested_at=pd.Timestamp.now(tz='Asia/Kolkata').isoformat()
             self.started_at=self.updated_at=time.monotonic()
             self.next_schedule=float('inf')
             def run():
@@ -124,7 +128,9 @@ def render(platform,database):
         jobs.update(0,0,'Initializing market-data services')
         return create_job_workspace(platform.settings,store.path)
     def submit(label,operation):
-        jobs.submit(label,operation)
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        context=get_script_run_ctx()
+        jobs.submit(label,operation,requested_by=context.session_id if context else None)
     @st.fragment(run_every='2s')
     def job_status():
         saved_job=store.locked_job()
@@ -140,6 +146,14 @@ def render(platform,database):
                 st.rerun(scope='app')
         if jobs.future:
             future=jobs.future
+            requested_at=getattr(jobs,'requested_at',None)
+            if requested_at:
+                st.caption(f'Job requested manually at {requested_at}. Changing pages does not restart or stop it.')
+                from streamlit.runtime.scriptrunner import get_script_run_ctx
+                context=get_script_run_ctx()
+                requested_by=getattr(jobs,'requested_by',None)
+                if context and requested_by and requested_by!=context.session_id:
+                    st.info('This job was requested in another browser session connected to this server.')
             if not jobs.future.done():
                 current,total,symbol=jobs.progress
                 st.progress(current/total if total else 0,text=f'{jobs.label}: {current}/{total} {symbol}' if total else f'{jobs.label}: {symbol or "Starting worker"}')

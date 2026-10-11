@@ -35,6 +35,10 @@ render(SimpleNamespace(settings=PlatformSettings(market_data_source="cache")),Si
                 app.radio[0].set_value('Settings').run(timeout=15)
                 assert not app.exception
             assert jobs.future is None
+            for section in ('Overview','Daily Trading','Shorting Stocks','Recovering Stocks','Rotation History'):
+                app.radio[0].set_value(section).run(timeout=15)
+                assert not app.exception
+                assert jobs.future is None
     finally: jobs.pool.shutdown(wait=True)
 
 
