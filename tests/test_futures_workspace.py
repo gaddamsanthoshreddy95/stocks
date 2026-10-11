@@ -320,6 +320,37 @@ def test_empty_daily_never_initializes(workspace):
     assert workspace.scan_daily(NOW)['selected_count']==0
     workspace.adapter.instruments.assert_not_called()
 
+
+def test_daily_review_members_are_visible_without_market_scan_or_approval(workspace):
+    rotate(workspace)
+    workspace.store.rollback(workspace.store.versions()[0]['id'])
+    workspace.scanner_factory=Mock(side_effect=AssertionError('Review members cannot enter scanner'))
+    result=workspace.scan_daily(NOW)
+    assert result['status']=='WATCHLIST_REVIEW_REQUIRED'
+    assert result['selected_count']==0 and result['withheld_count']>0
+    assert {r['symbol'] for r in result['other']}=={m['symbol'] for m in workspace.store.members()}
+    assert all(r['final_decision']=='UNKNOWN' and r['technical_score'] is None for r in result['other'])
+    assert not result['long'] and not result['short']
+    workspace.scanner_factory.assert_not_called()
+
+
+def test_daily_mixed_members_scan_only_active_and_keep_review_visible(workspace):
+    rotate(workspace)
+    members=workspace.store.members()
+    for member in members:
+        if member['symbol']=='BEAR':member['status']='REVIEW_REQUIRED'
+    with workspace.store.transaction() as c:workspace.store.publish(c,members,'RECHECK',{})
+    scanner=Mock()
+    scanner.scan.return_value={'reviewed':[
+        {'symbol':'BEAR','side':'SHORT','final_decision':'APPROVED'},
+        {'symbol':'RECOVER','side':'LONG','final_decision':'APPROVED'}]}
+    workspace.scanner_factory=Mock(return_value=scanner)
+    result=workspace.scan_daily(NOW)
+    assert scanner.scan.call_args.kwargs['selected_symbols']==['RECOVER']
+    assert result['selected_count']==1 and result['enabled_watchlist_count']==2
+    assert result['withheld_count']==1 and not result['short']
+    assert next(r for r in result['other'] if r['symbol']=='BEAR')['final_decision']=='UNKNOWN'
+
 @pytest.mark.parametrize('score,label',[(-1,'STRONG_BEARISH'),(-.4,'BEARISH'),(0,'NEUTRAL'),(.4,'BULLISH'),(1,'STRONG_BULLISH')])
 def test_market_bias_bands_report_only(score,label):
     inputs={k:{'value':score,'status':'PASS','source':'fixture','as_of':NOW.isoformat()} for k in MarketBias.WEIGHTS}

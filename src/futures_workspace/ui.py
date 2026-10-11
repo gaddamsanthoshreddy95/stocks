@@ -174,16 +174,32 @@ def render(platform,database):
             'Latest SHORT':len((daily or {}).get('short',[]))})
         st.info('Manual trading only. Stop new workspace entries at 15:00 IST; close manually by 15:10 IST. Membership is not a signal.')
     elif section=='Daily Trading':
+        enabled=[m for m in members if m['enabled']]
+        ready=sum(m['status']=='ACTIVE' for m in enabled)
+        st.caption(f'Current weekly watchlists: {len(enabled)} enabled stocks • {ready} ready for daily evaluation • {len(enabled)-ready} require review')
+        if members:
+            with st.expander('Current selected stocks and weekly context',expanded=True):
+                rows=[{'Symbol':m['symbol'],'Watchlist':m['category'],'Membership status':m['status'],
+                    'Enabled':bool(m['enabled']),'Weekly score':(m['evidence'].get('discovery') or {}).get('ranking_score'),
+                    **context_columns({},m['evidence'])} for m in members]
+                render_stock_table(rows,'workspace-daily-members',store)
+        if enabled and not ready:
+            st.warning('Weekly stocks are saved, but all enabled members require review. Use Weekly Rotation → Recheck Selected Watchlists. Daily admission remains blocked until membership validation succeeds.')
         if st.button('SCAN SELECTED STOCKS',type='primary',disabled=busy,key='ft-scan'):
             submit('Combined Daily Trading scan',lambda:new_workspace().scan_daily())
             st.rerun()
         if daily:
-            st.caption(f'{daily.get("selected_count",0)} unique selected stocks • completed {daily.get("generated_at")}')
+            st.caption(f'Last saved daily scan: {daily.get("selected_count",0)} stocks evaluated • completed {daily.get("generated_at")}')
+            if 'selected_symbols' in daily and set(daily['selected_symbols'])!={m['symbol'] for m in enabled if m['status']=='ACTIVE'}:
+                st.info('The current ready watchlist differs from this saved daily scan. Click SCAN SELECTED STOCKS to evaluate the current list.')
+            if daily.get('reason') and daily.get('status') in ('EMPTY_WATCHLISTS','WATCHLIST_REVIEW_REQUIRED'):
+                st.info(daily['reason'])
             st.caption('Persisted scan results are historical snapshots; scan again to evaluate current quotes and entry conditions.')
             for key,title in (('long','Futures LONG Opportunities'),('short','Futures SHORT Opportunities'),('other','NO TRADE / REJECTED / UNKNOWN')):
                 st.subheader(title)
                 items=daily.get(key,[])
-                rows=[{**base,**context_columns(item)} for base,item in zip(result_rows(items),items)]
+                weekly={m['symbol']:m['evidence'] for m in members}
+                rows=[{**base,**context_columns(item,weekly.get(item.get('symbol'),{}))} for base,item in zip(result_rows(items),items)]
                 render_stock_table(rows,'workspace-daily-'+key,store)
             details_and_export('Prepare full scan export including Reports A–E',daily,'ft-daily-details','futures_daily_scan.json')
         else:

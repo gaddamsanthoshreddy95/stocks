@@ -422,11 +422,23 @@ class FuturesWorkspace:
     def scan_daily(self,now=None):
         self.check_enabled(); fixed_now=now; now=self.now(now)
         with self.store.job('DAILY_TRADING') as (job_id,output):
+            enabled=[m for m in self.store.members() if m['enabled']]
+            withheld=[{'symbol':m['symbol'],'side':'SHORT' if m['category']==LISTS[0] else 'LONG',
+                'watchlist':m['category'],'membership_status':m['status'],
+                'final_decision':'UNKNOWN','workspace_decision':'UNKNOWN_DATA',
+                'technical_score':None,'original_daily_score':None,
+                'reason_codes':['WEEKLY_MEMBERSHIP_REVIEW_REQUIRED'],
+                'weekly_discovery_score':(m['evidence'].get('discovery') or {}).get('ranking_score'),
+                'manual_execution_only':True}
+                for m in enabled if m['status']!='ACTIVE']
             members=self.store.members(active=True)
             symbols=sorted({m['symbol'] for m in members})
             if not symbols:
-                output.update({'status':'EMPTY_WATCHLISTS','generated_at':now.isoformat(),'long':[],'short':[],
-                    'other':[],'selected_count':0,'reason':'Initialize using Weekly Rotation; daily scan never discovers stocks'})
+                output.update({'status':'WATCHLIST_REVIEW_REQUIRED' if withheld else 'EMPTY_WATCHLISTS',
+                    'generated_at':now.isoformat(),'long':[],'short':[],
+                    'other':withheld,'selected_count':0,'selected_symbols':[],
+                    'enabled_watchlist_count':len(enabled),'withheld_count':len(withheld),
+                    'reason':'Enabled weekly members require recheck before daily evaluation' if withheld else 'Initialize using Weekly Rotation; daily scan never discovers stocks'})
                 return output
             membership={m['symbol']:m for m in members}
             from src.futures.config import FuturesScanConfig
@@ -449,7 +461,7 @@ class FuturesWorkspace:
                 bias=self.adapter.market_bias(now if fixed_now is not None else self.now())
             except Exception:
                 bias=MarketBias.evaluate({})
-            buckets={'long':[],'short':[],'other':[]}
+            buckets={'long':[],'short':[],'other':withheld}
             reviewed=report.get('reviewed',[])
             by_symbol={s:[] for s in symbols}
             for r in reviewed:
@@ -478,6 +490,7 @@ class FuturesWorkspace:
             for name in ('long','short'):
                 buckets[name].sort(key=lambda r:r.get('original_daily_score') or 0,reverse=True)
             output.update({'status':'COMPLETED','selected_count':len(symbols),'selected_symbols':symbols,
+                'enabled_watchlist_count':len(enabled),'withheld_count':len(withheld),
                 'generated_at':report.get('generated_at',self.now().isoformat()),'market_bias':bias,**buckets,
                 'report':report,'watchlist_version':self.store.versions()[0]['id'] if self.store.versions() else None,
                 'policy':'Recommendations only. Close positions manually by 15:10 IST. No broker orders.'})

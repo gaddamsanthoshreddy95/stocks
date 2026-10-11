@@ -45,3 +45,29 @@ def test_latest_result_does_not_decode_older_corrupt_archive(tmp_path):
         c.execute("INSERT INTO ft_jobs(id,kind,status,started_at,result) VALUES('new','WEEKLY_ROTATION','COMPLETED','2026',?)",(json.dumps({'status':'COMPLETE'}),))
     assert store.latest_result('WEEKLY_ROTATION')=={'status':'COMPLETE'}
     assert len(store.jobs('WEEKLY_ROTATION',limit=1,include_results=False))==1
+
+
+def test_daily_page_shows_current_review_members_despite_old_empty_scan(tmp_path,monkeypatch):
+    monkeypatch.setenv('FUTURES_WORKSPACE_ENABLED','true')
+    path=tmp_path/'ui.db';store=WorkspaceStore(path)
+    member={'symbol':'BEAR','category':'SHORTING_STOCKS','enabled':True,'pinned':False,
+            'status':'REVIEW_REQUIRED','added_at':'2026-10-10','evaluated_at':'2026-10-10',
+            'evidence':{'discovery':{'ranking_score':80}}}
+    with store.transaction() as c:store.publish(c,[member],'WEEKLY_ROTATION',{})
+    with store.job('DAILY_TRADING') as (_,output):
+        output.update({'status':'EMPTY_WATCHLISTS','selected_count':0,'long':[],'short':[],'other':[]})
+    jobs=JobController()
+    code=f'''from types import SimpleNamespace
+from src.futures_workspace.ui import render
+from src.application.settings import PlatformSettings
+render(SimpleNamespace(settings=PlatformSettings(market_data_source="cache")),SimpleNamespace(path={str(path)!r}))
+'''
+    try:
+        with patch('src.futures_workspace.ui.controller',return_value=jobs),patch('src.futures_workspace.ui.TradingPlatform',side_effect=AssertionError('No automatic services')):
+            app=AppTest.from_string(code).run(timeout=15)
+            app.radio[0].set_value('Daily Trading').run(timeout=15)
+            assert not app.exception and jobs.future is None
+            assert any('1 enabled stocks' in caption.value for caption in app.caption)
+            assert any('BEAR' in table.value['Symbol'].tolist() for table in app.dataframe)
+            assert any('require review' in warning.value for warning in app.warning)
+    finally:jobs.pool.shutdown(wait=True)
