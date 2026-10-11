@@ -321,6 +321,38 @@ def test_empty_daily_never_initializes(workspace):
     workspace.adapter.instruments.assert_not_called()
 
 
+@pytest.mark.parametrize('recovers',[True,False])
+def test_daily_token_recovery_is_bounded_selected_only_and_one_job(workspace,recovers):
+    from kiteconnect.exceptions import TokenException
+    rotate(workspace)
+    original_master_calls=workspace.adapter.counts['instruments']
+    scanner=Mock()
+    scanner.scan.side_effect=[TokenException('stale token'),{'reviewed':[]}] if recovers else TokenException('invalid token')
+    workspace.scanner_factory=Mock(return_value=scanner)
+    workspace.adapter.refresh_credentials=Mock(return_value=True)
+    if recovers:
+        result=workspace.scan_daily(NOW)
+        assert result['selected_count']==2
+        assert result['credential_recovery']=='SUPPLIED_CREDENTIALS_RELOADED_ONCE'
+    else:
+        with pytest.raises(TokenException):workspace.scan_daily(NOW)
+        assert workspace.store.jobs('DAILY_TRADING')[0]['status']=='FAILED'
+    assert scanner.scan.call_count==2
+    assert all(call.kwargs['selected_symbols']==['BEAR','RECOVER'] for call in scanner.scan.call_args_list)
+    workspace.adapter.refresh_credentials.assert_called_once()
+    assert workspace.adapter.counts['instruments']==original_master_calls
+    assert len(workspace.store.jobs('DAILY_TRADING'))==1
+
+
+def test_workspace_database_path_survives_working_directory_change(workspace,tmp_path,monkeypatch):
+    rotate(workspace)
+    before=workspace.store.members(active=True)
+    other=tmp_path/'other';other.mkdir()
+    monkeypatch.chdir(other)
+    assert workspace.store.path.is_absolute()
+    assert workspace.store.members(active=True)==before
+
+
 def test_daily_review_members_are_visible_without_market_scan_or_approval(workspace):
     rotate(workspace)
     workspace.store.rollback(workspace.store.versions()[0]['id'])

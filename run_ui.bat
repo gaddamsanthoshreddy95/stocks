@@ -27,5 +27,5 @@ if /I "%~1"=="--recover-stopped" (
     )
 )
 
-call ".venv\Scripts\python.exe" -m streamlit run ui_app.py --server.fileWatcherType none --runner.magicEnabled false
+call ".venv\Scripts\python.exe" scripts\start_ui.py --server.fileWatcherType none --runner.magicEnabled false
 if errorlevel 1 pause

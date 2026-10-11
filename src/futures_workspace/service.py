@@ -450,12 +450,23 @@ class FuturesWorkspace:
             config=replace(legacy,entry_cutoff_hour=entry[0],entry_cutoff_minute=entry[1],intraday_exit_hour=flat[0],intraday_exit_minute=flat[1],
                            review_per_direction=max(legacy.review_per_direction,len(symbols)))
             factory=self.scanner_factory or FuturesOpportunityScanner
-            scanner=factory(self.platform,config=config)
-            if self.scanner_factory is None:
-                from src.futures_workspace.adapter import SelectedScanProvider
-                scanner.provider=SelectedScanProvider(self.platform.provider,symbols)
+            def make_scanner():
+                scanner=factory(self.platform,config=config)
+                if self.scanner_factory is None:
+                    from src.futures_workspace.adapter import SelectedScanProvider
+                    scanner.provider=SelectedScanProvider(self.platform.provider,symbols)
+                return scanner
+            scanner=make_scanner()
             # Explicit selected_symbols prevents _universe_symbols and all preparation discovery.
-            report=scanner.scan(limit=50,selected_symbols=symbols,now=fixed_now,include_backtest=False)
+            try:
+                report=scanner.scan(limit=50,selected_symbols=symbols,now=fixed_now,include_backtest=False)
+            except TokenException:
+                refresh=getattr(self.adapter,'refresh_credentials',None)
+                if not refresh or not refresh():
+                    raise
+                output['credential_recovery']='SUPPLIED_CREDENTIALS_RELOADED_ONCE'
+                scanner=make_scanner()
+                report=scanner.scan(limit=50,selected_symbols=symbols,now=fixed_now,include_backtest=False)
             report=self.platform._serialize(report)
             try:
                 bias=self.adapter.market_bias(now if fixed_now is not None else self.now())

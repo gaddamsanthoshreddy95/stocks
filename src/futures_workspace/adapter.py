@@ -39,12 +39,19 @@ class RepositoryAdapter:
         self.sector_resolver=SectorResolver(dict(zip(self.mapper.df.Symbol,self.mapper.df.Sector)))
         self.sector_evidence={};self.benchmark_evidence={};self._sector_frames={};self._index_archive_frames={}
 
-    def refresh_credentials(self):
+    def refresh_credentials(self,env_path=None):
         """Reload supplied credentials; never generate or bypass authorization."""
         with self._provider_lock:
             client=getattr(getattr(self.provider,'provider',None),'kite',None)
             key=os.getenv('KITE_API_KEY','').strip()
             token=os.getenv('KITE_ACCESS_TOKEN','').strip()
+            from dotenv import dotenv_values
+            path=Path(env_path) if env_path is not None else Path(__file__).resolve().parents[2]/'.env'
+            saved=dotenv_values(path,interpolate=False)
+            saved_key=(saved.get('KITE_API_KEY') or '').strip()
+            saved_token=(saved.get('KITE_ACCESS_TOKEN') or '').strip()
+            if saved_key and saved_token:
+                key,token=saved_key,saved_token
             if client is None or not key or not token:
                 return False
             client.api_key=key

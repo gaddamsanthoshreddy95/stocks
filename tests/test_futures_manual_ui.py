@@ -70,4 +70,12 @@ render(SimpleNamespace(settings=PlatformSettings(market_data_source="cache")),Si
             assert any('1 enabled stocks' in caption.value for caption in app.caption)
             assert any('BEAR' in table.value['Symbol'].tolist() for table in app.dataframe)
             assert any('require review' in warning.value for warning in app.warning)
+            try:
+                with store.job('DAILY_TRADING'):
+                    raise RuntimeError('test broker failure')
+            except RuntimeError:
+                pass
+            app.run(timeout=15)
+            assert any('latest daily scan failed' in warning.value.lower() for warning in app.warning)
+            assert any('BEAR' in table.value['Symbol'].tolist() for table in app.dataframe)
     finally:jobs.pool.shutdown(wait=True)

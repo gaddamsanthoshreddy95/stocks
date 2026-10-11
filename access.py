@@ -12,7 +12,7 @@ from kiteconnect.exceptions import TokenException
 
 def main() -> None:
     env_path = Path(__file__).resolve().parent / ".env"
-    load_dotenv(dotenv_path=env_path)
+    load_dotenv(dotenv_path=env_path, override=True)
     api_key = os.getenv("KITE_API_KEY") or getpass("Kite API key: ")
     api_secret = os.getenv("KITE_API_SECRET") or getpass("Kite API secret: ")
     if not api_key or not api_secret:

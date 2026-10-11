@@ -174,6 +174,14 @@ def render(platform,database):
             'Latest SHORT':len((daily or {}).get('short',[]))})
         st.info('Manual trading only. Stop new workspace entries at 15:00 IST; close manually by 15:10 IST. Membership is not a signal.')
     elif section=='Daily Trading':
+        recent=store.jobs('DAILY_TRADING',limit=1,include_results=False)
+        if recent and recent[0]['status']=='FAILED':
+            st.warning('The latest daily scan failed. Tables below show the previous saved result; they do not describe the current watchlist. '+str(recent[0].get('error') or 'See the Streamlit terminal for the failure.'))
+        with st.expander('Daily scan diagnostics'):
+            st.write({'Database':str(store.path),'UI module':__file__,
+                'Current members':len(members),
+                'Enabled active members':sum(m['enabled'] and m['status']=='ACTIVE' for m in members),
+                'Latest daily job':{k:recent[0].get(k) for k in ('status','started_at','completed_at')} if recent else None})
         enabled=[m for m in members if m['enabled']]
         ready=sum(m['status']=='ACTIVE' for m in enabled)
         st.caption(f'Current weekly watchlists: {len(enabled)} enabled stocks • {ready} ready for daily evaluation • {len(enabled)-ready} require review')

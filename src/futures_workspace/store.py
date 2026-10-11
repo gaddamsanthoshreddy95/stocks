@@ -32,7 +32,7 @@ def dumps(value):
 
 class WorkspaceStore:
     def __init__(self,path='data/ui/stock_analyzer.db'):
-        self.path=Path(path)
+        self.path=Path(path).resolve()
         self.path.parent.mkdir(parents=True,exist_ok=True)
         with closing(self.connect()) as c:
             c.executescript('''
