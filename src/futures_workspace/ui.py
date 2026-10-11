@@ -206,7 +206,8 @@ def render(platform,database):
         if enabled and not ready:
             st.warning('Weekly stocks are saved, but all enabled members require review. Use Weekly Rotation → Recheck Selected Watchlists. Daily admission remains blocked until membership validation succeeds.')
         if st.button('SCAN SELECTED STOCKS',type='primary',disabled=busy,key='ft-scan'):
-            submit('Combined Daily Trading scan',lambda:new_workspace().scan_daily())
+            from src.futures_workspace.isolated_daily import run_daily
+            submit('Combined Daily Trading scan',lambda:run_daily(store.path,platform.settings.market_data_source))
             st.rerun()
         if daily:
             st.caption(f'Last saved daily scan: {daily.get("selected_count",0)} stocks evaluated • completed {daily.get("generated_at")}')

@@ -14,6 +14,7 @@ def main():
     parser.add_argument('--database',default='data/ui/stock_analyzer.db')
     parser.add_argument('--job-id')
     parser.add_argument('--worker-stopped',action='store_true')
+    parser.add_argument('--result-file',help='Write this invocation result as JSON for the UI worker')
     args=parser.parse_args()
     if args.command=='schedule':
         print(json.dumps({'status':'MANUAL_MODE','reason':'Automatic jobs are disabled. Run rotate, recheck or refresh-universe explicitly.'}))
@@ -35,7 +36,12 @@ def main():
     operations={'schedule':lambda:WorkspaceScheduler(workspace).tick(),'rotate':workspace.rotate,
         'recheck':lambda:workspace.rotate(selected_only=True),'refresh-universe':workspace.refresh_universe,
         'daily':workspace.scan_daily,'recover-job':lambda:workspace.store.recover_job(args.job_id,worker_stopped=args.worker_stopped),'status':lambda:{'memberships':workspace.store.members(),'jobs':workspace.store.jobs()}}
-    print(json.dumps(operations[args.command](),indent=2,default=str))
+    result=operations[args.command]()
+    if args.result_file:
+        Path(args.result_file).write_text(json.dumps(result,default=str),encoding='utf-8')
+        print(json.dumps({'status':result.get('status'),'selected_count':result.get('selected_count')}))
+    else:
+        print(json.dumps(result,indent=2,default=str))
 
 if __name__=='__main__':
     main()
