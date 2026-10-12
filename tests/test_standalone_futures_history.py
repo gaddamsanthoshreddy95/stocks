@@ -30,7 +30,7 @@ def test_history_persists_across_database_reopen_and_remains_separate(tmp_path):
 def test_worker_saves_before_result_without_browser_sync(tmp_path):
     db=ReportDatabase(tmp_path/'ui.db');platform=Mock()
     platform.scan_futures_opportunities.return_value=report()
-    with patch('src.ui.futures_history.TradingPlatform',return_value=platform):
+    with patch('src.ui.futures_history.TradingPlatform',return_value=platform),patch('src.ui.futures_history.fetch_missing_fundamentals',side_effect=lambda value,**kwargs:value):
         result=scan_and_save(SimpleNamespace(market_data_source='kite'),db,5,'LIVE_SCAN','job-1')
     assert db.get_futures_scan(result['_ui_saved_scan_id'])['reviewed'][0]['symbol']=='HINDPETRO'
     platform.scan_futures_opportunities.assert_called_once_with(5,mode='LIVE_SCAN')

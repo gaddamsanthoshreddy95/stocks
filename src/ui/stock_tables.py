@@ -14,14 +14,17 @@ def matching_daily(member,daily):
 def context_columns(row,weekly=None):
     weekly=weekly or {}
     research=row.get('company_research') or {}
-    fundamental=research.get('fundamentals') or (weekly.get('fundamentals') or {}).get('snapshot') or {}
+    original=research.get('fundamentals') or (weekly.get('fundamentals') or {}).get('snapshot') or {}
+    supplemental=(row.get('display_fundamentals') or {}).get('snapshot') or {}
+    fundamental={**supplemental,**{k:v for k,v in original.items() if v is not None}}
+    supplemental_used=any(original.get(k) is None and supplemental.get(k) is not None for k in ('pe_ratio','sector_pe','roe','roce'))
     checks=row.get('execution_checks') or {}
     evidence=row.get('evidence') or {}
     factors=lambda k:(checks.get(k) or {}).get('factors') or {}
     metrics=weekly.get('metrics') or {}
     research_checks=research.get('checks') or {}
     valuation=(research_checks.get('valuation_quality') or {}).get('factors') or {}
-    measured=lambda key,fallback:fundamental[key] if fundamental.get(key) is not None else valuation.get(fallback)
+    measured=lambda key,fallback:original[key] if original.get(key) is not None else valuation[fallback] if valuation.get(fallback) is not None else fundamental.get(key)
     missing_reasons=list(row.get('reason_codes',[]))
     for name,check in research_checks.items():
         if check.get('status')=='UNKNOWN':
@@ -75,7 +78,13 @@ def context_columns(row,weekly=None):
         'Debt/equity':fundamental.get('debt_to_equity'),'Revenue growth':fundamental.get('revenue_growth'),
         'Profit growth':fundamental.get('profit_growth'),'Promoter pledge %':fundamental.get('promoter_pledge'),
         'Fundamental source':fundamental.get('source') or ('Saved valuation check' if valuation else 'UNKNOWN'),'Fundamentals as of':fundamental.get('as_of'),
-        'Fundamental snapshot':'Daily scan' if research.get('fundamentals') else 'Weekly rotation' if weekly.get('fundamentals') else 'Saved valuation check' if valuation else 'Not available',
+        'Fundamental snapshot':'Supplemental company data · display only' if supplemental_used else 'Daily scan' if research.get('fundamentals') else 'Weekly rotation' if weekly.get('fundamentals') else 'Saved valuation check' if valuation else 'Not available',
+        'Supplemental fundamental source':supplemental.get('source'),
+        'Supplemental fundamentals as of':supplemental.get('as_of'),
+        'Supplemental fundamentals fetched':(row.get('display_fundamentals') or {}).get('retrieved_at'),
+        'Supplemental fundamentals status':(row.get('display_fundamentals') or {}).get('status'),
+        'Supplemental data origin':(row.get('display_fundamentals') or {}).get('data_origin','PROVIDER' if supplemental else 'UNAVAILABLE'),
+        'Supplemental field sources':json.dumps((row.get('display_fundamentals') or {}).get('field_provenance',{})),
         'News status':state,'Relevant news':' | '.join(titles[:3]) or state,'News source':first.get('source'),
         'News link':link,'News published':first.get('published') or first.get('published_at'),
         'News checked':news.get('checked_at') or news.get('generated_at'), 'News snapshot':origin,
@@ -134,6 +143,7 @@ def render_stock_table(rows,view,store):
                'Daily score','Decision','Sector','P/E','Sector P/E','Futures VWAP','RSI','Relative volume',
                'Relevant news','News status','News link','News published','News checked']
     preferred+=['News source','News snapshot','Fundamental source','Fundamentals as of']
+    preferred+=['Fundamental snapshot','Supplemental fundamental source','Supplemental fundamentals as of','Supplemental fundamentals fetched','Supplemental fundamentals status','Supplemental data origin']
     preferred+=['Fundamental status','Research status','Stock VWAP','Futures VWAP status','Missing data reasons']
     preferred+=['News reversal gate','News reversal reasons']
     preferred+=['Stock volume status','Stock average volume','Futures liquidity context']

@@ -379,6 +379,14 @@ def futures_opportunities_page(platform: TradingPlatform, database=None) -> None
         with empty_tabs[0]:st.info('Run a scan manually to capture data availability and failure reasons.')
         with empty_tabs[1]:st.info('No standalone Futures scans have been saved yet.')
         return
+    if st.button('Fetch missing P/E, sector P/E and company fundamentals',disabled=running,key='futures-fetch-fundamentals'):
+        from src.ui.futures_history import refresh_and_save
+        snapshot=report
+        refresh_id=str(uuid4())
+        start_feature_job('futures_scan',lambda:refresh_and_save(snapshot,platform.settings,scan_database,refresh_id))
+        st.rerun()
+    if report.get('_fundamentals_refresh_only'):
+        st.info('Company fundamentals refreshed separately. Prices, scores and trade decisions still belong to the original scan time.')
     st.caption(f"Scanned {report['universe_size']} stocks in each direction · {report['approved_count']} approved · {data_age(report['generated_at'])}")
     st.caption(f"{report.get('scan_mode','REFERENCE')} · elapsed {report.get('timings',{}).get('total_seconds',0):.1f}s")
     with st.expander('Stage timings and data freshness'):
