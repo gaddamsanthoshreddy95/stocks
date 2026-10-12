@@ -42,6 +42,18 @@ class ReportDatabase:
                 );
                 CREATE INDEX IF NOT EXISTS idx_report_runs_generated_at
                     ON report_runs(generated_at DESC);
+                CREATE TABLE IF NOT EXISTS futures_scan_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT NOT NULL UNIQUE,
+                    generated_at TEXT NOT NULL,
+                    scan_mode TEXT NOT NULL,
+                    market_data_source TEXT NOT NULL,
+                    universe_size INTEGER NOT NULL,
+                    approved_count INTEGER NOT NULL,
+                    report_json TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_futures_scan_runs_generated_at
+                    ON futures_scan_runs(generated_at DESC);
                 CREATE TABLE IF NOT EXISTS actual_trades (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     created_at TEXT NOT NULL,
@@ -223,6 +235,30 @@ class ReportDatabase:
                 "SELECT preference_key, preference_value FROM ui_preferences"
             ).fetchall()
         return {str(row["preference_key"]): json.loads(row["preference_value"]) for row in rows}
+
+    def save_futures_scan(self, report, market_data_source, run_id):
+        generated=str(report.get('generated_at') or datetime.now(timezone.utc).isoformat())
+        with closing(self._connect()) as connection:
+            connection.execute('''INSERT INTO futures_scan_runs
+                (run_id,generated_at,scan_mode,market_data_source,universe_size,approved_count,report_json)
+                VALUES(?,?,?,?,?,?,?) ON CONFLICT(run_id) DO NOTHING''',
+                (run_id,generated,str(report.get('scan_mode','REFERENCE')),market_data_source,
+                 int(report.get('universe_size',0)),int(report.get('approved_count',0)),
+                 json.dumps(report,default=str,separators=(',',':'))))
+            connection.commit()
+            return connection.execute('SELECT id FROM futures_scan_runs WHERE run_id=?',(run_id,)).fetchone()['id']
+
+    def list_futures_scans(self, limit=50):
+        with closing(self._connect()) as connection:
+            rows=connection.execute('''SELECT id,run_id,generated_at,scan_mode,market_data_source,
+                universe_size,approved_count FROM futures_scan_runs ORDER BY id DESC LIMIT ?''',
+                (max(1,min(int(limit),500)),)).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_futures_scan(self, scan_id):
+        with closing(self._connect()) as connection:
+            row=connection.execute('SELECT report_json FROM futures_scan_runs WHERE id=?',(int(scan_id),)).fetchone()
+        return json.loads(row['report_json']) if row else None
 
     def save_report(self, report: dict[str, Any], market_data_source: str) -> int:
         generated_at = datetime.now(timezone.utc).isoformat()

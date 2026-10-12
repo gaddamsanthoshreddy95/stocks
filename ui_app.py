@@ -342,7 +342,10 @@ def futures_opportunities_page(platform: TradingPlatform, database=None) -> None
     running = feature_is_running("futures_scan")
     if st.button("Scan LONG and SHORT opportunities", disabled=running, key="run_futures_scan"):
         # Isolated provider prevents a concurrent report from sharing mutable live-refresh state.
-        start_feature_job("futures_scan", lambda: TradingPlatform(settings=platform.settings).scan_futures_opportunities(int(limit), mode=mode))
+        from src.ui.futures_history import scan_and_save
+        scan_database=database or ReportDatabase()
+        run_id=str(uuid4())
+        start_feature_job("futures_scan", lambda:scan_and_save(platform.settings,scan_database,int(limit),mode,run_id))
         st.rerun()
     if running:
         st.info("Scanning and validating futures opportunities. Refresh the view to see the result.")
@@ -351,6 +354,26 @@ def futures_opportunities_page(platform: TradingPlatform, database=None) -> None
     if st.session_state.get("futures_scan_job_error"):
         st.error(st.session_state["futures_scan_job_error"])
     report = st.session_state.get("futures_scan_report")
+    scan_database=database or ReportDatabase()
+    if report and not report.get('_ui_saved_scan_id'):
+        # Preserve the last still-visible scan from before history support existed.
+        legacy_id='legacy-futures-'+str(report.get('generated_at'))+'-'+str(report.get('scan_mode','REFERENCE'))
+        report['_ui_saved_scan_id']=scan_database.save_futures_scan(report,platform.settings.market_data_source,legacy_id)
+    history=scan_database.list_futures_scans()
+    if history:
+        with st.expander('Futures LONG / SHORT history'):
+            st.dataframe(pd.DataFrame(history),hide_index=True,width='stretch')
+            show_saved=st.checkbox('View a saved Futures scan',key='futures-view-saved')
+            if show_saved:
+                scan_id=st.selectbox('Saved Futures scan',[row['id'] for row in history],
+                    format_func=lambda value:next(f"#{r['id']} · {r['generated_at']} · {r['scan_mode']}" for r in history if r['id']==value),key='futures-history-id')
+                report=scan_database.get_futures_scan(scan_id)
+                st.warning('Historical snapshot: decisions and measurements belong to the saved scan time. Run a new scan to evaluate current entry conditions.')
+                st.download_button('Download saved Futures scan',json.dumps(report,default=str),
+                    file_name=f'futures_scan_{scan_id}.json',mime='application/json',key='futures-history-download')
+    if not report and history:
+        report=scan_database.get_futures_scan(history[0]['id'])
+        st.info('Showing the latest saved Futures scan. This is historical evidence; no new scan has started.')
     if not report:
         return
     st.caption(f"Scanned {report['universe_size']} stocks in each direction · {report['approved_count']} approved · {data_age(report['generated_at'])}")
