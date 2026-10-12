@@ -217,6 +217,10 @@ class AISentimentAnalyzer:
                     "summary": f"FinBERT {label.lower()} probability assessment; {len(entities)} entities extracted.",
                     "probabilities": {key: round(value * 100, 2) for key, value in probabilities.items()},
                     "entities": entities,
+                    # FinBERT confidence is not source or economic-materiality verification.
+                    **{key:article.get(key) for key in ('canonical_url','source_verified','company_specific',
+                        'company_symbols','materiality_verified','verification_basis','available_at',
+                        'first_seen_at','assessment_at','event_id') if key in article},
                 })
                 signed_scores.append(signed_score)
                 confidences.append(confidence)

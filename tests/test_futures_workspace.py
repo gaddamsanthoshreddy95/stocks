@@ -321,6 +321,27 @@ def test_empty_daily_never_initializes(workspace):
     workspace.adapter.instruments.assert_not_called()
 
 
+def test_enabled_daily_top_five_replaces_news_exclusion_and_preserves_weekly_members(workspace,monkeypatch):
+    monkeypatch.setenv('FUTURES_SCAN_NEWS_CONFLICT_GATE_ENABLED','1')
+    symbols=['TEST'+str(i) for i in range(7)]
+    members=[{'symbol':symbol,'category':LISTS[0],'enabled':True,'pinned':False,'status':'ACTIVE',
+              'added_at':NOW.isoformat(),'evaluated_at':NOW.isoformat(),'evidence':evaluation(LISTS[0],80)} for symbol in symbols]
+    with workspace.store.transaction() as c:workspace.store.publish(c,members,'WEEKLY_ROTATION',{})
+    before=workspace.store.members()
+    reviewed=[{'symbol':symbol,'side':'SHORT','technical_score':99-i,'final_decision':'APPROVED','reason_codes':[],
+               'news_conflict_gate':{'excluded':i==0,'reason_codes':['MATERIAL_POSITIVE_NEWS_BULLISH_REVERSAL_EXCLUDES_SHORT'] if i==0 else []}}
+              for i,symbol in enumerate(symbols)]
+    scanner=Mock();scanner.scan.return_value={'reviewed':reviewed}
+    workspace.scanner_factory=Mock(return_value=scanner)
+    result=workspace.scan_daily(NOW)
+    assert [item['symbol'] for item in result['short']]==symbols[1:6]
+    assert next(i for i in result['other'] if i['symbol']==symbols[0])['final_decision']=='REJECT'
+    assert next(i for i in result['other'] if i['symbol']==symbols[6])['workspace_decision']=='OUTSIDE_DAILY_TOP_5'
+    assert workspace.store.members()==before
+    assert scanner.scan.call_args.kwargs['selected_symbols']==symbols
+    assert scanner.scan.call_args.kwargs['include_backtest'] is False
+
+
 @pytest.mark.parametrize('recovers',[True,False])
 def test_daily_token_recovery_is_bounded_selected_only_and_one_job(workspace,recovers):
     from kiteconnect.exceptions import TokenException

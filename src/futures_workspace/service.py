@@ -507,6 +507,9 @@ class FuturesWorkspace:
                     'counter_trend':bias['long_adjustment']>0 if desired=='SHORT' else bias['long_adjustment']<0,
                     'weekly_confidence':member['evidence'].get('confidence'),
                     'workspace_flat_deadline_ist':f'{flat[0]:02}:{flat[1]:02}', 'manual_execution_only':True})
+                if config.news_conflict_gate_enabled and (item.get('news_conflict_gate') or {}).get('excluded'):
+                    item['final_decision']='REJECT'
+                    item['reason_codes']=[*item.get('reason_codes',[]),*item['news_conflict_gate'].get('reason_codes',[])]
                 age=(now-ist(member['evaluated_at'])).total_seconds()/86400
                 if not 0<=age<=self.config.maximum_membership_age_days:
                     item['final_decision']='UNKNOWN'
@@ -517,6 +520,12 @@ class FuturesWorkspace:
                 buckets['short' if desired=='SHORT' else 'long'].append(item) if item['workspace_decision']=='ELIGIBLE' else buckets['other'].append(item)
             for name in ('long','short'):
                 buckets[name].sort(key=lambda r:r.get('original_daily_score') or 0,reverse=True)
+                if config.news_conflict_gate_enabled:
+                    for overflow in buckets[name][5:]:
+                        overflow['workspace_decision']='OUTSIDE_DAILY_TOP_5'
+                        overflow['reason_codes']=[*overflow.get('reason_codes',[]),'OUTSIDE_DAILY_TOP_5']
+                        buckets['other'].append(overflow)
+                    buckets[name]=buckets[name][:5]
             output.update({'status':'COMPLETED','selected_count':len(symbols),'selected_symbols':symbols,
                 'enabled_watchlist_count':len(enabled),'withheld_count':len(withheld),
                 'generated_at':report.get('generated_at',self.now().isoformat()),'market_bias':bias,**buckets,

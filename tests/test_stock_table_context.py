@@ -55,3 +55,28 @@ def test_legacy_score_visible_without_overriding_explicit_missing_daily_score():
     from src.futures_workspace.ui import result_rows
     assert result_rows([{'symbol':'STOCK','technical_score':82}])[0]['Daily score']==82
     assert result_rows([{'symbol':'STOCK','technical_score':82,'original_daily_score':None}])[0]['Daily score'] is None
+
+
+def test_standalone_decision_and_measured_valuation_are_reused_without_fabrication():
+    from src.futures_workspace.ui import result_rows
+    row={'symbol':'STOCK','final_decision':'REJECT','company_research':{'checks':{
+        'valuation_quality':{'factors':{'stock_pe':0,'sector_pe':25}},
+        'vwap_quality':{'factors':{'vwap':123}}}},'reason_codes':['CANDLES_MISSING']}
+    assert result_rows([row])[0]['Decision']=='REJECT'
+    context=context_columns(row)
+    assert context['P/E']==0 and context['Sector P/E']==25
+    assert context['Stock VWAP']==123 and context['Futures VWAP'] is None
+    assert context['Missing data reasons']=='CANDLES_MISSING'
+
+
+def test_standalone_view_omits_inapplicable_weekly_columns_and_labels_missing(tmp_path):
+    code=f'''from src.ui.stock_tables import render_stock_table
+from src.futures_workspace.store import WorkspaceStore
+render_stock_table([{{'Symbol':'STOCK','Watchlist':None,'Weekly score':None,'P/E':None,'Decision':'UNKNOWN'}}],'legacy-futures-reviewed',WorkspaceStore({str(tmp_path/'ui.db')!r}))
+'''
+    app=AppTest.from_string(code).run(timeout=15)
+    assert not app.exception
+    table=app.dataframe[0].value
+    assert 'Watchlist' not in table and 'Weekly score' not in table
+    assert table['P/E'].iloc[0]=='Unavailable'
+    assert table['Decision'].iloc[0]=='UNKNOWN'

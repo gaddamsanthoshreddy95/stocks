@@ -1,0 +1,17 @@
+{
+  "symbol": "HINDPETRO",
+  "title": "HPCL Mumbai refinery modernization: EPC award announced",
+  "url": "https://www.globenewswire.com/news-release/2026/10/12/3378555/0/en/technip-energies-awarded-large-epc-contract-by-hpcl-for-mumbai-refinery-modernization-project-in-india.html",
+  "issuer_reference": "https://www.ten.com/en/media/press-releases/technip-energies-awarded-large-epc-contract-hpcl-mumbai-refinery-modernization",
+  "published": "2026-10-12T10:30:00+05:30",
+  "timestamp_basis": "Syndicated issuer release lists 01:00 US/Eastern on 12 October; EDT converts to 10:30 IST.",
+  "source_verified": true,
+  "company_specific": true,
+  "company_symbols": ["HINDPETRO"],
+  "materiality_verified": false,
+  "sentiment": "UNVERIFIED",
+  "materiality": "UNVERIFIED",
+  "verification_basis": "Issuer announcement verified; positive financial impact on HPCL is not independently established.",
+  "market_replay_available": false,
+  "limitations": "No historical HINDPETRO 5-minute bars or user's decision time supplied. This fixture verifies timestamp and non-inference rules, not an actual trading outcome."
+}

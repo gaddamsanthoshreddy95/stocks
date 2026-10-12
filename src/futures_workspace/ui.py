@@ -110,7 +110,7 @@ def result_rows(items):
             'Volume':factors('futures_rvol_quality').get('rvol',evidence.get('rvol',evidence.get('relative_volume'))),
             'OI':', '.join(checks.get('futures_oi_quality',{}).get('reason_codes',['UNKNOWN'])),'Entry':plan.get('entry'),
             'Target':plan.get('target'),'Stop':plan.get('stop_loss'),'Net R:R':plan.get('net_risk_reward'),
-            'Quote time':quote.get('timestamp'),'Data freshness':freshness,'Decision':r.get('workspace_decision'),'Original decision':r.get('final_decision'),
+            'Quote time':quote.get('timestamp'),'Data freshness':freshness,'Decision':r.get('workspace_decision') or r.get('final_decision','UNKNOWN'),'Original decision':r.get('final_decision'),
             'Confidence':r.get('weekly_confidence'),'Liquidity':checks.get('futures_spread_quality',{}).get('status','UNKNOWN'),
             'Reasons':', '.join(r.get('reason_codes',[]))})
     return rows

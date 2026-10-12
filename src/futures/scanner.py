@@ -1,6 +1,7 @@
 """Full-universe discovery and separate directional execution approval; no orders."""
 from datetime import datetime
 from copy import deepcopy
+from dataclasses import replace
 from src.futures.sessions import normalise_candles, completed_session_check
 from src.futures.execution_safety import finalize
 from src.futures.runtime import ScanRuntime
@@ -20,6 +21,7 @@ from src.futures.scoring import score_both, prepare, directional_setup
 from src.futures.research import CompanyResearch
 from src.news.analysis_service import NewsAnalysisService
 from src.news.today import INDEX_FUTURES, TodayNewsService
+from src.futures.news_conflict import evaluate as evaluate_conflict, research_policy, shortlist
 from src.quality.futures_execution import assess_execution, check, clean, FuturesExecutionConfig
 from src.quality.futures_selection import active_contracts, session_vwap_quality
 from src.quality.public_fundamentals import PublicFundamentalProvider
@@ -52,6 +54,11 @@ class FuturesOpportunityScanner:
         self.platform = platform
         self.provider = platform.provider
         self.config = config or FuturesScanConfig.from_env()
+        if self.config.news_conflict_gate_enabled:
+            entry=min((self.config.entry_cutoff_hour,self.config.entry_cutoff_minute),(15,0))
+            exit_time=min((self.config.intraday_exit_hour,self.config.intraday_exit_minute),(15,10))
+            self.config=replace(self.config,entry_cutoff_hour=entry[0],entry_cutoff_minute=entry[1],
+                                intraday_exit_hour=exit_time[0],intraday_exit_minute=exit_time[1])
         self.costs = costs or FuturesCosts.from_env()
         self.news_provider = news_provider or (lambda symbol: NewsAnalysisService.analyze(symbol, force_refresh=True, limit=16))
         self.event_provider = event_provider
@@ -195,7 +202,7 @@ class FuturesOpportunityScanner:
                 prefetch(symbols)
             except Exception as exc:
                 LOGGER.warning('Company prefetch incomplete: %s', type(exc).__name__)
-        research_inputs = {}
+        research_inputs = {};news_bars={}
         for item in all_items:
             symbol = item['symbol']
             if symbol not in news_cache:
@@ -220,11 +227,13 @@ class FuturesOpportunityScanner:
                         sector_history = self.provider.get_annual_history(sector_symbol)
                 except Exception:
                     pass
+                bars=None
                 try:
                     bars = normalise_candles(self.provider.get_session_intraday(symbol), '5minute', getattr(self, 'research_as_of', now))
                     stock_vwap = session_vwap_quality(bars, item.get('evidence', {}).get('price'), now=getattr(self,'research_as_of',now).to_pydatetime())
                 except Exception:
                     stock_vwap = None
+                news_bars[symbol]=bars
                 try:
                     stock = normalise_candles(stock, 'day', getattr(self, 'research_as_of', now), allow_live_daily=True) if stock is not None and not stock.empty else stock
                 except (ValueError, TypeError, AttributeError) as exc:
@@ -242,11 +251,29 @@ class FuturesOpportunityScanner:
             item['company_research'] = self.company_research.assess(symbol, item['sector'], item['side'],
                 news=news_cache[symbol], stock_history=stock, sector_history=sector_history, session_vwap=stock_vwap)
             research = item['company_research']
+            if self.config.news_conflict_gate_enabled:
+                self._news_conflict(item,news_cache[symbol],news_bars.get(symbol),now)
+                research=research_policy(research,item['news_conflict_gate'])
+                item['company_research']=research
             if not research['eligible'] and item['final_decision'] == 'WAIT':
                 item['final_decision'] = ('UNKNOWN' if research['unavailable_checks'] else
                                           'WAIT' if research['policy_review_required'] else 'REJECT')
                 item['reason_codes'].extend('RESEARCH_UNKNOWN:'+key for key in research['unavailable_checks'])
                 item['reason_codes'].extend('RESEARCH_FAIL:'+key for key in research['failed_checks'])
+        if self.config.news_conflict_gate_enabled:
+            selected=[]
+            for side in ('LONG','SHORT'):
+                pool=[i for i in all_items if i['side']==side and i.get('technical_score') is not None
+                      and i['technical_score']>=self.config.watch_score and i.get('timing')!='TOO LATE'
+                      and not i.get('news_conflict_gate',{}).get('excluded')]
+                ordered=sorted(pool,key=lambda i:(short_priority(i) if side=='SHORT' else 0,i['technical_score']),reverse=True)
+                # Review the retained input pool so a late conflict cannot consume
+                # a Top-5 slot without examining its next eligible replacement.
+                selected.extend(ordered)
+            ids={(i['symbol'],i['side']) for i in selected}
+            for i in all_items:
+                if (i['symbol'],i['side']) in ids:
+                    i['reason_codes']=[r for r in i['reason_codes'] if r!='OUTSIDE_DIRECTIONAL_EXECUTION_REVIEW_LIMIT']
         prepared_execution = []
         timings['research_news_events_seconds'] = perf_counter()-stage_started
         stage_started = perf_counter()
@@ -292,6 +319,7 @@ class FuturesOpportunityScanner:
                 except Exception:
                     data = {}
             evaluation_now = self._clock()
+            session_bars=None
             try:
                 session_bars = normalise_candles(self.provider.get_session_intraday(symbol), '5minute', getattr(self, 'research_as_of', evaluation_now))
                 reference_price = data.get('spot_price')
@@ -305,6 +333,10 @@ class FuturesOpportunityScanner:
             item['company_research'] = self.company_research.assess(symbol, item['sector'], item['side'],
                 news=news_cache[symbol], stock_history=annual_stock, sector_history=annual_sector, session_vwap=refreshed_vwap)
             item['company_research']['checked_at'] = evaluation_now.isoformat()
+            if self.config.news_conflict_gate_enabled:
+                self._news_conflict(item,news_cache[symbol],session_bars,evaluation_now)
+                item['company_research']=research_policy(item['company_research'],item['news_conflict_gate'])
+                if item['news_conflict_gate']['excluded']:continue
             item['reason_codes'] = [reason for reason in item['reason_codes'] if not reason.startswith('RESEARCH_')]
             if service is not None and context is not None:
                 try:
@@ -361,11 +393,22 @@ class FuturesOpportunityScanner:
                 'short_discovery_count': sum(i['side']=='SHORT' for i in all_items),
                 'rankable_long_count':len(long_items), 'rankable_short_count':len(short_items),
                 'execution_review_count': sum(item['execution_reviewed'] for item in all_items),
-                'report_a': long_items[:limit], 'report_b': short_items[:limit], 'report_c': eligible[:limit],
+                'report_a': shortlist(long_items,limit), 'report_b': shortlist(short_items,limit), 'report_c': shortlist(eligible,limit),
+                'news_conflict_exclusions':[{'symbol':i['symbol'],'side':i['side'],'evidence':i['news_conflict_gate']}
+                    for i in all_items if i.get('news_conflict_gate',{}).get('excluded')],
                 'reviewed': all_items, 'failures': failures, 'approved_count': len(eligible),
                 'config': self.config.__dict__, 'cost_assumptions': self.costs.__dict__,
                 'historical_validation': 'Weights are hypotheses. Holdout metrics validate technical signals, not missing historical news/depth.',
                 'execution_policy': 'Scanner only; no orders. Margin displayed only when supplied; no automatic margin lookup.'}
+
+    def _news_conflict(self,item,news,bars,now):
+        gate=evaluate_conflict(item['symbol'],item['side'],news,bars,now,self.config)
+        item['news_conflict_gate']=gate
+        if gate['excluded']:
+            item['final_decision']='REJECT'
+            item['reason_codes'].extend(r for r in gate['reason_codes'] if r not in item['reason_codes'])
+            if item.get('short_entry'):item['short_entry'].update(state='NEWS_REVERSAL_EXCLUDED',execution_approved=False)
+        return gate
 
     def _execution(self, item, data, contract, histories, news, event, now, historical):
         item.update({'contract': contract, 'news': news, 'event_risk': event, 'execution_reviewed': True,
@@ -482,6 +525,10 @@ class FuturesOpportunityScanner:
             reasons.extend(future_setup['reason_codes'])
         news_check = TodayNewsService.direction_check(news,
             checks['futures_oi_quality'].factors.get('price_change_percent'), direction, now=now.to_pydatetime())
+        if self.config.news_conflict_gate_enabled:
+            gate=item.get('news_conflict_gate') or evaluate_conflict(item['symbol'],item['side'],news,None,now,self.config)
+            news_check={'approved':gate['status']=='CLEAR','status':'CONFLICT' if gate['excluded'] else 'UNVERIFIED' if gate['status']=='UNAVAILABLE' else 'CLEAR',
+                        'reason_codes':gate['reason_codes'],'evidence':gate}
         item['news_alignment'] = news_check
         if not news_check['approved']:
             reasons.extend(news_check['reason_codes'])

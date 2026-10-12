@@ -19,12 +19,19 @@ def context_columns(row,weekly=None):
     evidence=row.get('evidence') or {}
     factors=lambda k:(checks.get(k) or {}).get('factors') or {}
     metrics=weekly.get('metrics') or {}
+    research_checks=research.get('checks') or {}
+    valuation=(research_checks.get('valuation_quality') or {}).get('factors') or {}
+    measured=lambda key,fallback:fundamental[key] if fundamental.get(key) is not None else valuation.get(fallback)
+    missing_reasons=list(row.get('reason_codes',[]))
+    for name,check in research_checks.items():
+        if check.get('status')=='UNKNOWN':
+            missing_reasons.append(name+': '+', '.join(check.get('reason_codes',[]) or ['Data unavailable']))
     news=row.get('news')
     origin='Daily scan'
     if news is None:
         saved=weekly.get('news_events') or {}
         news=saved.get('news') or {}
-        origin='Weekly rotation'
+        origin='Weekly rotation' if saved.get('news') is not None else 'Not available'
     titles=[]; articles=[]; seen=set()
     for article in news.get('article_assessments',[])+news.get('headlines',[]):
         if not isinstance(article,dict) or article.get('relevant') is False or article.get('is_relevant') is False:
@@ -41,11 +48,13 @@ def context_columns(row,weekly=None):
         state='Headlines available' if not news.get('fetch_failed') else 'Headlines available; analysis unavailable'
     elif news.get('fetch_failed') or news.get('news_state')=='FETCH_FAILED':
         state='Fetch failed'
-    elif news.get('requested') or news.get('available'):
+    elif news.get('news_state')=='NO_RELEVANT_NEWS' or news.get('requested') or news.get('available'):
         state='No relevant headlines found'
     else:
         state='Not checked / unknown'
     columns={'Sector':row.get('sector') or weekly.get('sector','UNKNOWN'),
+        'News reversal gate':(row.get('news_conflict_gate') or {}).get('status','NOT_ENABLED'),
+        'News reversal reasons':', '.join((row.get('news_conflict_gate') or {}).get('reason_codes',[])),
         'Stock volume status':(weekly.get('stock_quality') or {}).get('status','UNKNOWN'),
         'Stock average volume':(weekly.get('stock_quality') or {}).get('average_volume'),
         'Stock volume as of':(weekly.get('stock_quality') or {}).get('as_of'),
@@ -56,12 +65,17 @@ def context_columns(row,weekly=None):
         'Sector benchmark status':(weekly.get('sector_benchmark') or {}).get('status','UNKNOWN'),
         'Sector benchmark source':(weekly.get('sector_benchmark') or {}).get('source','UNKNOWN'),
         'Sector benchmark as of':(weekly.get('sector_benchmark') or {}).get('as_of'),
-        'P/E':fundamental.get('pe_ratio'),'Sector P/E':fundamental.get('sector_pe'),
+        'P/E':measured('pe_ratio','stock_pe'),'Sector P/E':measured('sector_pe','sector_pe'),
+        'Fundamental status':'AVAILABLE' if fundamental else 'PARTIAL_VALUATION_ONLY' if any(valuation.get(k) is not None for k in ('stock_pe','sector_pe')) else 'UNAVAILABLE',
+        'Research status':research.get('status','UNKNOWN'),
+        'Stock VWAP':(research_checks.get('vwap_quality') or {}).get('factors',{}).get('vwap'),
+        'Futures VWAP status':(checks.get('futures_vwap_quality') or {}).get('status','NOT_EXECUTION_REVIEWED' if not row.get('execution_reviewed') else 'UNKNOWN'),
+        'Missing data reasons':'; '.join(dict.fromkeys(missing_reasons)),
         'ROE %':fundamental.get('roe'),'ROCE %':fundamental.get('roce'),
         'Debt/equity':fundamental.get('debt_to_equity'),'Revenue growth':fundamental.get('revenue_growth'),
         'Profit growth':fundamental.get('profit_growth'),'Promoter pledge %':fundamental.get('promoter_pledge'),
-        'Fundamental source':fundamental.get('source','UNKNOWN'),'Fundamentals as of':fundamental.get('as_of'),
-        'Fundamental snapshot':'Daily scan' if research.get('fundamentals') else 'Weekly rotation',
+        'Fundamental source':fundamental.get('source') or ('Saved valuation check' if valuation else 'UNKNOWN'),'Fundamentals as of':fundamental.get('as_of'),
+        'Fundamental snapshot':'Daily scan' if research.get('fundamentals') else 'Weekly rotation' if weekly.get('fundamentals') else 'Saved valuation check' if valuation else 'Not available',
         'News status':state,'Relevant news':' | '.join(titles[:3]) or state,'News source':first.get('source'),
         'News link':link,'News published':first.get('published') or first.get('published_at'),
         'News checked':news.get('checked_at') or news.get('generated_at'), 'News snapshot':origin,
@@ -107,6 +121,10 @@ def context_columns(row,weekly=None):
 
 def render_stock_table(rows,view,store):
     frame=pd.DataFrame([{k:v for k,v in row.items() if not k.startswith('_')} for row in rows])
+    if view.startswith('legacy-futures-'):
+        frame=frame.drop(columns=[c for c in frame if c in ('Watchlist','Weekly score','Membership status','Enabled')
+            or c.startswith('Weekly ') or c.startswith('Stock volume ') or c in ('Stock average volume','Futures liquidity context')
+            or c.startswith('Sector identity ') or c.startswith('Sector benchmark')],errors='ignore')
     if frame.empty:
         st.info('No stocks in this result.')
         return
@@ -116,6 +134,8 @@ def render_stock_table(rows,view,store):
                'Daily score','Decision','Sector','P/E','Sector P/E','Futures VWAP','RSI','Relative volume',
                'Relevant news','News status','News link','News published','News checked']
     preferred+=['News source','News snapshot','Fundamental source','Fundamentals as of']
+    preferred+=['Fundamental status','Research status','Stock VWAP','Futures VWAP status','Missing data reasons']
+    preferred+=['News reversal gate','News reversal reasons']
     preferred+=['Stock volume status','Stock average volume','Futures liquidity context']
     preferred+=['Sector identity status','Sector identity source','Sector benchmark','Sector benchmark status',
                 'bearish confirmed_score','bearish possible_score','bearish coverage_percent',
@@ -132,7 +152,11 @@ def render_stock_table(rows,view,store):
             store.save_view_columns(view,selected)
             st.success('Column selection saved for this view.')
     if selected:
-        st.dataframe(frame[selected],hide_index=True,width='stretch',column_config={
+        display=frame[selected].copy()
+        for column in display:
+            if column!='News link' and display[column].isna().all():display[column]='Unavailable'
+        st.caption('Unavailable or blank values were not verified in this saved scan. See status and missing-data reasons. Stock VWAP and Futures VWAP use separate instruments.')
+        st.dataframe(display,hide_index=True,width='stretch',column_config={
             'News link':st.column_config.LinkColumn('News link',display_text='Read article')})
     else:
         st.info('Select at least one column above.')
