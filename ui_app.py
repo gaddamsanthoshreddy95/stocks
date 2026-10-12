@@ -375,6 +375,9 @@ def futures_opportunities_page(platform: TradingPlatform, database=None) -> None
         report=scan_database.get_futures_scan(history[0]['id'])
         st.info('Showing the latest saved Futures scan. This is historical evidence; no new scan has started.')
     if not report:
+        empty_tabs=st.tabs(['Missing data','History'])
+        with empty_tabs[0]:st.info('Run a scan manually to capture data availability and failure reasons.')
+        with empty_tabs[1]:st.info('No standalone Futures scans have been saved yet.')
         return
     st.caption(f"Scanned {report['universe_size']} stocks in each direction · {report['approved_count']} approved · {data_age(report['generated_at'])}")
     st.caption(f"{report.get('scan_mode','REFERENCE')} · elapsed {report.get('timings',{}).get('total_seconds',0):.1f}s")
@@ -391,11 +394,38 @@ def futures_opportunities_page(platform: TradingPlatform, database=None) -> None
     from src.futures_workspace.ui import result_rows
     from src.futures_workspace.store import WorkspaceStore
     stock_table_store=WorkspaceStore(database.path) if database is not None else WorkspaceStore()
-    st.subheader('All reviewed stocks · news and measurements')
-    reviewed=report.get('reviewed',[])
-    render_stock_table([{**row,**context_columns(candidate)} for row,candidate in zip(result_rows(reviewed),reviewed)],
-                       'legacy-futures-reviewed',stock_table_store)
-    for tab, key in zip(st.tabs(["A · Bullish", "B · Bearish", "C · Combined approved"]), ('report_a', 'report_b', 'report_c')):
+    tabs=st.tabs(['All reviewed','A · Bullish','B · Bearish','C · Combined approved','Missing data','History'])
+    with tabs[0]:
+        st.subheader('All reviewed stocks · news and measurements')
+        reviewed=report.get('reviewed',[])
+        render_stock_table([{**row,**context_columns(candidate)} for row,candidate in zip(result_rows(reviewed),reviewed)],
+                           'legacy-futures-reviewed',stock_table_store)
+    with tabs[4]:
+        from src.ui.futures_history import missing_data_rows
+        missing=missing_data_rows(report)
+        st.caption('Recorded missing fields and reasons from this saved scan. Viewing this tab does not retry data requests.')
+        if missing:st.dataframe(pd.DataFrame(missing),hide_index=True,width='stretch')
+        else:st.info('No missing fields found among the displayed measurements.')
+        with st.expander('Saved source failures and broker reconciliation'):
+            st.json({'source_failures':report.get('source_failures',{}),'failures':report.get('failures',[]),
+                'reconciliation':report.get('execution_safety',{}).get('reconciliation',{})})
+    with tabs[5]:
+        if history:
+            st.dataframe(pd.DataFrame(history),hide_index=True,width='stretch')
+            selected_id=st.selectbox('Historical Futures scan',[row['id'] for row in history],
+                format_func=lambda value:next(f"#{r['id']} · {r['generated_at']} · {r['scan_mode']}" for r in history if r['id']==value),key='futures-history-tab-id')
+            saved=scan_database.get_futures_scan(selected_id)
+            st.warning('Historical snapshot: prices, scores and decisions refer to the saved time, not current trade approval.')
+            candidates=saved.get('reviewed',[])
+            render_stock_table([{**row,**context_columns(candidate)} for row,candidate in zip(result_rows(candidates),candidates)],'legacy-futures-history-tab',stock_table_store)
+            old_missing=missing_data_rows(saved)
+            if old_missing:
+                st.subheader('Missing data recorded in this historical scan')
+                st.dataframe(pd.DataFrame(old_missing),hide_index=True,width='stretch')
+            st.download_button('Download historical scan JSON',json.dumps(saved,default=str),
+                file_name=f'futures_scan_{selected_id}.json',mime='application/json',key='futures-history-tab-download')
+        else:st.info('No standalone Futures scans have been saved yet.')
+    for tab, key in zip(tabs[1:4], ('report_a', 'report_b', 'report_c')):
         with tab:
             candidates=report[key]
             table_rows=[{**row,**context_columns(candidate)} for row,candidate in zip(result_rows(candidates),candidates)]

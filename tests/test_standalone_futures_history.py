@@ -56,7 +56,33 @@ futures_opportunities_page(SimpleNamespace(settings=SimpleNamespace(market_data_
     with patch('src.ui.futures_history.TradingPlatform',side_effect=AssertionError('Viewing history must not scan')):
         app=AppTest.from_string(code).run(timeout=15)
         assert not app.exception
+        assert {'Missing data','History'}.issubset({tab.label for tab in app.tabs})
         next(box for box in app.checkbox if box.label=='View a saved Futures scan').check().run(timeout=15)
         assert not app.exception
         assert any('Historical snapshot' in warning.value for warning in app.warning)
     assert len(db.list_futures_scans())==1
+
+
+def test_missing_fields_retain_reasons_and_do_not_mark_known_values_missing():
+    from src.ui.futures_history import missing_data_rows
+    value=report()
+    value['reviewed']=[{'symbol':'HINDPETRO','side':'SHORT','reason_codes':['CANDLES_MISSING'],
+        'evidence':{'rsi_14':47,'relative_volume':1.2},
+        'company_research':{'fundamentals':{'pe_ratio':0,'sector_pe':15}},
+        'execution_checks':{'futures_vwap_quality':{'status':'UNKNOWN','reason_codes':['INTRADAY_HISTORY_MISSING']}}}]
+    rows=missing_data_rows(value)
+    assert not any(row['Missing field'] in ('P/E','Sector P/E','RSI','Relative volume') for row in rows)
+    assert next(row for row in rows if row['Missing field']=='Futures VWAP')['Reason']=='INTRADAY_HISTORY_MISSING'
+
+
+def test_missing_data_and_history_tabs_visible_before_first_scan(tmp_path):
+    from streamlit.testing.v1 import AppTest
+    code=f'''from types import SimpleNamespace
+from ui_app import futures_opportunities_page
+from src.ui.database import ReportDatabase
+futures_opportunities_page(SimpleNamespace(settings=SimpleNamespace(market_data_source="cache")),ReportDatabase({str(tmp_path/'empty.db')!r}))
+'''
+    with patch('src.ui.futures_history.TradingPlatform',side_effect=AssertionError('No automatic scan')):
+        app=AppTest.from_string(code).run(timeout=15)
+        assert not app.exception
+        assert {'Missing data','History'}.issubset({tab.label for tab in app.tabs})
