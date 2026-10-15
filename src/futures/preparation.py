@@ -265,6 +265,9 @@ class PreparedScanner:
                 raise DataUnavailableError('Universe unavailable and no prepared universe exists; run FULL_RESEARCH') from exc
             symbols, self.instruments = cached['payload']['symbols'], cached['payload']['instruments']
             self.errors['universe_verification'] = source_failure(exc)
+        restricted=getattr(self.scanner.platform,'restricted_symbols',None)
+        if restricted is not None:
+            symbols=sorted(set(symbols).intersection(restricted))
         if not symbols:
             raise DataUnavailableError('Empty F&O universe')
         self.symbols = symbols
@@ -325,7 +328,7 @@ class PreparedScanner:
             proxy.manager.contracts = {}  # No unverified master may approve a listed contract.
             proxy.get_nfo_instruments = lambda: []
         step = perf_counter()
-        report = runner.scan(limit, now=now, include_backtest=False)
+        report = runner.scan(limit, now=now, include_backtest=False, selected_symbols=symbols)
         timings['scanner_seconds'] = perf_counter()-step
         timings.update({'scanner_'+key:value for key,value in report['timings'].items()})
         timings['total_seconds'] = perf_counter()-started

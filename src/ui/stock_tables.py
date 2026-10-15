@@ -156,7 +156,7 @@ def render_stock_table(rows,view,store):
         st.info('No stocks in this result.')
         return
     available=list(frame.columns)
-    preferred=['Symbol','Direction','Watchlist','Membership status','Enabled','Weekly score','Latest daily score','Latest daily decision',
+    preferred=['Symbol','Direction','AI infrastructure connection','Power sector connection','Futures availability','Delivery %','Monthly delivery %','Watchlist','Membership status','Enabled','Weekly score','Latest daily score','Latest daily decision',
                'Latest daily scan','Daily score status',
                'Daily score','Daily ranking score','OI score','OI regime','OI change %','OI ranking status','Score basis','Score failure','Decision','Sector','P/E','Sector P/E','Futures VWAP','RSI','Relative volume',
                'Relevant news','News status','News link','News published','News checked']

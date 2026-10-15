@@ -73,6 +73,7 @@ def record_company(manager, payload, stamp, source):
 def recover_existing_data(manager):
     """Import only missing records; never use scores/plans from an old report as new signals."""
     original = manager.scanner.provider
+    original = getattr(original,'recovery_provider',original)
     result = {'candles_imported':0, 'companies_imported':0, 'news_imported':0}
     if not isinstance(original, KiteDataProvider):
         return result
