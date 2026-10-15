@@ -293,6 +293,7 @@ FEATURE_JOBS = {
     "futures_scan": ("Futures LONG / SHORT scan", "futures_scan_report"),
     "ai_stock": ("AI-Stock scan", "ai_stock_report"),
     "power_stocks": ("Power Stocks scan", "power_stocks_report"),
+    "reality_stocks": ("Reality scan", "reality_stocks_report"),
 }
 
 
@@ -4045,6 +4046,7 @@ def main() -> None:
             "Futures LONG / SHORT": "Futures LONG / SHORT",
             "AI-Stock": "AI-Stock",
             "Power Stocks": "Power Stocks",
+            "Reality": "Reality",
             "AI analyst": "AI Assistant", "Codex developer": "Codex",
             "Watchlists & alerts": "Watchlists", "Report history": "History",
             "System & diagnostics": "System",
@@ -4144,6 +4146,9 @@ def main() -> None:
         render(platform,database,start_feature_job,feature_is_running)
     elif page == "Power Stocks":
         from src.ui.power_stocks import render
+        render(platform,database,start_feature_job,feature_is_running)
+    elif page == "Reality":
+        from src.ui.reality_stocks import render
         render(platform,database,start_feature_job,feature_is_running)
     elif page == "AI Assistant":
         ai_assistant_page(database)
