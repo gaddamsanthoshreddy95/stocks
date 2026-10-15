@@ -194,7 +194,7 @@ class KiteDataProvider:
             with self._history_cache_lock:
                 history = self._history_cache.get(key)
                 live_refresh = self._live_refresh
-            if history is not None:
+            if history is not None and not history.empty:
                 if live_refresh:
                     history = self._with_live_candle(key, history)
                 with self._history_cache_lock:
@@ -254,7 +254,10 @@ class KiteDataProvider:
             if live_refresh:
                 history = self._with_live_candle(key, history)
             with self._history_cache_lock:
-                self._history_cache[key] = history
+                if history is not None and not history.empty:
+                    self._history_cache[key] = history
+                else:
+                    self._history_cache.pop(key,None)
             return history.copy()
 
     def get_long_history(self, symbol: str, period: str = "10y"):

@@ -97,7 +97,12 @@ def missing_data_rows(report):
 
 
 def scan_and_save(settings,database,limit,mode,run_id):
-    report=TradingPlatform(settings=settings).scan_futures_opportunities(limit,mode=mode)
+    platform=TradingPlatform(settings=settings)
+    from src.data_provider.kite_data_provider import KiteDataProvider
+    if isinstance(getattr(platform,'provider',None),KiteDataProvider):
+        # access.py can update .env while Streamlit retains its old environment.
+        platform.provider.provider.reload_saved_credentials()
+    report=platform.scan_futures_opportunities(limit,mode=mode)
     report=fetch_missing_fundamentals(report,database=database)
     report['_ui_saved_scan_id']=database.save_futures_scan(report,settings.market_data_source,run_id)
     return report

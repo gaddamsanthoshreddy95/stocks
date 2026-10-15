@@ -389,8 +389,9 @@ def futures_opportunities_page(platform: TradingPlatform, database=None) -> None
         st.info('Company fundamentals refreshed separately. Prices, scores and trade decisions still belong to the original scan time.')
     st.caption(f"Scanned {report['universe_size']} stocks in each direction · {report['approved_count']} approved · {data_age(report['generated_at'])}")
     st.caption(f"{report.get('scan_mode','REFERENCE')} · elapsed {report.get('timings',{}).get('total_seconds',0):.1f}s")
+    st.caption(f"Saved market scan time: {report.get('generated_at')} · Page refresh does not run a new scan. Use Scan LONG and SHORT opportunities for a new market snapshot.")
     with st.expander('Stage timings and data freshness'):
-        st.json({'timings':report.get('timings',{}),'request_counts':report.get('request_counts',{}),'source_failures':report.get('source_failures',{})})
+        st.json({'timings':report.get('timings',{}),'request_counts':report.get('request_counts',{}),'source_failures':report.get('source_failures',{}),'scoring_failures':report.get('failures',[])})
     safety = report.get('execution_safety', {})
     window = safety.get('entry_window', {})
     if window:

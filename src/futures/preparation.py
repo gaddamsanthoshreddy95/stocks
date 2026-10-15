@@ -124,6 +124,21 @@ class PreparedDataProvider:
             return completed_frame(frame, self.manager.data_as_of, 'day')
         frame = frame.copy()
         quote = self.quotes.get('NSE:'+symbol)
+        if getattr(self.manager,'mode',None)=='LIVE_SCAN':
+            # A cache read is not evidence of a current market read.
+            from src.quality.futures_execution import FuturesExecutionConfig
+            from src.futures.sessions import ist
+            try:
+                if not quote or not quote.get('timestamp'):
+                    raise ValueError('LIVE_UNDERLYING_QUOTE_MISSING')
+                stamp=ist(quote['timestamp'])
+                current=self.manager.clock()
+                if stamp.date()!=current.date() or not 0<=(current-stamp).total_seconds()<=FuturesExecutionConfig.from_env().maximum_quote_age_seconds:
+                    raise ValueError('LIVE_UNDERLYING_QUOTE_STALE')
+            except (ValueError,TypeError) as exc:
+                self.manager.errors['NSE:'+symbol+':live_quote']={'type':str(exc),
+                    'quote_timestamp':quote.get('timestamp') if quote else None}
+                raise
         if not quote:
             return frame
         today = self.manager.clock().normalize()

@@ -467,6 +467,8 @@ class FuturesWorkspace:
             config=replace(legacy,entry_cutoff_hour=entry[0],entry_cutoff_minute=entry[1],intraday_exit_hour=flat[0],intraday_exit_minute=flat[1],
                            review_per_direction=max(legacy.review_per_direction,len(symbols)))
             factory=self.scanner_factory or FuturesOpportunityScanner
+            if self.scanner_factory is None:
+                self.adapter.refresh_credentials()
             def make_scanner():
                 scanner=factory(self.platform,config=config)
                 if self.scanner_factory is None:
@@ -519,7 +521,7 @@ class FuturesWorkspace:
                     item['reason_codes']=[*item.get('reason_codes',[]),'OPPOSITE_DIRECTION_APPROVED_REVIEW_REQUIRED']
                 buckets['short' if desired=='SHORT' else 'long'].append(item) if item['workspace_decision']=='ELIGIBLE' else buckets['other'].append(item)
             for name in ('long','short'):
-                buckets[name].sort(key=lambda r:r.get('original_daily_score') or 0,reverse=True)
+                buckets[name].sort(key=lambda r:r.get('daily_ranking_score',r.get('original_daily_score')) or 0,reverse=True)
                 if config.news_conflict_gate_enabled:
                     for overflow in buckets[name][5:]:
                         overflow['workspace_decision']='OUTSIDE_DAILY_TOP_5'
@@ -527,6 +529,13 @@ class FuturesWorkspace:
                         buckets['other'].append(overflow)
                     buckets[name]=buckets[name][:5]
             output.update({'status':'COMPLETED','selected_count':len(symbols),'selected_symbols':symbols,
+                'score_diagnostics':{
+                    'available_count':sum(i.get('original_daily_score') is not None for b in buckets.values() for i in b),
+                    'unavailable':[{'symbol':i['symbol'],'side':i['side'],
+                        'reasons':i.get('reason_codes',[]),'score_failure':i.get('score_failure'),
+                        'intraday_score_failure':i.get('intraday_score_failure')}
+                        for b in buckets.values() for i in b if i.get('original_daily_score') is None],
+                    'history_failures':getattr(scanner,'history_failures',{})},
                 'enabled_watchlist_count':len(enabled),'withheld_count':len(withheld),
                 'generated_at':report.get('generated_at',self.now().isoformat()),'market_bias':bias,**buckets,
                 'report':report,'watchlist_version':self.store.versions()[0]['id'] if self.store.versions() else None,

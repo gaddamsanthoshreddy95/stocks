@@ -207,6 +207,7 @@ def render(platform,database):
             st.write({'Database':str(store.path),'UI module':__file__,
                 'Current members':len(members),
                 'Enabled active members':sum(m['enabled'] and m['status']=='ACTIVE' for m in members),
+                'Score diagnostics':(daily or {}).get('score_diagnostics',{}),
                 'Latest daily job':{k:recent[0].get(k) for k in ('status','started_at','completed_at')} if recent else None})
         enabled=[m for m in members if m['enabled']]
         ready=sum(m['status']=='ACTIVE' for m in enabled)
@@ -224,6 +225,12 @@ def render(platform,database):
             submit('Combined Daily Trading scan',lambda:run_daily(store.path,platform.settings.market_data_source))
             st.rerun()
         if daily:
+            unavailable=[i for bucket in ('long','short','other') for i in daily.get(bucket,[]) if i.get('original_daily_score') is None]
+            if unavailable:
+                st.warning(f'{len(unavailable)} stocks have no verified daily score. Completion means the job finished, not that every stock had usable data.')
+                with st.expander('Why daily scores are unavailable',expanded=True):
+                    st.dataframe([{'Symbol':i['symbol'],'Reasons':', '.join(i.get('reason_codes',[])),
+                        'Failed validation':((i.get('score_failure') or {}).get('history_failure') or {}).get('detail') or (i.get('score_failure') or {}).get('detail','Not captured by this saved scan; run the updated scanner manually.')} for i in unavailable],hide_index=True)
             st.caption(f'Last saved daily scan: {daily.get("selected_count",0)} stocks evaluated • completed {daily.get("generated_at")}')
             if 'selected_symbols' in daily and set(daily['selected_symbols'])!={m['symbol'] for m in enabled if m['status']=='ACTIVE'}:
                 st.info('The current ready watchlist differs from this saved daily scan. Click SCAN SELECTED STOCKS to evaluate the current list.')

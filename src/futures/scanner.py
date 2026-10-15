@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from time import perf_counter
 import logging
 import pandas as pd
+from kiteconnect.exceptions import TokenException
 
 from src.application.errors import DataUnavailableError, ValidationError
 from src.event_risk.service import EventRiskService
@@ -22,6 +23,7 @@ from src.futures.research import CompanyResearch
 from src.news.analysis_service import NewsAnalysisService
 from src.news.today import INDEX_FUTURES, TodayNewsService
 from src.futures.news_conflict import evaluate as evaluate_conflict, research_policy, shortlist
+from src.futures.oi_ranking import apply_oi_ranking
 from src.quality.futures_execution import assess_execution, check, clean, FuturesExecutionConfig
 from src.quality.futures_selection import active_contracts, session_vwap_quality
 from src.quality.public_fundamentals import PublicFundamentalProvider
@@ -37,7 +39,7 @@ DECISION_PRIORITY = {'APPROVED': 5, 'WAIT': 4, 'UNKNOWN': 3, 'TOO LATE': 2, 'REJ
 
 def rank_key(item):
     return (DECISION_PRIORITY.get(item.get('final_decision'), 0),
-            item.get('technical_score') or 0, (item.get('plan') or {}).get('net_risk_reward') or 0)
+            item.get('daily_ranking_score',item.get('technical_score')) or 0, (item.get('plan') or {}).get('net_risk_reward') or 0)
 
 
 def short_priority(item):
@@ -64,6 +66,7 @@ class FuturesOpportunityScanner:
         self.event_provider = event_provider
         self.mapper = SectorMapper()
         self.context_cache = {}
+        self.history_failures = {}
         self._report_e_inputs = {}
         self._report_e_history = {}
         self.company_research = CompanyResearch(platform.settings.quality_config,
@@ -74,8 +77,14 @@ class FuturesOpportunityScanner:
             try:
                 raw = self.provider.get_data(symbol)
                 self.context_cache[symbol] = normalise_candles(raw, 'day', getattr(self, 'research_as_of', self._clock()), allow_live_daily=True)
+            except TokenException:
+                # Authentication is a job-wide failure, not missing stock history.
+                # Let the workspace's bounded credential reload handle it.
+                raise
             except Exception as exc:
                 LOGGER.warning('Directional history failed for %s: %s', symbol, type(exc).__name__)
+                self.history_failures[symbol] = {'stage':'DIRECTIONAL_HISTORY',
+                    'error_type':type(exc).__name__, 'detail':str(exc)}
                 self.context_cache[symbol] = None
         return self.context_cache[symbol]
 
@@ -101,6 +110,7 @@ class FuturesOpportunityScanner:
         if not symbols:
             raise DataUnavailableError('No configured NSE futures stock universe is available')
         self.context_cache.clear()
+        self.history_failures = {}
         self._report_e_inputs = {}
         self._report_e_history = {}
         self._final_frames = {}
@@ -124,8 +134,12 @@ class FuturesOpportunityScanner:
             from src.futures.gateway import KiteGateway
             gateway = getattr(self, 'account_gateway', None) or KiteGateway(self.provider, self.runtime)
             snapshot = gateway.account_snapshot(self._clock() if self._fixed_clock else None)
+            if snapshot.get('authentication_failed'):
+                raise TokenException('Kite rejected the scanner session; refresh the saved credentials before retrying.')
             return FuturesTradeLedger(self.runtime.ledger_path, self.config.maximum_daily_entries,
                 self.runtime.reconciliation_max_age_seconds).reconcile(snapshot, self._clock(), instruments)
+        except TokenException:
+            raise
         except Exception as exc:
             return unknown('BROKER_RECONCILIATION_FAILED:'+type(exc).__name__, self._clock())
 
@@ -143,12 +157,19 @@ class FuturesOpportunityScanner:
             try:
                 both = score_both(history, config=self.config, benchmark=benchmark, sector=sector_history)
             except (ValueError, TypeError, KeyError, IndexError) as exc:
-                failures.append({'symbol': symbol, 'reason': type(exc).__name__, 'detail':str(exc), 'history_rows':len(history) if history is not None else 0})
+                failure={'symbol': symbol, 'reason': type(exc).__name__, 'detail':str(exc), 'history_rows':len(history) if history is not None else 0,
+                         'history_failure':self.history_failures.get(symbol)}
+                failures.append(failure)
                 both = {side: {'side': side, 'technical_score': None, 'timing': 'UNKNOWN',
                                'setup_type': 'UNVERIFIED', 'reason_codes': ['DISCOVERY_DATA_UNAVAILABLE'],
-                               'evidence': {}} for side in ('LONG', 'SHORT')}
+                               'score_failure':failure, 'evidence': {}} for side in ('LONG', 'SHORT')}
             histories[symbol] = (history, sector_history)
             for side, item in both.items():
+                if item.get('technical_score') is None and 'score_failure' not in item:
+                    item['score_failure']={'stage':'DIRECTIONAL_SCORING',
+                        'detail':', '.join(item.get('reason_codes',[])),
+                        'history_rows':len(history) if history is not None else 0,
+                        'required_history':self.config.minimum_history}
                 item['daily_discovery'] = {**deepcopy(item), 'basis': 'DAILY_UNDERLYING_RESEARCH',
                     'provisional_daily_candle': bool(history is not None and not history.empty and pd.notna(history.iloc[-1].get('IS_LIVE_CANDLE')) and history.iloc[-1].get('IS_LIVE_CANDLE', False)),
                     'execution_confirmation': False}
@@ -442,19 +463,27 @@ class FuturesOpportunityScanner:
             except (ValueError, TypeError, KeyError, AttributeError):
                 pass
             item['futures_setup'] = future_setup
+            if future_setup.get('technical_score') is None:
+                item['intraday_score_failure']={'stage':'FUTURES_5_MINUTE_SCORING',
+                    'detail':', '.join(future_setup.get('reason_codes',[])),
+                    'history_rows':len(frame),'required_history':self.config.minimum_history,
+                    'fetch_errors':data.get('fetch_errors',{})}
             if future_setup.get('technical_score') is not None:
                 item['discovery_technical_score'] = item['technical_score']
                 item['discovery_setup_type'] = item['setup_type']
                 item['technical_score'] = future_setup['technical_score']
                 item['setup_type'] = future_setup['setup_type']
                 item['technical_score_timeframe'] = 'COMPLETED_FUTURES_5_MINUTE'
-        except (ValueError, TypeError, KeyError, IndexError):
-            pass
+        except (ValueError, TypeError, KeyError, IndexError) as exc:
+            item['intraday_score_failure']={'stage':'FUTURES_5_MINUTE_SCORING',
+                'error_type':type(exc).__name__,'detail':str(exc),
+                'fetch_errors':data.get('fetch_errors',{})}
         levels = future_setup.get('evidence', {}) if future_setup else {}
         # assess_execution's target-space proxy is not used: below, compare actual futures levels to futures entry.
         checks = assess_execution(data, stock_history=histories[0], sector_history=histories[1],
                                   levels={}, event=event, direction=direction, now=now)
         oi = checks['futures_oi_quality']
+        apply_oi_ranking(item,data,oi,self.config)
         known_regimes = {'LONG_BUILDUP', 'SHORT_BUILDUP', 'LONG_UNWINDING', 'SHORT_COVERING', 'UNCHANGED'}
         if oi.status != 'UNKNOWN' and oi.reason_codes and oi.reason_codes[0] in known_regimes:
             pc = oi.factors.get('price_change_percent', 0)

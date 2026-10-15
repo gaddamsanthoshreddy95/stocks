@@ -35,6 +35,19 @@ class KiteProvider(BaseProvider):
         self._last_historical_request = 0.0
         self._historical_min_interval = 0.34
 
+    def reload_saved_credentials(self, env_path=None):
+        """Apply a complete saved pair to this client without changing global env."""
+        from dotenv import dotenv_values
+        path=Path(env_path) if env_path is not None else Path(__file__).resolve().parents[2]/'.env'
+        saved=dotenv_values(path,interpolate=False)
+        key=(saved.get('KITE_API_KEY') or '').strip()
+        token=(saved.get('KITE_ACCESS_TOKEN') or '').strip()
+        if not key or not token:
+            return False
+        self.kite.api_key=key
+        self.kite.set_access_token(token)
+        return True
+
     # -----------------------------------------------------
 
     def get_profile(self):

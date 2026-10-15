@@ -6,6 +6,10 @@ import os
 
 @dataclass(frozen=True)
 class FuturesScanConfig:
+    oi_ranking_weight: float = .10
+    oi_minimum_change_percent: float = .1
+    oi_minimum_price_change_percent: float = .05
+    oi_full_strength_change_percent: float = 5.0
     news_conflict_gate_enabled: int = 0
     news_conflict_max_age_hours: float = 24
     news_conflict_snapshot_age_seconds: int = 900
@@ -70,6 +74,10 @@ class FuturesScanConfig:
             if abs(sum(self.weights(direction).values()) - 1) > 1e-8:
                 raise ValueError(f'{direction} weights must sum to one')
         if self.news_conflict_gate_enabled not in (0,1):raise ValueError('news_conflict_gate_enabled must be 0 or 1')
+        if not 0<=self.oi_ranking_weight<=1:
+            raise ValueError('oi_ranking_weight must be between zero and one')
+        if not 0<self.oi_minimum_change_percent<=self.oi_full_strength_change_percent or self.oi_minimum_price_change_percent<=0:
+            raise ValueError('OI ranking thresholds must be positive and ordered')
         for name in ('news_conflict_confirmation_bars','news_conflict_volume_lookback','news_conflict_snapshot_age_seconds','news_conflict_price_age_seconds'):
             if getattr(self,name)<1 or int(getattr(self,name))!=getattr(self,name):raise ValueError(name+' must be a positive integer')
         if self.news_conflict_confirmation_bars<2 or self.news_conflict_max_age_hours<=0 or self.news_conflict_minimum_rvol<=0 or self.news_conflict_minimum_move_percent<=0:

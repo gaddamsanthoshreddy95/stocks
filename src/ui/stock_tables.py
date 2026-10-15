@@ -26,6 +26,12 @@ def context_columns(row,weekly=None):
     valuation=(research_checks.get('valuation_quality') or {}).get('factors') or {}
     measured=lambda key,fallback:original[key] if original.get(key) is not None else valuation[fallback] if valuation.get(fallback) is not None else fundamental.get(key)
     missing_reasons=list(row.get('reason_codes',[]))
+    score_failure=row.get('score_failure') or {}
+    history_failure=score_failure.get('history_failure') or {}
+    score_detail=history_failure.get('detail') or score_failure.get('detail')
+    intraday_failure=row.get('intraday_score_failure') or {}
+    if score_detail:missing_reasons.append('Daily scoring: '+score_detail)
+    if intraday_failure.get('detail'):missing_reasons.append('Futures intraday scoring: '+intraday_failure['detail'])
     for name,check in research_checks.items():
         if check.get('status')=='UNKNOWN':
             missing_reasons.append(name+': '+', '.join(check.get('reason_codes',[]) or ['Data unavailable']))
@@ -56,6 +62,18 @@ def context_columns(row,weekly=None):
     else:
         state='Not checked / unknown'
     columns={'Sector':row.get('sector') or weekly.get('sector','UNKNOWN'),
+        'Daily ranking score':row.get('daily_ranking_score'),
+        'OI score':(row.get('oi_ranking') or {}).get('score'),
+        'OI ranking status':(row.get('oi_ranking') or {}).get('status','NOT_EVALUATED'),
+        'OI regime':(row.get('oi_ranking') or {}).get('regime'),
+        'OI change %':(row.get('oi_ranking') or {}).get('oi_change_percent'),
+        'OI price change %':(row.get('oi_ranking') or {}).get('price_change_percent'),
+        'OI baseline time':(row.get('oi_ranking') or {}).get('baseline_timestamp'),
+        'OI quote time':(row.get('oi_ranking') or {}).get('quote_timestamp'),
+        'Futures OI':(row.get('oi_ranking') or {}).get('current_oi'),
+        'OI ranking reasons':', '.join((row.get('oi_ranking') or {}).get('reason_codes',[])),
+        'Score basis':row.get('technical_score_timeframe','DAILY_UNDERLYING_RESEARCH') if row.get('technical_score') is not None else 'UNAVAILABLE',
+        'Score failure':score_detail or intraday_failure.get('detail'),
         'News reversal gate':(row.get('news_conflict_gate') or {}).get('status','NOT_ENABLED'),
         'News reversal reasons':', '.join((row.get('news_conflict_gate') or {}).get('reason_codes',[])),
         'Stock volume status':(weekly.get('stock_quality') or {}).get('status','UNKNOWN'),
@@ -140,7 +158,7 @@ def render_stock_table(rows,view,store):
     available=list(frame.columns)
     preferred=['Symbol','Direction','Watchlist','Membership status','Enabled','Weekly score','Latest daily score','Latest daily decision',
                'Latest daily scan','Daily score status',
-               'Daily score','Decision','Sector','P/E','Sector P/E','Futures VWAP','RSI','Relative volume',
+               'Daily score','Daily ranking score','OI score','OI regime','OI change %','OI ranking status','Score basis','Score failure','Decision','Sector','P/E','Sector P/E','Futures VWAP','RSI','Relative volume',
                'Relevant news','News status','News link','News published','News checked']
     preferred+=['News source','News snapshot','Fundamental source','Fundamentals as of']
     preferred+=['Fundamental snapshot','Supplemental fundamental source','Supplemental fundamentals as of','Supplemental fundamentals fetched','Supplemental fundamentals status','Supplemental data origin']

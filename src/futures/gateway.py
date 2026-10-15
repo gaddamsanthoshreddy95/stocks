@@ -4,7 +4,7 @@ from hashlib import sha256
 from time import monotonic, sleep
 
 from requests.exceptions import ConnectionError, Timeout
-from kiteconnect.exceptions import NetworkException, DataException
+from kiteconnect.exceptions import NetworkException, DataException, TokenException
 
 
 class KiteGateway:
@@ -90,4 +90,6 @@ class KiteGateway:
                 return {'status':'UNKNOWN','reasons':['BROKER_BOOK_CHANGED_DURING_RECONCILIATION']}
             return {**after,'status':'PASS','checked_at':ist(now if now is not None else pd.Timestamp.now(tz='Asia/Kolkata')).isoformat(),'read_only':True}
         except Exception as exc:
-            return {'status':'UNKNOWN','reasons':['BROKER_ACCOUNT_READ_FAILED:'+type(exc).__name__], 'read_only':True}
+            result={'status':'UNKNOWN','reasons':['BROKER_ACCOUNT_READ_FAILED:'+type(exc).__name__], 'read_only':True}
+            if isinstance(exc,TokenException):result['authentication_failed']=True
+            return result
