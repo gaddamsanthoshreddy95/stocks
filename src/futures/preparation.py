@@ -16,7 +16,7 @@ from src.futures.gateway import KiteGateway
 from src.futures.data_recovery import recover_existing_data, source_failure, completed_frame, completed_session_cutoff
 from src.futures.live_news import collect, fresh_result
 from src.futures.runtime import ScanRuntime, MODES
-from src.futures.sessions import normalise_candles, CALCULATION_VERSION
+from src.futures.sessions import normalise_candles, CALCULATION_VERSION, ist, trading_day
 from src.futures.execution_safety import finalize
 from src.news.analysis_service import NewsAnalysisService
 from src.news.today import stock_aliases, INDEX_FUTURES
@@ -51,6 +51,11 @@ def next_session(day):
     while following.weekday() >= 5 or following.date().isoformat() in holidays:
         following += pd.Timedelta(days=1)
     return following.date().isoformat()
+
+
+def live_market_open(now):
+    now=ist(now)
+    return trading_day(now) and (9,15)<=(now.hour,now.minute)<(15,30)
 
 
 class CachedCompanies:
@@ -122,12 +127,15 @@ class PreparedDataProvider:
             return None
         if getattr(self.manager,'mode',None) == 'AFTER_MARKET_RESEARCH':
             return completed_frame(frame, self.manager.data_as_of, 'day')
+        if getattr(self.manager,'mode',None)=='LIVE_SCAN' and not live_market_open(self.manager.clock()):
+            # Closed-market quotes cannot verify a live entry, but that must not
+            # erase valid completed daily research or invent a live daily bar.
+            return completed_frame(frame,self.manager.clock(),'day')
         frame = frame.copy()
         quote = self.quotes.get('NSE:'+symbol)
         if getattr(self.manager,'mode',None)=='LIVE_SCAN':
             # A cache read is not evidence of a current market read.
             from src.quality.futures_execution import FuturesExecutionConfig
-            from src.futures.sessions import ist
             try:
                 if not quote or not quote.get('timestamp'):
                     raise ValueError('LIVE_UNDERLYING_QUOTE_MISSING')
@@ -321,9 +329,11 @@ class PreparedScanner:
         timings['scanner_seconds'] = perf_counter()-step
         timings.update({'scanner_'+key:value for key,value in report['timings'].items()})
         timings['total_seconds'] = perf_counter()-started
+        live_closed=mode=='LIVE_SCAN' and not live_market_open(self.clock())
         report.update(scan_mode=mode, timings=timings, request_counts=self.gateway.counts, source_failures=self.errors,
                       prepared_for_session=next_session(self.now.normalize()) if mode in ('FULL_RESEARCH','DAILY_PREP') else self.now.date().isoformat(),
-                      cache_recovery=recovery, research_only=mode=='AFTER_MARKET_RESEARCH',
+                      cache_recovery=recovery, research_only=mode=='AFTER_MARKET_RESEARCH' or live_closed,
+                      live_market_closed=live_closed,
                       completed_session_as_of=self.data_as_of.isoformat() if mode=='AFTER_MARKET_RESEARCH' else None,
                       cache_directory=str(self.cache.path), execution_time_target_seconds=[30,120],
                       performance_target_met=timings['total_seconds']<=120 if mode=='LIVE_SCAN' else None)

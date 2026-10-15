@@ -390,6 +390,14 @@ def futures_opportunities_page(platform: TradingPlatform, database=None) -> None
     st.caption(f"Scanned {report['universe_size']} stocks in each direction · {report['approved_count']} approved · {data_age(report['generated_at'])}")
     st.caption(f"{report.get('scan_mode','REFERENCE')} · elapsed {report.get('timings',{}).get('total_seconds',0):.1f}s")
     st.caption(f"Saved market scan time: {report.get('generated_at')} · Page refresh does not run a new scan. Use Scan LONG and SHORT opportunities for a new market snapshot.")
+    if report.get('live_market_closed'):
+        st.info('Market was closed at this scan. Available scores use completed daily history for research. Live OI ranking and trade approval are unavailable; use AFTER_MARKET_RESEARCH for completed-session intraday analysis.')
+    if report.get('reviewed') and all(i.get('technical_score') is None for i in report['reviewed']):
+        st.error('No technical scores were calculated. The scan finished, but its price data was unavailable or failed validation. This is not a successful scored result.')
+        details=list(dict.fromkeys(str(f.get('detail') or f.get('reason')) for f in report.get('failures',[])))
+        if details:st.write('Scoring failures: '+'; '.join(details[:3]))
+        if report.get('scan_mode')=='LIVE_SCAN':
+            st.info('LIVE_SCAN needs prepared history. If history is missing, manually run AFTER_MARKET_RESEARCH after close or DAILY_PREP to prepare data. Authentication failures must be resolved before data can be fetched.')
     with st.expander('Stage timings and data freshness'):
         st.json({'timings':report.get('timings',{}),'request_counts':report.get('request_counts',{}),'source_failures':report.get('source_failures',{}),'scoring_failures':report.get('failures',[])})
     safety = report.get('execution_safety', {})
