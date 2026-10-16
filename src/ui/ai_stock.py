@@ -87,7 +87,7 @@ class AiStockHistory:
             return json.loads(row[0]) if row else None
 
 
-def scan_ai_stock(settings,database,limit,mode,run_id,*,stocks=None,title='AI-Stock',cache_name='ai_stock_prepared',history_class=AiStockHistory,saved_id='_ai_saved_scan_id'):
+def scan_ai_stock(settings,database,limit,mode,run_id,*,stocks=None,title='AI-Stock',cache_name='ai_stock_prepared',history_class=AiStockHistory,saved_id='_ai_saved_scan_id',companies=None):
     stocks=AI_STOCKS if stocks is None else stocks
     platform=TradingPlatform(settings=settings)
     from src.data_provider.kite_data_provider import KiteDataProvider
@@ -109,7 +109,7 @@ def scan_ai_stock(settings,database,limit,mode,run_id,*,stocks=None,title='AI-St
     day=pd.Timestamp(report['generated_at']).date()
     verified=not report.get('source_failures',{}).get('universe_verification') and scoped.provider.master is not None
     report['feature']=title
-    report['universe']=[{'symbol':symbol,'connection':connection,
+    report['universe']=[{'symbol':symbol,'company':(companies or {}).get(symbol),'connection':connection,
         'futures_status':('ACTIVE_CONTRACT_VERIFIED' if active_contracts(symbol,scoped.provider.master,day) else 'NO_ACTIVE_CONTRACT') if verified else 'UNVERIFIED'}
         for symbol,connection in stocks.items()]
     # Defensive isolation: no returned row may escape the user-supplied universe.
@@ -119,13 +119,13 @@ def scan_ai_stock(settings,database,limit,mode,run_id,*,stocks=None,title='AI-St
     return report
 
 
-def render(platform,database,start_job,is_running,*,stocks=None,title='AI-Stock',feature='ai_stock',history_class=AiStockHistory,scan_function=None,connection_label='AI infrastructure connection'):
+def render(platform,database,start_job,is_running,*,stocks=None,title='AI-Stock',feature='ai_stock',history_class=AiStockHistory,scan_function=None,connection_label='AI infrastructure connection',companies=None):
     stocks=AI_STOCKS if stocks is None else stocks
     scan_function=scan_function or scan_ai_stock
     view_prefix=feature.replace('_','-')
     st.header(title)
     st.caption(f'Your {len(stocks)}-stock watchlist · existing fundamental, technical, news and OI analysis · manual scans only')
-    st.dataframe([{'Stock':symbol,connection_label:connection,'Futures':'Verify active contract during scan'}
+    st.dataframe([{'Stock':symbol,**({'Company':companies[symbol]} if companies and symbol in companies else {}),connection_label:connection,'Futures':'Verify active contract during scan'}
         for symbol,connection in stocks.items()],hide_index=True,width='stretch')
     mode=st.selectbox(title+' scan mode',['AFTER_MARKET_RESEARCH','LIVE_SCAN','DAILY_PREP','FULL_RESEARCH'],key=view_prefix+'-mode')
     st.caption(f'After market: AFTER_MARKET_RESEARCH. During market: LIVE_SCAN uses prepared history. DAILY_PREP / FULL_RESEARCH prepare only these {len(stocks)} stocks.')
@@ -166,7 +166,7 @@ def render(platform,database,start_job,is_running,*,stocks=None,title='AI-Stock'
             original=(item.get('company_research') or {}).get('fundamentals') or {}
             facts={**((item.get('display_fundamentals') or {}).get('snapshot') or {}),
                 **{key:value for key,value in original.items() if value is not None}}
-            rows.append({**row,**context_columns(display),connection_label:stocks.get(item['symbol']),
+            rows.append({**row,**context_columns(display),**({'Company':companies[item['symbol']]} if companies and item['symbol'] in companies else {}),connection_label:stocks.get(item['symbol']),
                 'Futures availability':availability.get(item['symbol'],'UNVERIFIED'),
                 'Delivery %':facts.get('delivery_percent'),'Monthly delivery %':facts.get('monthly_delivery_percent')})
         render_stock_table(rows,view,preferences)

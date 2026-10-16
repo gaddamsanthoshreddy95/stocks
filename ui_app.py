@@ -294,6 +294,7 @@ FEATURE_JOBS = {
     "ai_stock": ("AI-Stock scan", "ai_stock_report"),
     "power_stocks": ("Power Stocks scan", "power_stocks_report"),
     "reality_stocks": ("Reality scan", "reality_stocks_report"),
+    "defence_india": ("Defence India scan", "defence_india_report"),
 }
 
 
@@ -4047,6 +4048,7 @@ def main() -> None:
             "AI-Stock": "AI-Stock",
             "Power Stocks": "Power Stocks",
             "Reality": "Reality",
+            "Defence India": "Defence India",
             "AI analyst": "AI Assistant", "Codex developer": "Codex",
             "Watchlists & alerts": "Watchlists", "Report history": "History",
             "System & diagnostics": "System",
@@ -4149,6 +4151,9 @@ def main() -> None:
         render(platform,database,start_feature_job,feature_is_running)
     elif page == "Reality":
         from src.ui.reality_stocks import render
+        render(platform,database,start_feature_job,feature_is_running)
+    elif page == "Defence India":
+        from src.ui.defence_india import render
         render(platform,database,start_feature_job,feature_is_running)
     elif page == "AI Assistant":
         ai_assistant_page(database)
