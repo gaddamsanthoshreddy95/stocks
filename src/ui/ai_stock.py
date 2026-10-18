@@ -105,8 +105,7 @@ def scan_ai_stock(settings,database,limit,mode,run_id,*,stocks=None,title='AI-St
     runtime=ScanRuntime.from_env()
     # Dedicated universe/cache; the execution ledger stays global across features.
     runtime=replace(runtime,cache_directory=str(Path(runtime.cache_directory).parent/cache_name))
-    scan_limit=max(1,len(stocks)*2) if all_universe else limit
-    report=FuturesOpportunityScanner(scoped,config=config).scan(scan_limit,mode=mode,runtime=runtime)
+    report=FuturesOpportunityScanner(scoped,config=config).scan(limit,mode=mode,runtime=runtime)
     report=platform._serialize(report)
     report=fetch_missing_fundamentals(report,database=database)
     day=pd.Timestamp(report['generated_at']).date()
@@ -135,7 +134,7 @@ def render(platform,database,start_job,is_running,*,stocks=None,title='AI-Stock'
             for symbol,connection in stocks.items()],hide_index=True,width='stretch')
     mode=st.selectbox(title+' scan mode',['AFTER_MARKET_RESEARCH','LIVE_SCAN','DAILY_PREP','FULL_RESEARCH'],index=1 if all_universe else 0,key=view_prefix+'-mode')
     st.caption(f'After market: AFTER_MARKET_RESEARCH. During market: LIVE_SCAN uses prepared history. DAILY_PREP / FULL_RESEARCH prepare the selected universe.' if all_universe else f'After market: AFTER_MARKET_RESEARCH. During market: LIVE_SCAN uses prepared history. DAILY_PREP / FULL_RESEARCH prepare only these {len(stocks)} stocks.')
-    limit=st.number_input('Candidates per direction',min_value=1,max_value=100 if all_universe else len(stocks),value=5 if all_universe else min(5,len(stocks)),key=view_prefix+'-limit')
+    limit=st.number_input('Candidates per direction',min_value=1,max_value=50 if all_universe else len(stocks),value=5 if all_universe else min(5,len(stocks)),key=view_prefix+'-limit')
     busy=is_running(feature)
     if st.button('Scan '+title,type='primary',disabled=busy):
         run_id=str(uuid4())

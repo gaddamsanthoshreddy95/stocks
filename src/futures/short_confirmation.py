@@ -1,5 +1,6 @@
 """Strict, prefix-only SHORT confirmation; never manufactures missing market data."""
 from math import isfinite
+from src.futures.sector_direction import alignment
 import pandas as pd
 from src.futures.sessions import ist,normalise_candles,completed_session_check
 from src.quality.futures_execution import clean
@@ -67,6 +68,9 @@ def evaluate(data,oi_check,now,config):
         ret=lambda f:float((f.Close.iloc[-1]/f.Open.iloc[0]-1)*100)
         sr,nr,br=ret(stock),ret(nifty),ret(sector)
         evidence.update(stock_session_return_percent=sr,nifty_session_return_percent=nr,sector_session_return_percent=br)
+        direction = alignment('SHORT', sr, br)
+        evidence['sector_direction'] = direction
+        conflicts.extend(direction['reason_codes'])
         if sr>nr:conflicts.append('SHORT_STOCK_STRONGER_THAN_NIFTY_INTRADAY')
         if sr>br:conflicts.append('SHORT_STOCK_STRONGER_THAN_SECTOR_INTRADAY')
         if getattr(oi_check,'status','UNKNOWN')=='UNKNOWN':raise ValueError('SHORT_OI_CONFIRMATION_UNAVAILABLE')

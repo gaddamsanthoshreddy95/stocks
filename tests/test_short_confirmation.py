@@ -19,11 +19,15 @@ def inputs():
     frame=pd.DataFrame(rows,index=index,columns=['Open','High','Low','Close'])
     frame['Volume']=1000
     benchmark=frame.copy()
-    for col in ('Open','High','Low','Close'):benchmark[col]=100
+    for col in ('Open','High','Low','Close'):benchmark[col]=100.0
     benchmark['High']=100.1;benchmark['Low']=99.9
     data={'underlying_intraday':frame.copy(),'intraday':frame.copy(),
         'short_nifty_intraday':benchmark.copy(),'short_sector_intraday':benchmark.copy(),
         'instrument_token':42,'quote':{'instrument_token':42,'last_price':196.49,'timestamp':NOW.isoformat()}}
+    # Weak sector supports the short; stock remains weaker than its sector.
+    sector=data['short_sector_intraday']
+    sector.iloc[-1,sector.columns.get_loc('Close')]=99.8
+    sector.iloc[-1,sector.columns.get_loc('Low')]=99.7
     data['spot_quote']={'last_price':196.49,'timestamp':NOW.isoformat()}
     oi=SimpleNamespace(status='PASS',factors={'price_change_percent':-1,'oi_change_percent':2})
     return data,oi

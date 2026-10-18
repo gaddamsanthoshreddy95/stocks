@@ -56,13 +56,24 @@ def filter_discount_report(report, limit):
         'directional_evaluations': len(rows), 'statuses': dict(Counter(i['futures_discount']['status'] for i in rows)),
         'matching_stocks': len({symbol for symbol, _ in matches}),
         'note': 'Discount is a price filter, not entry approval. Unavailable evidence is not a confirmed non-match.'}
-    # Preserve the original order and scores. Filter the full ranked lists before applying UI limits.
-    evidence = {(i['symbol'], i['side']): i['futures_discount'] for i in rows}
-    for key in ('report_a', 'report_b', 'report_c'):
-        selected = [i for i in result.get(key, []) if (i['symbol'], i['side']) in matches]
-        for item in selected:
-            item['futures_discount'] = evidence[(item['symbol'], item['side'])]
-        result[key] = selected[:limit]
+    # The shared scanner caps displayed lists at 50, but reviewed retains the full
+    # universe. Reuse its ranking functions after filtering, without another scan.
+    from src.futures.scanner import rank_key, short_priority, DECISION_PRIORITY
+    from src.futures.news_conflict import shortlist
+    matched = [i for i in rows if (i['symbol'], i['side']) in matches]
+    for side, key in (('LONG', 'report_a'), ('SHORT', 'report_b')):
+        pool = [i for i in matched if i['side'] == side and i.get('technical_score') is not None]
+        if result.get('scan_mode') == 'AFTER_MARKET_RESEARCH':
+            ranked = sorted(pool, key=lambda i: i['technical_score'], reverse=True)
+        elif side == 'SHORT':
+            ranked = sorted(pool, key=lambda i: (
+                DECISION_PRIORITY.get(i.get('decision_before_entry_quality', i.get('final_decision')), 0),
+                short_priority(i), *rank_key(i)[1:]), reverse=True)
+        else:
+            ranked = sorted(pool, key=rank_key, reverse=True)
+        result[key] = shortlist(ranked, limit)
+    eligible = sorted((i for i in matched if i.get('final_decision') == 'APPROVED'), key=rank_key, reverse=True)
+    result['report_c'] = [] if result.get('scan_mode') == 'AFTER_MARKET_RESEARCH' else shortlist(eligible, limit)
     result['discount_diagnostics'] = [{'symbol': i['symbol'], 'side': i['side'], **i['futures_discount']}
         for i in rows if i['futures_discount']['status'] != 'MATCH']
     result['reviewed'] = [i for i in rows if (i['symbol'], i['side']) in matches]
@@ -72,7 +83,7 @@ def filter_discount_report(report, limit):
 
 
 def scan_imp_future(settings, database, limit, mode, run_id):
-    # One shared scan, with full ranked lists retained until the discount filter runs.
+    # One shared scan; rebuild discount shortlists from its full reviewed universe.
     return scan_ai_stock(settings, database, limit, mode, run_id, all_universe=True,
         title='Imp Future', cache_name='imp_future_prepared', history_class=ImpFutureHistory,
         saved_id='_imp_future_saved_scan_id', postprocess=lambda report: filter_discount_report(report, limit))
