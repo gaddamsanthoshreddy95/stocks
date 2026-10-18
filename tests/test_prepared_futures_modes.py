@@ -15,6 +15,8 @@ from src.futures.config import FuturesScanConfig
 
 def test_live_uses_prepared_research_no_backtests_and_batched_quotes(tmp_path):
     scanner,provider=fixture()
+    # Isolate legacy cache equivalence from the new live benchmark confirmation reads.
+    scanner.config=replace(scanner.config,long_confirmation_gate_enabled=0,short_confirmation_gate_enabled=0)
     runtime,cache=seed(scanner,tmp_path)
     with patch('src.futures.backtest.FuturesIntradayBacktester.run',side_effect=AssertionError('No live backtests')):
         result=scanner.scan(mode='LIVE_SCAN',runtime=runtime,now=NOW)
@@ -33,6 +35,8 @@ def test_live_uses_prepared_research_no_backtests_and_batched_quotes(tmp_path):
 
 def test_reference_and_prepared_outputs_match_same_snapshot(tmp_path):
     scanner,provider=fixture()
+    # Isolate legacy cache equivalence from the new live benchmark confirmation reads.
+    scanner.config=replace(scanner.config,long_confirmation_gate_enabled=0,short_confirmation_gate_enabled=0)
     reference=scanner.scan(now=NOW,include_backtest=False)
     runtime,cache=seed(scanner,tmp_path)
     prepared=scanner.scan(mode='LIVE_SCAN',runtime=runtime,now=NOW)

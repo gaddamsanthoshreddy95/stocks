@@ -52,6 +52,11 @@ class FuturesOpportunitiesPresenter:
                  '|---|---|---|---|']
         for key, check in item.get('execution_checks', {}).items():
             lines.append(f"| {key} | {check['status']} | {check.get('factors', {})} | {', '.join(check.get('reason_codes', []))} |")
+        quality=item.get('entry_quality')
+        if quality:
+            lines.extend(['',f"Entry Quality ({quality.get('mode')}): {quality.get('classification')}; assessed {quality.get('assessed_at')}.",
+                f"Reasons: {', '.join(quality.get('reason_codes',[]))}. Conditional entry zone: {quality.get('entry_zone')}.",
+                'REPORT_ONLY assessments do not change the recorded production decision.' if quality.get('mode')=='REPORT_ONLY' else 'Entry quality can withdraw approval only.'])
         lines.append('')
         short_entry = item.get('short_entry', {})
         if item['side'] == 'SHORT':

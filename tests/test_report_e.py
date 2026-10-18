@@ -261,10 +261,14 @@ def test_cli_api_streamlit_and_scheduled_output_backward_compatible(capsys,tmp_p
     tree=ast.parse(Path('ui_app.py').read_text());fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='futures_opportunities_page')
     context=Mock();context.__enter__=Mock(return_value=context);context.__exit__=Mock(return_value=False)
     st=Mock();st.session_state={'futures_scan_report':r};st.number_input.return_value=5;st.selectbox.return_value='LIVE_SCAN';st.button.return_value=False
-    st.tabs.return_value=[context]*3;st.expander.return_value=context;jobs=Mock();jobs.future.return_value=None
+    st.tabs.return_value=[context]*6;st.expander.return_value=context;st.checkbox.return_value=False;jobs=Mock();jobs.future.return_value=None
     env={'st':st,'TradingPlatform':Mock,'daily_report_jobs':lambda:jobs,'feature_is_running':lambda _:False,'data_age':lambda _:'fresh',
-         'FuturesOpportunitiesPresenter':FuturesOpportunitiesPresenter,'json':json}
-    exec(compile(ast.Module(body=[fn],type_ignores=[]),'ui_app.py','exec'),env);env['futures_opportunities_page'](Mock())
+         'FuturesOpportunitiesPresenter':FuturesOpportunitiesPresenter,'json':json,'pd':pd}
+    exec(compile(ast.Module(body=[fn],type_ignores=[]),'ui_app.py','exec'),env)
+    database=Mock();database.path=tmp_path/'ui.db';database.list_futures_scans.return_value=[]
+    r['_ui_saved_scan_id']='existing-test-snapshot'
+    with patch('src.ui.stock_tables.render_stock_table'):
+        env['futures_opportunities_page'](Mock(),database)
     assert st.markdown.call_args_list[-2].args[0].startswith('## ADDITIONAL ANALYSIS')
     assert st.markdown.call_args_list[-1].args[0].startswith('## '+TITLE)
 

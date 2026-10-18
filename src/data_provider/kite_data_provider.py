@@ -316,6 +316,15 @@ class KiteDataProvider:
             # A cache/serialization failure must not discard fetched market data.
             logger.warning('Unable to persist intraday candles for %s', filename)
 
+    def refresh_execution_quotes(self,symbol,contract,data):
+        """Refresh only the exact contract/spot quotes; never redownload history."""
+        from src.futures.gateway import KiteGateway
+        from src.futures.runtime import ScanRuntime
+        quotes=KiteGateway(self,ScanRuntime.from_env()).quotes(['NFO:'+contract['tradingsymbol'],'NSE:'+symbol])
+        return {**data,'quote':quotes.get('NFO:'+contract['tradingsymbol'],{}),
+            'spot_quote':quotes.get('NSE:'+symbol,{}),
+            'spot_price':quotes.get('NSE:'+symbol,{}).get('last_price')}
+
     def get_futures_execution_data(self, symbol: str, contract: dict) -> dict:
         """Fresh quotes and OI candles for the exact selected expiry; no margins/orders."""
         from datetime import timedelta
@@ -358,6 +367,7 @@ class KiteDataProvider:
             quotes = {}
             errors['quote'] = type(exc).__name__
         return {"contract": contract, "quote": quotes.get(key, {}),
+                'spot_quote':quotes.get(spot_key,{}),
                 "spot_price": quotes.get(spot_key, {}).get("last_price"),
                 **histories, 'fetch_errors': errors,
                 'fetched_at': datetime.now(ZoneInfo('Asia/Kolkata')).isoformat(),

@@ -458,8 +458,17 @@ class SelectedScanProvider:
             quotes={}
         for key,value in entries:
             value.update({'quote':quotes.get('NFO:'+key[2],{}),'spot_price':quotes.get('NSE:'+key[1],{}).get('last_price'),
+                          'spot_quote':quotes.get('NSE:'+key[1],{}),
                           'fetched_at':pd.Timestamp.now(tz='Asia/Kolkata').isoformat()})
         self.quote_refresh_clock=time.monotonic()
+
+    def refresh_execution_quotes(self,symbol,contract,data):
+        if self._gateway is None:self._gateway=KiteGateway(self._wrapped,ScanRuntime.from_env())
+        quotes=self._gateway.quotes(['NFO:'+contract['tradingsymbol'],'NSE:'+symbol])
+        fresh={**data,'quote':quotes.get('NFO:'+contract['tradingsymbol'],{}),
+            'spot_quote':quotes.get('NSE:'+symbol,{}),
+            'spot_price':quotes.get('NSE:'+symbol,{}).get('last_price')}
+        return fresh
 
     def get_futures_execution_data(self,symbol,contract):
         import time

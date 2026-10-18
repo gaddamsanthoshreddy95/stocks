@@ -78,4 +78,6 @@ def finalize(report, frames, reconciliation, now, config, max_snapshot_age=120):
         'contradictory_symbols': sorted(conflicts), 'broker_actions': 'READ_ONLY',
         'calculation_version': CALCULATION_VERSION, 'final_checked_at': now.isoformat(),
         'discovery_basis': 'DAILY_UNDERLYING_RESEARCH', 'execution_basis': 'COMPLETED_FUTURES_5_MINUTE_AND_FRESH_DEPTH'}
+    from src.futures.entry_quality import refresh_report
+    refresh_report(report,now,scan_config=config)
     return report

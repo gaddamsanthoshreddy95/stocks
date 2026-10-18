@@ -797,6 +797,12 @@ class TradingPlatform:
             and item.get("trade_eligibility", {}).get("eligible")
             and item.get("final_action") == "BUY"
         ]
+        # This legacy daily screen does not validate exact-contract intraday entry.
+        for candidate in reviewed+qualified+report.get('watchlist',[]):
+            candidate['entry_quality']={'version':'ENTRY_QUALITY_V1','mode':'REPORT_ONLY',
+                'classification':'SKIP','status':'NOT_APPLICABLE',
+                'reason_codes':['DAILY_RESEARCH_NOT_AN_EXACT_CONTRACT_INTRADAY_ENTRY'],
+                'production_decision_changed':False}
         return {
             "market_data_source": self.settings.market_data_source,
             "universe_size": report.get("summary", {}).get("stocks_scanned", 0),

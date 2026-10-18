@@ -118,7 +118,7 @@ class FuturesIntradayBacktester:
                     'setup_invalidation_price': setup['evidence'].get('setup_invalidation_price') if side == 'SHORT' else None})
         return results
 
-    def simulate(self, frame, start, side, setup_type, lot_size, *, entry_trigger=None, invalidation=None, underlying=None):
+    def simulate(self, frame, start, side, setup_type, lot_size, *, entry_trigger=None, invalidation=None, underlying=None, entry_reference=None, exit_spread_bps=0):
         # Positional start is used internally; reject invalid direct-call session data rather than shift it.
         normalized = normalise_candles(frame, '5minute')
         if not normalized.index.equals(frame.index):
@@ -130,6 +130,11 @@ class FuturesIntradayBacktester:
             return None
         entry = float(frame.iloc[start].Open)
         fill_basis = 'NEXT_BAR_OPEN'
+        if entry_reference is not None:
+            from math import isfinite
+            if not isfinite(entry_reference) or entry_reference<=0:raise ValueError('Invalid recorded execution reference')
+            entry=float(entry_reference)
+            fill_basis='RECORDED_DEPTH_WEIGHTED_DECISION_REFERENCE_NOT_EXECUTED_FILL'
         if side == 'SHORT' and entry_trigger is not None:
             if entry > entry_trigger:
                 if float(frame.iloc[start].Low) > entry_trigger:
@@ -137,9 +142,16 @@ class FuturesIntradayBacktester:
                 entry, fill_basis = float(entry_trigger), 'TRIGGER_TOUCHED_IN_NEXT_BAR'
             if (entry_trigger-entry)/entry_trigger*100 > self.config.short_maximum_trigger_distance_percent:
                 return None
+        if side == 'LONG' and entry_trigger is not None:
+            if entry < entry_trigger:
+                if float(frame.iloc[start].High) < entry_trigger:
+                    return None
+                entry, fill_basis = float(entry_trigger), 'TRIGGER_TOUCHED_IN_NEXT_BAR'
+            if (entry-entry_trigger)/entry_trigger*100 > self.config.short_maximum_trigger_distance_percent:
+                return None
         sign = 1 if side == 'LONG' else -1
         target, stop = entry*(1+sign*self.config.target_fraction), entry*(1-sign*self.config.stop_fraction)
-        if side == 'SHORT' and invalidation is not None and stop <= invalidation:
+        if invalidation is not None and ((side == 'SHORT' and stop <= invalidation) or (side == 'LONG' and stop >= invalidation)):
             return None
         mae = mfe = 0
         outcome, exit_price, exit_index = 'INTRADAY_EXIT', entry, start
@@ -169,7 +181,7 @@ class FuturesIntradayBacktester:
             return None  # Incomplete final session cannot establish an intraday exit.
         if outcome == 'INTRADAY_EXIT' and (frame.index[exit_index].hour, frame.index[exit_index].minute) < self.exit_time:
             return None
-        pnl = self.costs.round_trip(entry, exit_price, lot_size, side, entry_stamp.date())
+        pnl = self.costs.round_trip(entry, exit_price, lot_size, side, entry_stamp.date(), exit_spread_bps=exit_spread_bps)
         return {'side': side, 'setup_type': setup_type, 'entry': entry, 'target': target, 'stop_loss': stop,
                 'movement_basis': 'FUTURES', 'underlying_entry': None,
                 'exit_fill_basis': 'BARRIER_PRICE_WITH_GAP_HANDLING',

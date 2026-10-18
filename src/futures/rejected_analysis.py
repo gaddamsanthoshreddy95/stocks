@@ -1,4 +1,5 @@
 """Read-only Report D: no providers, recalculation of setups, or approval changes."""
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
@@ -88,6 +89,7 @@ def build_report_d(report):
         row = {
             'symbol': item.get('symbol'), 'side': item.get('side'), 'status': 'REJECTED / RESEARCH ONLY',
             'original_decision': item.get('final_decision'), 'classification': category,
+            **({'entry_quality_assessment':deepcopy(item['entry_quality'])} if item.get('entry_quality') else {}),
             'technical_score': score, 'research_scores': {k: v.get('score') for k, v in research.get('checks', {}).items()},
             'fundamental_assessment': research.get('fundamental_assessment'),
             'entry': plan.get('entry'), 'target': plan.get('target'), 'stop_loss': plan.get('stop_loss'),

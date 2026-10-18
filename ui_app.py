@@ -292,6 +292,7 @@ FEATURE_JOBS = {
     "analysis": ("Stock analysis", "analysis_result"),
     "futures_scan": ("Futures LONG / SHORT scan", "futures_scan_report"),
     "ai_stock": ("AI-Stock scan", "ai_stock_report"),
+    "imp_future": ("Imp Future scan", "imp_future_report"),
     "power_stocks": ("Power Stocks scan", "power_stocks_report"),
     "reality_stocks": ("Reality scan", "reality_stocks_report"),
     "defence_india": ("Defence India scan", "defence_india_report"),
@@ -418,6 +419,7 @@ def futures_opportunities_page(platform: TradingPlatform, database=None) -> None
     tabs=st.tabs(['All reviewed','A · Bullish','B · Bearish','C · Combined approved','Missing data','History'])
     with tabs[0]:
         st.subheader('All reviewed stocks · news and measurements')
+        st.caption('LONG/SHORT are the directions evaluated. A high score alone is not an entry recommendation; check Decision and the confirmation reasons.')
         reviewed=report.get('reviewed',[])
         render_stock_table([{**row,**context_columns(candidate)} for row,candidate in zip(result_rows(reviewed),reviewed)],
                            'legacy-futures-reviewed',stock_table_store)
@@ -448,6 +450,8 @@ def futures_opportunities_page(platform: TradingPlatform, database=None) -> None
         else:st.info('No standalone Futures scans have been saved yet.')
     for tab, key in zip(tabs[1:4], ('report_a', 'report_b', 'report_c')):
         with tab:
+            if key=='report_b':
+                st.caption('SHORT research includes unapproved setups. Only Decision = APPROVED has passed the recorded entry checks.')
             candidates=report[key]
             table_rows=[{**row,**context_columns(candidate)} for row,candidate in zip(result_rows(candidates),candidates)]
             render_stock_table(table_rows,'legacy-futures-'+key,stock_table_store)
@@ -4046,6 +4050,7 @@ def main() -> None:
             "Analyze stock": "Analyze", "Bearish options": "Bearish options",
             "Futures LONG / SHORT": "Futures LONG / SHORT",
             "AI-Stock": "AI-Stock",
+            "Imp Future": "Imp Future",
             "Power Stocks": "Power Stocks",
             "Reality": "Reality",
             "Defence India": "Defence India",
@@ -4145,6 +4150,9 @@ def main() -> None:
         futures_opportunities_page(platform,database)
     elif page == "AI-Stock":
         from src.ui.ai_stock import render
+        render(platform,database,start_feature_job,feature_is_running)
+    elif page == "Imp Future":
+        from src.ui.imp_future import render
         render(platform,database,start_feature_job,feature_is_running)
     elif page == "Power Stocks":
         from src.ui.power_stocks import render

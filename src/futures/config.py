@@ -6,6 +6,12 @@ import os
 
 @dataclass(frozen=True)
 class FuturesScanConfig:
+    long_confirmation_gate_enabled: int = 1
+    short_confirmation_gate_enabled: int = 1
+    short_confirmation_support_bars: int = 3
+    short_confirmation_retest_max_age_bars: int = 2
+    short_confirmation_buying_volume_share: float = .6
+    short_confirmation_max_age_seconds: int = 30
     oi_ranking_weight: float = .10
     oi_minimum_change_percent: float = .1
     oi_minimum_price_change_percent: float = .05
@@ -46,9 +52,9 @@ class FuturesScanConfig:
     short_maximum_trigger_distance_percent: float = .1
     maximum_lots: int = 1
     intraday_exit_hour: int = 15
-    intraday_exit_minute: int = 20
+    intraday_exit_minute: int = 10
     entry_cutoff_hour: int = 15
-    entry_cutoff_minute: int = 15
+    entry_cutoff_minute: int = 0
     manual_exit_warning_minutes: int = 10
     maximum_daily_entries: int = 2
     out_of_sample_fraction: float = .3
@@ -66,6 +72,13 @@ class FuturesScanConfig:
     bullish_opportunity_weight: float = .15
 
     def __post_init__(self):
+        for prefix, limit in (("entry_cutoff", (15, 0)), ("intraday_exit", (15, 10))):
+            hour,minute=getattr(self,prefix+"_hour"),getattr(self,prefix+"_minute")
+            if not isfinite(hour) or not isfinite(minute) or int(hour)!=hour or int(minute)!=minute or not 0<=hour<24 or not 0<=minute<60:
+                raise ValueError(prefix+" must be a valid hour and minute")
+            if (hour,minute) > limit:
+                object.__setattr__(self, prefix+"_hour", limit[0])
+                object.__setattr__(self, prefix+"_minute", limit[1])
         for field in fields(self):
             value = getattr(self, field.name)
             if not isfinite(value) or value < 0:
@@ -74,6 +87,12 @@ class FuturesScanConfig:
             if abs(sum(self.weights(direction).values()) - 1) > 1e-8:
                 raise ValueError(f'{direction} weights must sum to one')
         if self.news_conflict_gate_enabled not in (0,1):raise ValueError('news_conflict_gate_enabled must be 0 or 1')
+        if self.long_confirmation_gate_enabled not in (0,1):raise ValueError('long_confirmation_gate_enabled must be 0 or 1')
+        if self.short_confirmation_gate_enabled not in (0,1):raise ValueError('short_confirmation_gate_enabled must be 0 or 1')
+        for name in ('short_confirmation_support_bars','short_confirmation_retest_max_age_bars','short_confirmation_max_age_seconds'):
+            if getattr(self,name)<1 or int(getattr(self,name))!=getattr(self,name):raise ValueError(name+' must be a positive integer')
+        if self.short_confirmation_support_bars<3 or not 0<self.short_confirmation_buying_volume_share<=1:
+            raise ValueError('Short confirmation requires at least three support bars and a valid buying-volume share')
         if not 0<=self.oi_ranking_weight<=1:
             raise ValueError('oi_ranking_weight must be between zero and one')
         if not 0<self.oi_minimum_change_percent<=self.oi_full_strength_change_percent or self.oi_minimum_price_change_percent<=0:

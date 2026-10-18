@@ -86,7 +86,7 @@ def test_no_new_entries_at_cutoff_and_manual_warning_is_visible(minute):
     assert report['execution_safety']['entry_window']['manual_exit_warning_active']
     result=entry_analysis(item,report,context)
     assert result['entry_status']!='READY' and result['entry'] is None
-    assert '15:20 IST' in report['execution_safety']['entry_window']['manual_exit_warning']
+    assert '15:10 IST' in report['execution_safety']['entry_window']['manual_exit_warning']
 
 
 def test_reconciliation_must_still_be_fresh_at_final_report():
@@ -186,7 +186,8 @@ def test_preserved_baseline_keeps_daily_scores_and_research_thresholds():
     assert len(old)==len(after['reviewed'])
     for row in after['reviewed']:
         previous=old[(row['symbol'],row['side'])]
-        for key in ('BULLISH_SCORE','BEARISH_SCORE','technical_score','final_decision'):
+        # Confirmation may now block an entry; the underlying scores must remain identical.
+        for key in ('BULLISH_SCORE','BEARISH_SCORE','technical_score'):
             assert row[key]==previous[key]
         assert row['company_research']['thresholds']==previous['company_research']['thresholds']
         assert row['daily_discovery']['execution_confirmation'] is False

@@ -2,6 +2,7 @@
 from dataclasses import asdict
 import json
 from pathlib import Path
+from math import isfinite
 
 from src.quality.engine import CandidateQualityEngine, _returns
 from src.quality.futures_selection import REQUIRED_CHECKS
@@ -31,7 +32,7 @@ class CompanyResearch:
         except (OSError, ValueError):
             self.company_types = {}
 
-    def assess(self, symbol, sector, side, *, news, stock_history=None, sector_history=None, session_vwap=None):
+    def assess(self, symbol, sector, side, *, news, stock_history=None, sector_history=None, session_vwap=None, directional_vwap=False):
         annual = lambda frame: (_returns(frame, (252,)) or {}).get(252)
         scores = self.engine.stock_selection_quality(symbol, sector_one_year_return=annual(sector_history),
             stock_one_year_return=annual(stock_history), news=news)
@@ -39,12 +40,23 @@ class CompanyResearch:
         scores['delivery_quality'] = self.engine.delivery_quality(symbol)
         scores['vwap_quality'] = session_vwap or QualityScore(None, 'UNKNOWN', 0,
             reason_codes=['UNDERLYING_SESSION_VWAP_UNVERIFIED'])
+        original_vwap=scores['vwap_quality'].to_dict()
+        if side=='SHORT' and directional_vwap and scores['vwap_quality'].status in ('PASS','FAIL'):
+            try:
+                factors=scores['vwap_quality'].factors
+                price,vwap=float(factors['current_price']),float(factors['vwap'])
+                if not all(isfinite(v) and v>0 for v in (price,vwap)):raise ValueError('Invalid VWAP')
+                scores['vwap_quality']=QualityScore(100 if price<=vwap else 0,'PASS' if price<=vwap else 'FAIL',100,
+                    factors={**factors,'direction':'SHORT'},reason_codes=['SHORT_UNDERLYING_AT_OR_BELOW_VWAP_REQUIRED'],warnings=scores['vwap_quality'].warnings)
+            except (ValueError,TypeError,KeyError):
+                scores['vwap_quality']=QualityScore(None,'UNKNOWN',0,reason_codes=['SHORT_UNDERLYING_VWAP_UNVERIFIED'])
         snapshot = self.engine._fundamental_snapshot(symbol)
         fundamental = self.engine.fundamental_quality(symbol).to_dict()
         checks = {key: scores[key].to_dict() for key in REQUIRED_CHECKS}
         missing = [key for key, check in checks.items() if check['status'] == 'UNKNOWN']
         failed = [key for key, check in checks.items() if check['status'] == 'FAIL']
-        flags = [{'check': key, 'status': checks[key]['status'], 'reason': reason}
+        flags = [{'check': key, 'status': checks[key]['status'], 'reason':
+                  'The directional SHORT rule requires stock price at/below its verified VWAP; price above it cannot be waived.' if directional_vwap and key=='vwap_quality' else reason}
                  for key, reason in SHORT_REVIEW_RULES.items()
                  if side == 'SHORT' and checks[key]['status'] == 'FAIL']
         lender = (sector in {'BANKING', 'PSU_BANK', 'NBFC', 'HOUSING_FINANCE'}
@@ -64,6 +76,7 @@ class CompanyResearch:
                 'eligible': not missing and not failed, 'checks': checks, 'failed_checks': failed,
                 'unavailable_checks': missing, 'policy_review_required': bool(flags), 'review_flags': flags,
                 'fundamental_assessment': fundamental, 'fundamentals': asdict(snapshot) if snapshot else None,
+                'original_underlying_vwap_check':original_vwap,
                 'short_interpretation': interpretations, 'sector_interpretation': sector_note,
                 'thresholds': {'maximum_sector_pe_deviation': self.engine.config.maximum_sector_pe_deviation,
                     'minimum_roe_percent': self.engine.config.minimum_roe_percent,
@@ -71,7 +84,8 @@ class CompanyResearch:
                     'minimum_fii_holding_percent': self.engine.config.minimum_fii_holding_percent,
                     'minimum_dii_holding_percent': self.engine.config.minimum_dii_holding_percent,
                     'minimum_promoter_holding_percent': self.engine.config.minimum_promoter_holding_percent},
-                'policy': 'Original research thresholds/statuses retained for both sides. Directional interpretation never grants execution approval or waives a failed rule.'}
+                'policy': ('Company thresholds retained; verified stock VWAP uses the recorded SHORT direction. No other failed rule is waived.' if side=='SHORT' and directional_vwap else
+                    'Original research thresholds/statuses retained for both sides. Directional interpretation never grants execution approval or waives a failed rule.')}
 
     @staticmethod
     def _interpret(snapshot, checks, news, lender):
@@ -129,6 +143,10 @@ class CompanyResearch:
         for condition, key in (('sector_one_year', 'sector_one_year_quality'), ('stock_vs_sector', 'sector_leadership_quality'),
                                ('underlying_vwap', 'vwap_quality')):
             value = checks[key]
+            if condition=='underlying_vwap' and value.get('factors',{}).get('direction')=='SHORT':
+                add(condition,'SUPPORTS_SHORT' if value['status']=='PASS' else 'CONTRADICTS_SHORT',
+                    'Verified price at/below stock VWAP supports SHORT; price above it conflicts with SHORT.',value['factors'])
+                continue
             add(condition, 'UNKNOWN' if value['status'] == 'UNKNOWN' else 'SUPPORTS_SHORT' if value['status'] == 'FAIL' else 'CONTRADICTS_SHORT',
                 'Directional context only. The original bullish-oriented rule status remains unchanged and a failure requires policy review.',
                 value['factors'])

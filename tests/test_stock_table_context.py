@@ -45,7 +45,7 @@ render_stock_table([{{'Symbol':'STOCK','P/E':20,'Relevant news':'headline'}}],'d
 '''
     app=AppTest.from_string(code).run(timeout=15)
     assert not app.exception
-    assert list(app.dataframe[0].value.columns)==['Symbol','P/E']
+    assert list(app.dataframe[0].value.columns)==['Entry status','Symbol','P/E']
     app.multiselect[0].set_value(['Symbol','Relevant news']).run(timeout=15)
     next(b for b in app.button if b.label=='Save column selection').click().run(timeout=15)
     assert store.view_columns('daily')==['Symbol','Relevant news']
@@ -80,3 +80,17 @@ render_stock_table([{{'Symbol':'STOCK','Watchlist':None,'Weekly score':None,'P/E
     assert 'Watchlist' not in table and 'Weekly score' not in table
     assert table['P/E'].iloc[0]=='Unavailable'
     assert table['Decision'].iloc[0]=='UNKNOWN'
+
+
+def test_expired_saved_approval_is_visible_even_with_old_column_preferences(tmp_path):
+    store=WorkspaceStore(tmp_path/'expiry.db')
+    store.save_view_columns('daily',['Symbol','Decision'])
+    code=f'''from src.ui.stock_tables import render_stock_table
+from src.futures_workspace.store import WorkspaceStore
+render_stock_table([{{'Symbol':'TEST','Decision':'APPROVED','Entry valid until':'2020-01-01T10:00:00+05:30'}}],'daily',WorkspaceStore({str(store.path)!r}))
+'''
+    app=AppTest.from_string(code).run(timeout=15)
+    assert not app.exception
+    shown=app.dataframe[0].value
+    assert shown.iloc[0]['Entry status']=='EXPIRED — RESCAN'
+    assert shown.iloc[0]['Decision']=='SAVED APPROVAL — RESCAN'

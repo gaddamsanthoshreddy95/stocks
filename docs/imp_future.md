@@ -1,0 +1,11 @@
+# Imp Future
+
+Manual full-universe stock-Futures discount research. Requires a **minimum 1% Futures discount to spot**: Futures price ≤ 99% of underlying stock price. Discount % = (stock price − Futures price) / stock price × 100. Exactly 1% and larger discounts qualify; a 0.2% discount does not. For a ₹100 stock, Futures must be ₹99 or lower. Decimal price comparison prevents rounding smaller discounts up to the threshold. Earlier saved scans retain their original rule; run a new manual scan to apply this requirement.
+
+One shared FuturesOpportunityScanner pass evaluates the current underlying universe in both directions. It uses the existing scoring, company fundamentals, news, OI, execution checks and Entry Quality policy. Full directional ranked lists are retained until the discount filter runs, then the requested display limit is applied. Original ranking order and scores remain unchanged. Weekly memberships and other features' reports are untouched.
+
+A comparison requires positive finite paired prices, the evaluated symbol and exact Futures instrument identity, and exchange quotes within 30 seconds of the recorded assessment. Kite naive exchange timestamps mean Asia/Kolkata. Missing, stale or mismatched prices remain UNAVAILABLE with reasons in Missing data. A discount cannot create APPROVED or ENTER, and a research row may remain UNKNOWN, WAIT or SKIP. The discount observation is a timestamped research snapshot, not a continuously updated quote or arbitrage guarantee. After-market stale quotes cannot establish a live discount.
+
+The page defaults to LIVE_SCAN; use existing preparation modes when required. Opening the page, changing tabs or viewing history never starts a scan. Full-universe execution review can take longer than the ordinary Top 5 view; existing source deadlines remain in force and unavailable data is retained in diagnostics. No additional automatic scan or retry is added.
+
+Separate cache `imp_future_prepared` and SQLite archive `imp_future_scan_runs`; shared global execution ledger. Maximum two executed entries per day, 15:00 entry cutoff, 15:10 manual flat deadline and no automated orders remain in force. Saved history is immutable; a fresh manual scan is needed for current entry checks.

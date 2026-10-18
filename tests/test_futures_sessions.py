@@ -143,16 +143,16 @@ def test_scoring_indicators_match_clean_session_when_feed_has_after_hours_extrem
 
 @pytest.mark.parametrize('clock,can_enter,warning', [
     ('09:19:59', False, False), ('09:20', True, False),
-    ('15:09:59', True, False), ('15:10', True, True),
-    ('15:14:59', True, True), ('15:15', False, True), ('15:20', False, True),
+    ('14:59:59', True, False), ('15:00', False, True),
+    ('15:14:59', False, True), ('15:15', False, True), ('15:20', False, True),
 ])
 def test_explicit_entry_cutoff_and_manual_exit_warning(clock, can_enter, warning):
     result = entry_window(stamp('2026-10-08 ' + clock), FuturesScanConfig())
     assert (result['status'] == 'PASS') == can_enter
     assert result['manual_exit_warning_active'] == warning
     assert result['automatic_square_off'] is False
-    assert result['entry_cutoff'] == stamp('2026-10-08 15:15').isoformat()
-    assert result['manual_exit_deadline'] == stamp('2026-10-08 15:20').isoformat()
+    assert result['entry_cutoff'] == stamp('2026-10-08 15:00').isoformat()
+    assert result['manual_exit_deadline'] == stamp('2026-10-08 15:10').isoformat()
     assert 'Manually close' in result['manual_exit_warning']
 
 
@@ -161,22 +161,22 @@ def test_entry_cutoff_is_configurable_without_changing_forced_exit():
     before = entry_window(stamp('2026-10-08 14:29:59'), config)
     after = entry_window(stamp('2026-10-08 14:30'), config)
     assert before['status'] == 'PASS' and after['status'] == 'FAIL'
-    assert after['manual_exit_deadline'] == stamp('2026-10-08 15:20').isoformat()
+    assert after['manual_exit_deadline'] == stamp('2026-10-08 15:10').isoformat()
 
 
-def test_backtest_next_bar_entry_respects_entry_cutoff_and_still_exits_at_1520():
+def test_backtest_next_bar_entry_respects_entry_cutoff_and_still_exits_at_1510():
     data = pd.concat([candles(pd.date_range(day+pd.Timedelta(hours=9, minutes=15), periods=75, freq='5min'))
                       for day in pd.date_range('2026-10-05', periods=4, freq='B', tz='Asia/Kolkata')])
     def late_signals(prefix):
-        if prefix.index[-1].strftime('%H:%M') in ('15:05', '15:10'):
+        if prefix.index[-1].strftime('%H:%M') in ('14:50', '14:55'):
             return [{'side': 'LONG', 'setup_type': 'TEST'}]
         return []
     result = FuturesIntradayBacktester().run(data, 500, signal_factory=late_signals)
     assert result['trades']
-    assert all(pd.Timestamp(t['entry_timestamp']).strftime('%H:%M') == '15:10' for t in result['trades'])
-    assert all(pd.Timestamp(t['exit_timestamp']).strftime('%H:%M') == '15:20' for t in result['trades'])
+    assert all(pd.Timestamp(t['entry_timestamp']).strftime('%H:%M') == '14:55' for t in result['trades'])
+    assert all(pd.Timestamp(t['exit_timestamp']).strftime('%H:%M') == '15:10' for t in result['trades'])
     def too_late_signals(prefix):
-        return [{'side': 'LONG', 'setup_type': 'TEST'}] if prefix.index[-1].strftime('%H:%M') == '15:10' else []
+        return [{'side': 'LONG', 'setup_type': 'TEST'}] if prefix.index[-1].strftime('%H:%M') == '14:55' else []
     assert FuturesIntradayBacktester().run(data, 500, signal_factory=too_late_signals)['trades'] == []
 
 

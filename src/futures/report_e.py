@@ -260,6 +260,7 @@ def build_report_e(report,*,config=None,contexts=None,histories=None,limit=5):
             'original_fundamental_score':((item.get('company_research') or {}).get('fundamental_assessment') or {}).get('score'),
             'original_research_status':(item.get('company_research') or {}).get('status','UNKNOWN'),
             'original_decision':item.get('final_decision'),'label':'REJECTED / RESEARCH ONLY' if d else 'APPROVED IN ORIGINAL REPORT C' if item.get('final_decision')=='APPROVED' and not report.get('research_only') else 'RESEARCH ONLY',
+            **({'entry_quality_assessment':deepcopy(item['entry_quality'])} if item.get('entry_quality') else {}),
             'quality':q,'timing':timing,'historical':historical,'report_e_rank_score':round(rank_score,2) if rank_score is not None else None,
             'news_event_status':{'news':item.get('news',{}).get('news_state','UNKNOWN'),'news_checked_at':item.get('news',{}).get('checked_at'),
                                  'event_risk':deepcopy(item.get('event_risk'))},
@@ -339,6 +340,8 @@ def render_report_e(analysis):
         limit=section.get('display_limit');selected=rows if limit is None else rows[:limit]
         lines.extend([f"Showing {len(selected)} of {len(rows)} retained candidates. Full analysis is available in JSON.",''])
         for row in selected:
+            assessment=row.get('entry_quality_assessment')
+            if assessment:lines.append(f"Entry Quality ({assessment.get('mode')}): {assessment.get('classification')}; assessed {assessment.get('assessed_at')}. Original decision remains authoritative.")
             q,t,h=row['quality'],row['timing'],row['historical']
             lines.extend([f"#### {row['symbol']} — {row['side']} — {row['label']}",'',
                           f"Original technical/fundamental scores: {row['original_technical_score']}/{row['original_fundamental_score']}; original decision {row['original_decision']}.",

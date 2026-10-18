@@ -62,6 +62,17 @@ def context_columns(row,weekly=None):
     else:
         state='Not checked / unknown'
     columns={'Sector':row.get('sector') or weekly.get('sector','UNKNOWN'),
+        'Entry quality':(row.get('entry_quality') or {}).get('classification','NOT_EVALUATED'),
+        'Entry quality assessed':(row.get('entry_quality') or {}).get('assessed_at'),
+        'Entry quality mode':(row.get('entry_quality') or {}).get('mode','NOT_EVALUATED'),
+        'Entry quality reasons':', '.join((row.get('entry_quality') or {}).get('reason_codes',[])),
+        'Entry zone':str((row.get('entry_quality') or {}).get('entry_zone') or 'Unavailable'),
+        '15-minute confirmation':((row.get('entry_quality') or {}).get('retracement_15m') or {}).get('status','NOT_EVALUATED'),
+        'Entry valid until':row.get('entry_valid_until'),
+        'Long confirmation':(row.get('long_confirmation') or {}).get('status','NOT_EVALUATED'),
+        'Long confirmation reasons':', '.join((row.get('long_confirmation') or {}).get('reason_codes',[])),
+        'Short confirmation':(row.get('short_confirmation') or {}).get('status','NOT_EVALUATED'),
+        'Short confirmation reasons':', '.join((row.get('short_confirmation') or {}).get('reason_codes',[])),
         'Daily ranking score':row.get('daily_ranking_score'),
         'OI score':(row.get('oi_ranking') or {}).get('score'),
         'OI ranking status':(row.get('oi_ranking') or {}).get('status','NOT_EVALUATED'),
@@ -155,8 +166,18 @@ def render_stock_table(rows,view,store):
     if frame.empty:
         st.info('No stocks in this result.')
         return
+    if 'Entry quality mode' in frame and (frame['Entry quality mode']=='ENFORCE').any():
+        st.caption('Entry Quality ENFORCE was active for this saved scan. Only ENTER with Decision APPROVED and current entry validity passed the recorded checks. WAIT FOR PULLBACK and SKIP are not entry signals. Scans remain manual.')
+    if 'Entry quality mode' in frame and (frame['Entry quality mode']=='REPORT_ONLY').any():
+        st.caption('Entry Quality is REPORT_ONLY: ENTER / WAIT FOR PULLBACK / SKIP are proposed assessments, not active entry protection. Existing Decision remains authoritative.')
+    from src.futures.entry_validity import entry_status
+    now=pd.Timestamp.now(tz='Asia/Kolkata')
+    frame['Entry status']=[entry_status(row,now) for row in rows]
+    if 'Decision' in frame:
+        frame.loc[frame['Entry status'].isin(['EXPIRED — RESCAN','UNVERIFIED — RESCAN']), 'Decision']='SAVED APPROVAL — RESCAN'
+    st.caption('LONG / SHORT indicates the direction evaluated. Scores alone are not entry permission. Only APPROVED with a current entry validity can be considered; expired saved results require a manual rescan.')
     available=list(frame.columns)
-    preferred=['Symbol','Company','Direction','AI infrastructure connection','Power sector connection','Defence business','Futures availability','Delivery %','Monthly delivery %','Watchlist','Membership status','Enabled','Weekly score','Latest daily score','Latest daily decision',
+    preferred=['Symbol','Company','Direction','Stock price','Futures price','Discount %','AI infrastructure connection','Power sector connection','Defence business','Futures availability','Delivery %','Monthly delivery %','Watchlist','Membership status','Enabled','Weekly score','Latest daily score','Latest daily decision',
                'Latest daily scan','Daily score status',
                'Daily score','Daily ranking score','OI score','OI regime','OI change %','OI ranking status','Score basis','Score failure','Decision','Sector','P/E','Sector P/E','Futures VWAP','RSI','Relative volume',
                'Relevant news','News status','News link','News published','News checked']
@@ -164,21 +185,24 @@ def render_stock_table(rows,view,store):
     preferred+=['Fundamental snapshot','Supplemental fundamental source','Supplemental fundamentals as of','Supplemental fundamentals fetched','Supplemental fundamentals status','Supplemental data origin']
     preferred+=['Fundamental status','Research status','Stock VWAP','Futures VWAP status','Missing data reasons']
     preferred+=['News reversal gate','News reversal reasons']
+    preferred+=['Entry quality','Entry quality assessed','Entry quality mode','Entry quality reasons','Entry zone','15-minute confirmation','Entry status','Entry valid until','Long confirmation','Long confirmation reasons','Short confirmation','Short confirmation reasons']
     preferred+=['Stock volume status','Stock average volume','Futures liquidity context']
     preferred+=['Sector identity status','Sector identity source','Sector benchmark','Sector benchmark status',
                 'bearish confirmed_score','bearish possible_score','bearish coverage_percent',
                 'recovery confirmed_score','recovery possible_score','recovery coverage_percent']
     defaults=[c for c in preferred if c in available]
     saved=store.view_columns(view)
+    if saved is not None:saved=['Entry quality' if c=='Entry quality proposal' else c for c in saved]
     initial=[c for c in (saved if saved is not None else defaults) if c in available]
     key='stock-columns-'+view
     if key in st.session_state:
-        st.session_state[key]=[c for c in st.session_state[key] if c in available]
+        st.session_state[key]=[('Entry quality' if c=='Entry quality proposal' else c) for c in st.session_state[key] if c in available or c=='Entry quality proposal']
     with st.expander('Choose visible columns'):
         selected=st.multiselect('Visible columns',available,default=initial,key=key)
         if st.button('Save column selection',key=key+'-save'):
             store.save_view_columns(view,selected)
             st.success('Column selection saved for this view.')
+    if 'Entry status' not in selected:selected=['Entry status']+selected
     if selected:
         display=frame[selected].copy()
         for column in display:

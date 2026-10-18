@@ -242,7 +242,9 @@ def test_short_approval_requires_research_trigger_confirmation_remaining_space_a
     data = {'daily': candles(np.full(260, 200)), 'intraday': SimulatedProvider(['TEST']).intraday,
             'quote': {'timestamp':NOW.isoformat(), 'last_price':200, 'depth': {'buy': [{'price': 200, 'quantity': 10000}],
                                'sell': [{'price': 200.02, 'quantity': 10000}]}}}
-    with patch('src.futures.scanner.assess_execution', return_value=checks), patch('src.futures.scanner.directional_setup', return_value=setup):
+    # Isolate the established risk gates here; the new confirmation gate has
+    # independent raw-candle and decision-integration regression coverage.
+    with patch('src.futures.scanner.short_confirmation',return_value={'status':'PASS','checked_at':NOW.isoformat(),'reason_codes':[]}), patch('src.futures.scanner.assess_execution', return_value=checks), patch('src.futures.scanner.directional_setup', return_value=setup):
         scanner._execution(item, data, {'lot_size': 500}, (None, None),
             {'news_state': 'NO_RELEVANT_NEWS', 'checked_at': NOW.isoformat()}, {}, NOW, None)
     assert item['final_decision'] == expected

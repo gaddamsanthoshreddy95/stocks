@@ -24,6 +24,8 @@ from src.news.analysis_service import NewsAnalysisService
 from src.news.today import INDEX_FUTURES, TodayNewsService
 from src.futures.news_conflict import evaluate as evaluate_conflict, research_policy, shortlist
 from src.futures.oi_ranking import apply_oi_ranking
+from src.futures.long_confirmation import evaluate as long_confirmation
+from src.futures.short_confirmation import evaluate as short_confirmation,still_valid as short_confirmation_fresh
 from src.quality.futures_execution import assess_execution, check, clean, FuturesExecutionConfig
 from src.quality.futures_selection import active_contracts, session_vwap_quality
 from src.quality.public_fundamentals import PublicFundamentalProvider
@@ -38,7 +40,7 @@ DECISION_PRIORITY = {'APPROVED': 5, 'WAIT': 4, 'UNKNOWN': 3, 'TOO LATE': 2, 'REJ
 
 
 def rank_key(item):
-    return (DECISION_PRIORITY.get(item.get('final_decision'), 0),
+    return (DECISION_PRIORITY.get(item.get('decision_before_entry_quality',item.get('final_decision')), 0),
             item.get('daily_ranking_score',item.get('technical_score')) or 0, (item.get('plan') or {}).get('net_risk_reward') or 0)
 
 
@@ -270,7 +272,8 @@ class FuturesOpportunityScanner:
             item['news'] = news_cache[symbol]
             item['event_risk'] = event_cache[symbol]
             item['company_research'] = self.company_research.assess(symbol, item['sector'], item['side'],
-                news=news_cache[symbol], stock_history=stock, sector_history=sector_history, session_vwap=stock_vwap)
+                news=news_cache[symbol], stock_history=stock, sector_history=sector_history, session_vwap=stock_vwap,
+                directional_vwap=bool(self.config.short_confirmation_gate_enabled))
             research = item['company_research']
             if self.config.news_conflict_gate_enabled:
                 self._news_conflict(item,news_cache[symbol],news_bars.get(symbol),now)
@@ -325,6 +328,7 @@ class FuturesOpportunityScanner:
         stage_started = perf_counter()
         # Finish expensive historical work for BOTH directions before final approval.
         # Otherwise the first approval could age while later stocks are backtested.
+        short_context={}
         for item, data, contract in prepared_execution:
             symbol = item['symbol']
             evaluation_now = self._clock()
@@ -352,7 +356,8 @@ class FuturesOpportunityScanner:
                 refreshed_vwap = None
             annual_stock, annual_sector, _ = research_inputs[symbol]
             item['company_research'] = self.company_research.assess(symbol, item['sector'], item['side'],
-                news=news_cache[symbol], stock_history=annual_stock, sector_history=annual_sector, session_vwap=refreshed_vwap)
+                news=news_cache[symbol], stock_history=annual_stock, sector_history=annual_sector, session_vwap=refreshed_vwap,
+                directional_vwap=bool(self.config.short_confirmation_gate_enabled))
             item['company_research']['checked_at'] = evaluation_now.isoformat()
             if self.config.news_conflict_gate_enabled:
                 self._news_conflict(item,news_cache[symbol],session_bars,evaluation_now)
@@ -365,6 +370,43 @@ class FuturesOpportunityScanner:
                         news_context=news_cache[symbol], as_of=evaluation_now.to_pydatetime()).to_dict()
                 except Exception:
                     event_cache[symbol] = {'event_data_availability_state': 'UNAVAILABLE', 'hard_block': True}
+            if (self.config.short_confirmation_gate_enabled if item['side']=='SHORT' else self.config.long_confirmation_gate_enabled):
+                data=dict(data)
+                data['underlying_intraday']=session_bars
+                sector_symbol=SectorStrength.KITE_INDEX_SYMBOLS.get(item['sector'])
+                for field,index_symbol in (('short_nifty_intraday','NIFTY 50'),('short_sector_intraday',sector_symbol)):
+                    try:
+                        key=(index_symbol,self._clock().floor('5min'))
+                        if key not in short_context:
+                            reader=getattr(self.provider,'get_confirmation_intraday',None) or self.provider.get_session_intraday
+                            short_context[key]=reader(index_symbol) if index_symbol else None
+                        data[field]=short_context[key]
+                    except Exception:
+                        data[field]=None
+                refresh=getattr(self.provider,'refresh_execution_quotes',None)
+                try:
+                    current_quote=True
+                    for quote_key in ('quote','spot_quote'):
+                        stamp=pd.Timestamp((data.get(quote_key) or {})['timestamp'])
+                        stamp=stamp.tz_localize('Asia/Kolkata') if stamp.tz is None else stamp
+                        current_quote=current_quote and 0<=(self._clock()-stamp).total_seconds()<=self.config.short_confirmation_max_age_seconds
+                except (KeyError,ValueError,TypeError):current_quote=False
+                quotes_refreshed=False
+                if refresh and not current_quote:
+                    try:
+                        data=refresh(symbol,contract,data)
+                        quotes_refreshed=True
+                    except TokenException:raise
+                    except Exception:data['quote']={}
+                evaluation_now=self._clock()
+                if quotes_refreshed:
+                    latest_vwap=session_vwap_quality(session_bars,(data.get('spot_quote') or {}).get('last_price'),now=evaluation_now.to_pydatetime())
+                    item['company_research']=self.company_research.assess(symbol,item['sector'],item['side'],
+                        news=news_cache[symbol],stock_history=annual_stock,sector_history=annual_sector,
+                        session_vwap=latest_vwap,directional_vwap=True)
+                    item['company_research']['checked_at']=evaluation_now.isoformat()
+                    if self.config.news_conflict_gate_enabled:
+                        item['company_research']=research_policy(item['company_research'],item['news_conflict_gate'])
             self._execution(item, data, contract, histories[symbol], news_cache[symbol], event_cache[symbol], evaluation_now,
                             backtests.get(symbol))
         timings['execution_validation_seconds'] = perf_counter()-stage_started
@@ -373,6 +415,12 @@ class FuturesOpportunityScanner:
         for item in all_items:
             if item['final_decision'] != 'APPROVED':
                 continue
+            if (self.config.short_confirmation_gate_enabled if item['side']=='SHORT' else self.config.long_confirmation_gate_enabled):
+                gate=item.get(item['side'].lower()+'_confirmation') or {}
+                if not short_confirmation_fresh(gate,served_at,self.config):
+                    item['final_decision']='UNKNOWN'
+                    item['reason_codes'].append(item['side']+'_CONFIRMATION_EXPIRED_BEFORE_REPORT')
+                    item['missing_execution_checks'].append(item['side']+'_CONFIRMATION_FRESHNESS')
             stamp = pd.Timestamp(item['futures_quote']['timestamp'])
             stamp = stamp.tz_localize('Asia/Kolkata') if stamp.tz is None else stamp.tz_convert('Asia/Kolkata')
             if not 0 <= (served_at-stamp).total_seconds() <= max_age:
@@ -387,12 +435,13 @@ class FuturesOpportunityScanner:
         temporary = {'reviewed': all_items, 'report_c': []}
         finalize(temporary, self._final_frames, reconciliation, self._clock(), self.config, self.runtime.reconciliation_max_age_seconds)
         self._execution_safety = temporary['execution_safety']
+        self._entry_quality_summary=temporary.get('entry_quality_summary',{})
         self._execution_safety['initial_reconciliation'] = initial_reconciliation
         timings['read_only_reconciliation_and_final_safety_seconds'] = perf_counter()-stage_started
         served_at = self._clock()
         long_items = sorted((item for item in all_items if item['side'] == 'LONG' and item.get('technical_score') is not None), key=rank_key, reverse=True)
         short_items = sorted((item for item in all_items if item['side'] == 'SHORT' and item.get('technical_score') is not None),
-            key=lambda item: (DECISION_PRIORITY.get(item.get('final_decision'), 0), short_priority(item), *rank_key(item)[1:]), reverse=True)
+            key=lambda item: (DECISION_PRIORITY.get(item.get('decision_before_entry_quality',item.get('final_decision')), 0), short_priority(item), *rank_key(item)[1:]), reverse=True)
         eligible = sorted((item for item in all_items if item['final_decision'] == 'APPROVED'), key=rank_key, reverse=True)
         # Additional summaries reuse backtests already completed by this execution.
         # No existing trade, metric, group or candidate is modified.
@@ -410,6 +459,7 @@ class FuturesOpportunityScanner:
         timings['total_seconds'] = perf_counter()-total_started
         return {'report_type': 'bidirectional_futures', 'generated_at': served_at.isoformat(), 'started_at': now.isoformat(),
                 'timings': timings, 'execution_safety': self._execution_safety,
+                'entry_quality_summary':self._entry_quality_summary,'entry_quality_shortlist_limit':limit,
                 'universe_size': len(symbols), 'long_discovery_count': sum(i['side']=='LONG' for i in all_items),
                 'short_discovery_count': sum(i['side']=='SHORT' for i in all_items),
                 'rankable_long_count':len(long_items), 'rankable_short_count':len(short_items),
@@ -565,6 +615,9 @@ class FuturesOpportunityScanner:
                 missing.append('NEWS_UNVERIFIED')
             else:
                 failed.append('NEWS_CONFLICT')
+        confirmation=None
+        if (self.config.short_confirmation_gate_enabled if item['side']=='SHORT' else self.config.long_confirmation_gate_enabled):
+            confirmation=(short_confirmation if item['side']=='SHORT' else long_confirmation)(data,checks['futures_oi_quality'],now,self.config)
         plan = None
         try:
             quote_stamp = pd.Timestamp(quote['timestamp'])
@@ -617,6 +670,10 @@ class FuturesOpportunityScanner:
             if item['side'] == 'SHORT':
                 trigger = levels.get('short_trigger_price')
                 invalidation = levels.get('setup_invalidation_price')
+                if confirmation is not None:
+                    retest=confirmation.get('evidence',{}).get('breakdown_retest') or {}
+                    if retest.get('invalidation') is not None:
+                        invalidation=max(invalidation,retest['invalidation']) if invalidation is not None else retest['invalidation']
                 entry_state = 'TRIGGER_CROSSED'
                 if trigger is None or invalidation is None:
                     missing.append('SHORT_TRIGGER_OR_INVALIDATION_UNVERIFIED')
@@ -640,6 +697,19 @@ class FuturesOpportunityScanner:
                     'actual_futures_entry': weighted, 'target': plan['target'], 'stop_loss': plan['stop_loss'],
                     'setup_invalidation_price': invalidation,
                     'setup_type': item['setup_type'], 'checked_at': now.isoformat()}
+            if item['side']=='LONG' and self.config.long_confirmation_gate_enabled:
+                retest=confirmation.get('evidence',{}).get('breakout_retest') or {}
+                trigger,invalidation=retest.get('trigger'),retest.get('invalidation')
+                if trigger is None or invalidation is None:
+                    if confirmation['status']=='PASS':missing.append('LONG_TRIGGER_OR_INVALIDATION_UNVERIFIED')
+                elif weighted<trigger:
+                    failed.append('LONG_EXECUTABLE_PRICE_BELOW_TRIGGER')
+                elif (weighted-trigger)/trigger*100>self.config.short_maximum_trigger_distance_percent:
+                    failed.append('LONG_ENTRY_TOO_FAR_ABOVE_TRIGGER')
+                if invalidation is not None and plan['stop_loss']>=invalidation:
+                    failed.append('LONG_STOP_DOES_NOT_COVER_SETUP_INVALIDATION')
+                item['long_entry']={'trigger_price':trigger,'setup_invalidation_price':invalidation,
+                    'actual_futures_entry':weighted,'checked_at':now.isoformat()}
             obstacle = levels.get('resistance' if item['side'] == 'LONG' else 'support')
             if obstacle is None:
                 missing.append('FUTURES_TARGET_SPACE_UNVERIFIED')
@@ -675,7 +745,21 @@ class FuturesOpportunityScanner:
             item['historical_validation'] = historical['validation_status']
         elif historical:
             item['historical'].update(historical)
+        if (self.config.short_confirmation_gate_enabled if item['side']=='SHORT' else self.config.long_confirmation_gate_enabled):
+            item['historical'][item['side'].lower()+'_confirmation_replayed']=False
+            item['historical']['validation_scope']='LEGACY_TECHNICAL_BACKTEST; NEW_STOCK_SECTOR_OI_CONFIRMATION_NOT_REPLAYED'
         timing = future_setup.get('timing') if future_setup else 'UNKNOWN'
+        short_wait=False
+        if (self.config.short_confirmation_gate_enabled if item['side']=='SHORT' else self.config.long_confirmation_gate_enabled):
+            gate=confirmation
+            item[item['side'].lower()+'_confirmation']=gate
+            from src.futures.confirmation_replay import capture
+            item['confirmation_replay_snapshot']=capture(data,checks['futures_oi_quality'],now,item['side'])
+            reasons.extend(gate['reason_codes'])
+            if gate['status']=='UNKNOWN':missing.append(item['side']+'_REVERSAL_CONFIRMATION_UNVERIFIED')
+            elif gate['status']=='BLOCKED':failed.append(item['side']+'_DIRECTIONAL_CONFLICT_OR_OI_MISMATCH')
+            elif gate['status']=='WAIT':short_wait=True
+            item['execution_checks'][item['side'].lower()+'_reversal_confirmation']=gate
         short_entry_state = item.get('short_entry', {}).get('state')
         if missing:
             decision = 'UNKNOWN'
@@ -687,7 +771,7 @@ class FuturesOpportunityScanner:
             decision = 'WAIT'
         elif research_failed:
             decision = 'REJECT'
-        elif (short_entry_state == 'WAIT_FOR_SHORT_TRIGGER' or sudden_covering or item['technical_score'] < self.config.minimum_score or
+        elif (short_wait or short_entry_state == 'WAIT_FOR_SHORT_TRIGGER' or sudden_covering or item['technical_score'] < self.config.minimum_score or
               future_setup['technical_score'] < self.config.minimum_score or timing != 'READY' or not future_setup.get('confirmed')):
             decision = 'WAIT'
             reasons.append('DIRECTIONAL_SETUP_CONFIRMATION_PENDING')
@@ -696,8 +780,17 @@ class FuturesOpportunityScanner:
         else:
             decision = 'APPROVED'
             reasons.append('SETUP_AND_MANDATORY_EXECUTION_GATES_PASSED')
+        if decision=='APPROVED':
+            stamp=pd.Timestamp(quote['timestamp'])
+            if stamp.tz is None:stamp=stamp.tz_localize('Asia/Kolkata')
+            stamps=[now,stamp]
+            if data.get('spot_quote',{}).get('timestamp') is not None:
+                spot_stamp=pd.Timestamp(data['spot_quote']['timestamp'])
+                if spot_stamp.tz is None:spot_stamp=spot_stamp.tz_localize('Asia/Kolkata')
+                stamps.append(spot_stamp)
+            item['entry_valid_until']=(min(stamps)+pd.Timedelta(seconds=min(30,self.config.short_confirmation_max_age_seconds))).isoformat()
         item['final_decision'] = decision
-        item['reason_codes'] = list(dict.fromkeys(reasons))
+        item['reason_codes'] = list(dict.fromkeys(reasons+missing+failed))
         item['missing_execution_checks'] = missing
         item['failed_execution_checks'] = failed
         if item.get('short_entry'):
@@ -709,3 +802,6 @@ class FuturesOpportunityScanner:
                               else 'UNVERIFIED' if decision == 'UNKNOWN' else 'REJECTED' if decision == 'REJECT'
                               else 'WAIT_FOR_SHORT_TRIGGER' if entry['trigger_status'] == 'WAIT_FOR_SHORT_TRIGGER'
                               else 'WAIT_FOR_CONFIRMATION_OR_RESEARCH')
+
+        from src.futures.entry_quality import snapshot
+        item['entry_quality_input']=snapshot(item,data,now,scan_config=self.config)

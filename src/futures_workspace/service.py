@@ -516,6 +516,8 @@ class FuturesWorkspace:
                 if not 0<=age<=self.config.maximum_membership_age_days:
                     item['final_decision']='UNKNOWN'
                     item['reason_codes']=[*item.get('reason_codes',[]),'WEEKLY_MEMBERSHIP_STALE_RECHECK_REQUIRED']
+                from src.futures.entry_quality import refresh_report
+                refresh_report({'reviewed':[item]},now,scan_config=config)
                 item['workspace_decision']='CONFLICT' if contradictory else 'ELIGIBLE' if item.get('final_decision')=='APPROVED' else 'UNKNOWN_DATA' if item.get('final_decision')=='UNKNOWN' else 'NO_TRADE'
                 if contradictory:
                     item['reason_codes']=[*item.get('reason_codes',[]),'OPPOSITE_DIRECTION_APPROVED_REVIEW_REQUIRED']

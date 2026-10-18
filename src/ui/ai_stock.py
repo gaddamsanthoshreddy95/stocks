@@ -87,12 +87,14 @@ class AiStockHistory:
             return json.loads(row[0]) if row else None
 
 
-def scan_ai_stock(settings,database,limit,mode,run_id,*,stocks=None,title='AI-Stock',cache_name='ai_stock_prepared',history_class=AiStockHistory,saved_id='_ai_saved_scan_id',companies=None):
+def scan_ai_stock(settings,database,limit,mode,run_id,*,stocks=None,title='AI-Stock',cache_name='ai_stock_prepared',history_class=AiStockHistory,saved_id='_ai_saved_scan_id',companies=None,all_universe=False,postprocess=None):
     stocks=AI_STOCKS if stocks is None else stocks
     platform=TradingPlatform(settings=settings)
     from src.data_provider.kite_data_provider import KiteDataProvider
     if isinstance(getattr(platform,'provider',None),KiteDataProvider):
         platform.provider.provider.reload_saved_credentials()
+    if all_universe:
+        stocks={symbol:"Current stock-Futures universe" for symbol in platform._universe_symbols()}
     scoped=ThemePlatform(platform,stocks)
     config=FuturesScanConfig.from_env()
     entry=min((config.entry_cutoff_hour,config.entry_cutoff_minute),(15,0))
@@ -103,7 +105,8 @@ def scan_ai_stock(settings,database,limit,mode,run_id,*,stocks=None,title='AI-St
     runtime=ScanRuntime.from_env()
     # Dedicated universe/cache; the execution ledger stays global across features.
     runtime=replace(runtime,cache_directory=str(Path(runtime.cache_directory).parent/cache_name))
-    report=FuturesOpportunityScanner(scoped,config=config).scan(limit,mode=mode,runtime=runtime)
+    scan_limit=max(1,len(stocks)*2) if all_universe else limit
+    report=FuturesOpportunityScanner(scoped,config=config).scan(scan_limit,mode=mode,runtime=runtime)
     report=platform._serialize(report)
     report=fetch_missing_fundamentals(report,database=database)
     day=pd.Timestamp(report['generated_at']).date()
@@ -115,21 +118,24 @@ def scan_ai_stock(settings,database,limit,mode,run_id,*,stocks=None,title='AI-St
     # Defensive isolation: no returned row may escape the user-supplied universe.
     for key in ('reviewed','report_a','report_b','report_c'):
         report[key]=[row for row in report.get(key,[]) if row.get('symbol') in stocks]
+    if postprocess is not None:
+        report=postprocess(report)
     report[saved_id]=history_class(database).save(report,run_id)
     return report
 
 
-def render(platform,database,start_job,is_running,*,stocks=None,title='AI-Stock',feature='ai_stock',history_class=AiStockHistory,scan_function=None,connection_label='AI infrastructure connection',companies=None):
+def render(platform,database,start_job,is_running,*,stocks=None,title='AI-Stock',feature='ai_stock',history_class=AiStockHistory,scan_function=None,connection_label='AI infrastructure connection',companies=None,all_universe=False):
     stocks=AI_STOCKS if stocks is None else stocks
     scan_function=scan_function or scan_ai_stock
     view_prefix=feature.replace('_','-')
     st.header(title)
-    st.caption(f'Your {len(stocks)}-stock watchlist · existing fundamental, technical, news and OI analysis · manual scans only')
-    st.dataframe([{'Stock':symbol,**({'Company':companies[symbol]} if companies and symbol in companies else {}),connection_label:connection,'Futures':'Verify active contract during scan'}
-        for symbol,connection in stocks.items()],hide_index=True,width='stretch')
-    mode=st.selectbox(title+' scan mode',['AFTER_MARKET_RESEARCH','LIVE_SCAN','DAILY_PREP','FULL_RESEARCH'],key=view_prefix+'-mode')
-    st.caption(f'After market: AFTER_MARKET_RESEARCH. During market: LIVE_SCAN uses prepared history. DAILY_PREP / FULL_RESEARCH prepare only these {len(stocks)} stocks.')
-    limit=st.number_input('Candidates per direction',min_value=1,max_value=len(stocks),value=min(5,len(stocks)),key=view_prefix+'-limit')
+    st.caption(f'Your {"full stock-Futures universe" if all_universe else str(len(stocks))+"-stock watchlist"} · existing fundamental, technical, news and OI analysis · manual scans only')
+    if stocks:
+        st.dataframe([{'Stock':symbol,**({'Company':companies[symbol]} if companies and symbol in companies else {}),connection_label:connection,'Futures':'Verify active contract during scan'}
+            for symbol,connection in stocks.items()],hide_index=True,width='stretch')
+    mode=st.selectbox(title+' scan mode',['AFTER_MARKET_RESEARCH','LIVE_SCAN','DAILY_PREP','FULL_RESEARCH'],index=1 if all_universe else 0,key=view_prefix+'-mode')
+    st.caption(f'After market: AFTER_MARKET_RESEARCH. During market: LIVE_SCAN uses prepared history. DAILY_PREP / FULL_RESEARCH prepare the selected universe.' if all_universe else f'After market: AFTER_MARKET_RESEARCH. During market: LIVE_SCAN uses prepared history. DAILY_PREP / FULL_RESEARCH prepare only these {len(stocks)} stocks.')
+    limit=st.number_input('Candidates per direction',min_value=1,max_value=100 if all_universe else len(stocks),value=5 if all_universe else min(5,len(stocks)),key=view_prefix+'-limit')
     busy=is_running(feature)
     if st.button('Scan '+title,type='primary',disabled=busy):
         run_id=str(uuid4())
@@ -151,6 +157,8 @@ def render(platform,database,start_job,is_running,*,stocks=None,title='AI-Stock'
     st.caption(f"Saved scan: {report.get('generated_at')} · {report.get('scan_mode')} · scores are not success probabilities")
     scored=sum(item.get('technical_score') is not None for item in report.get('reviewed',[]))
     st.caption(f"{scored} of {len(report.get('reviewed',[]))} directional evaluations have a technical score.")
+    if all_universe:
+        st.json(report.get('discount_summary',{}))
     if not scored:st.warning('No verified technical scores in this snapshot. Open Missing data for the recorded failures; no prices or scores have been filled in.')
     st.info('Research rows are not buy/sell recommendations. Only APPROVED rows passed the recorded checks. No automated orders; new entries stop by 15:00 IST and manual exit is by 15:10 IST.')
     from src.ui.stock_tables import context_columns,render_stock_table
@@ -166,7 +174,7 @@ def render(platform,database,start_job,is_running,*,stocks=None,title='AI-Stock'
             original=(item.get('company_research') or {}).get('fundamentals') or {}
             facts={**((item.get('display_fundamentals') or {}).get('snapshot') or {}),
                 **{key:value for key,value in original.items() if value is not None}}
-            rows.append({**row,**context_columns(display),**({'Company':companies[item['symbol']]} if companies and item['symbol'] in companies else {}),connection_label:stocks.get(item['symbol']),
+            rows.append({**row,**context_columns(display),**({'Stock price':(item.get('futures_discount') or {}).get('stock_price'),'Futures price':(item.get('futures_discount') or {}).get('futures_price'),'Discount %':(item.get('futures_discount') or {}).get('discount_percent')} if all_universe else {}),**({'Company':companies[item['symbol']]} if companies and item['symbol'] in companies else {}),connection_label:stocks.get(item['symbol']),
                 'Futures availability':availability.get(item['symbol'],'UNVERIFIED'),
                 'Delivery %':facts.get('delivery_percent'),'Monthly delivery %':facts.get('monthly_delivery_percent')})
         render_stock_table(rows,view,preferences)
@@ -174,6 +182,7 @@ def render(platform,database,start_job,is_running,*,stocks=None,title='AI-Stock'
     for tab,key in zip(tabs[:4],('reviewed','report_a','report_b','report_c')):
         with tab:table(report,key,view_prefix+'-'+key)
     with tabs[4]:
+        if all_universe:st.dataframe(report.get('discount_diagnostics',[]),hide_index=True,width='stretch')
         st.dataframe(missing_data_rows(report),hide_index=True,width='stretch')
         st.json({'futures_availability':report.get('universe',[]),'source_failures':report.get('source_failures',{}),'scoring_failures':report.get('failures',[])})
     with tabs[5]:

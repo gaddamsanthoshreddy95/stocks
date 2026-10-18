@@ -178,6 +178,8 @@ def test_approval_expires_if_quote_ages_before_report_finishes():
 def test_long_unwinding_and_each_mandatory_execution_gate(gate, status):
     from src.quality.futures_execution import CHECKS, check, unknown
     scanner, _ = scanner_fixture()
+    # This regression isolates the legacy OI gate; strict buildup confirmation has separate tests.
+    scanner.config=replace(scanner.config,short_confirmation_gate_enabled=0)
     # Zero-cost synthetic model isolates mandatory gate decisions; production
     # remains at net R:R >=1 and the real tariff is covered by cost regressions.
     from futures_mode_fixture import SyntheticNoCostModel

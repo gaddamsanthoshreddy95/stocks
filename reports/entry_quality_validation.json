@@ -1,0 +1,358 @@
+{
+  "status": "INSUFFICIENT_POINT_IN_TIME_EVIDENCE",
+  "historical_sources": [
+    {
+      "file": "reports/futures_after_market_2026-10-08.json",
+      "sha256": "9944d3170276a80fe7efaf82246b5d784b34476b34676a4264a25fbaafb24a88",
+      "generated_at": "2026-10-08T22:52:52.979016+05:30",
+      "original_candidates": 428,
+      "recorded_entry_quality_inputs": 0,
+      "file_unchanged": true
+    },
+    {
+      "file": "reports/futures_live_20261009_1434_top10.json",
+      "sha256": "cd7b0e2f277665dd42385de22def1ddd5018a4132bbb523c28d465293b41643e",
+      "generated_at": "2026-10-09T14:37:20.183916+05:30",
+      "original_candidates": 428,
+      "recorded_entry_quality_inputs": 0,
+      "file_unchanged": true
+    },
+    {
+      "file": "reports/futures_live_20261009_top10_network_retry.json",
+      "sha256": "b43d22a8289bec3f347077072e182866061b3997ded78d7dec9a7f0fe77ea11f",
+      "generated_at": "2026-10-09T14:41:06.742951+05:30",
+      "original_candidates": 428,
+      "recorded_entry_quality_inputs": 0,
+      "file_unchanged": true
+    },
+    {
+      "file": "reports/futures_live_latest.json",
+      "sha256": "ae4d86c2bc0cf3802fa95281801fc9205517e54439dd62d3289c73f1e3e8c717",
+      "generated_at": "2026-10-08T22:20:33.418940+05:30",
+      "original_candidates": 428,
+      "recorded_entry_quality_inputs": 0,
+      "file_unchanged": true
+    },
+    {
+      "file": "reports/futures_opportunities_2026-10-08.json",
+      "sha256": "1a766a79ba6241c33845220b0e2dfc5a56a481feb33abacb202638102178c8f3",
+      "generated_at": "2026-10-08T20:21:12.569205+05:30",
+      "original_candidates": 428,
+      "recorded_entry_quality_inputs": 0,
+      "file_unchanged": true
+    },
+    {
+      "file": "reports/futures_selection.json",
+      "sha256": "4db952ffa72f10813b9a188f674b61bb85ea486d30680d63aa238f79e98ef8ee",
+      "generated_at": null,
+      "original_candidates": 20,
+      "recorded_entry_quality_inputs": 0,
+      "file_unchanged": true
+    },
+    {
+      "file": "reports/futures_selection_explained.json",
+      "sha256": "18959bb2eac690368495913cfce4d5b6f65cf9f591093fb2a599ad34f10dd384",
+      "generated_at": null,
+      "original_candidates": 20,
+      "recorded_entry_quality_inputs": 0,
+      "file_unchanged": true
+    }
+  ],
+  "saved_runs": 7,
+  "original_candidate_records": 2180,
+  "recorded_input_snapshots": 0,
+  "comparison": {
+    "version": "ENTRY_QUALITY_V1",
+    "status": "INSUFFICIENT_POINT_IN_TIME_EVIDENCE",
+    "scope": "PAIRED_RECORDED_SIGNALS; NOT_RECONSTRUCTED_NEWS_DEPTH_OR_WIN_PROBABILITY",
+    "slots_ist": [
+      "09:30",
+      "09:45",
+      "10:00"
+    ],
+    "policy": {
+      "mode": "REPORT_ONLY",
+      "quote_age_seconds": 30,
+      "max_extension_stop_units": 1.5,
+      "minimum_rvol": 1.2,
+      "maximum_slippage_bps": 10,
+      "require_15m": true,
+      "level_bars_15m": 2,
+      "retest_age_15m": 2
+    },
+    "summary": {
+      "09:30": {
+        "coverage": {},
+        "baseline": {
+          "historical_signals": 0,
+          "sample_status": "INSUFFICIENT",
+          "target_first_percent": null,
+          "observed_target_first_percent": null,
+          "stop_first_percent": null,
+          "neither_percent": null,
+          "median_minutes_to_target": null,
+          "maximum_adverse_excursion_percent": null,
+          "maximum_favorable_excursion_percent": null,
+          "average_net_pnl": null,
+          "profit_factor": null,
+          "profit_factor_status": "NO_SIGNALS",
+          "maximum_drawdown": null
+        },
+        "framework": {
+          "historical_signals": 0,
+          "sample_status": "INSUFFICIENT",
+          "target_first_percent": null,
+          "observed_target_first_percent": null,
+          "stop_first_percent": null,
+          "neither_percent": null,
+          "median_minutes_to_target": null,
+          "maximum_adverse_excursion_percent": null,
+          "maximum_favorable_excursion_percent": null,
+          "average_net_pnl": null,
+          "profit_factor": null,
+          "profit_factor_status": "NO_SIGNALS",
+          "maximum_drawdown": null
+        },
+        "missed_target_opportunities": 0,
+        "avoided_stops": 0,
+        "withheld_candidates": 0
+      },
+      "09:45": {
+        "coverage": {},
+        "baseline": {
+          "historical_signals": 0,
+          "sample_status": "INSUFFICIENT",
+          "target_first_percent": null,
+          "observed_target_first_percent": null,
+          "stop_first_percent": null,
+          "neither_percent": null,
+          "median_minutes_to_target": null,
+          "maximum_adverse_excursion_percent": null,
+          "maximum_favorable_excursion_percent": null,
+          "average_net_pnl": null,
+          "profit_factor": null,
+          "profit_factor_status": "NO_SIGNALS",
+          "maximum_drawdown": null
+        },
+        "framework": {
+          "historical_signals": 0,
+          "sample_status": "INSUFFICIENT",
+          "target_first_percent": null,
+          "observed_target_first_percent": null,
+          "stop_first_percent": null,
+          "neither_percent": null,
+          "median_minutes_to_target": null,
+          "maximum_adverse_excursion_percent": null,
+          "maximum_favorable_excursion_percent": null,
+          "average_net_pnl": null,
+          "profit_factor": null,
+          "profit_factor_status": "NO_SIGNALS",
+          "maximum_drawdown": null
+        },
+        "missed_target_opportunities": 0,
+        "avoided_stops": 0,
+        "withheld_candidates": 0
+      },
+      "10:00": {
+        "coverage": {},
+        "baseline": {
+          "historical_signals": 0,
+          "sample_status": "INSUFFICIENT",
+          "target_first_percent": null,
+          "observed_target_first_percent": null,
+          "stop_first_percent": null,
+          "neither_percent": null,
+          "median_minutes_to_target": null,
+          "maximum_adverse_excursion_percent": null,
+          "maximum_favorable_excursion_percent": null,
+          "average_net_pnl": null,
+          "profit_factor": null,
+          "profit_factor_status": "NO_SIGNALS",
+          "maximum_drawdown": null
+        },
+        "framework": {
+          "historical_signals": 0,
+          "sample_status": "INSUFFICIENT",
+          "target_first_percent": null,
+          "observed_target_first_percent": null,
+          "stop_first_percent": null,
+          "neither_percent": null,
+          "median_minutes_to_target": null,
+          "maximum_adverse_excursion_percent": null,
+          "maximum_favorable_excursion_percent": null,
+          "average_net_pnl": null,
+          "profit_factor": null,
+          "profit_factor_status": "NO_SIGNALS",
+          "maximum_drawdown": null
+        },
+        "missed_target_opportunities": 0,
+        "avoided_stops": 0,
+        "withheld_candidates": 0
+      }
+    },
+    "comparisons": [],
+    "portfolio_by_slot": {
+      "09:30": {
+        "baseline": {
+          "maximum_entries_per_day": 2,
+          "unranked_excluded": 0,
+          "metrics": {
+            "historical_signals": 0,
+            "sample_status": "INSUFFICIENT",
+            "target_first_percent": null,
+            "observed_target_first_percent": null,
+            "stop_first_percent": null,
+            "neither_percent": null,
+            "median_minutes_to_target": null,
+            "maximum_adverse_excursion_percent": null,
+            "maximum_favorable_excursion_percent": null,
+            "average_net_pnl": null,
+            "profit_factor": null,
+            "profit_factor_status": "NO_SIGNALS",
+            "maximum_drawdown": null
+          },
+          "scope": "ALTERNATIVE_FIXED_TIME_STRATEGY; EACH_SLOT_HAS_ITS_OWN_TWO_ENTRY_DAILY_CAP"
+        },
+        "framework": {
+          "maximum_entries_per_day": 2,
+          "unranked_excluded": 0,
+          "metrics": {
+            "historical_signals": 0,
+            "sample_status": "INSUFFICIENT",
+            "target_first_percent": null,
+            "observed_target_first_percent": null,
+            "stop_first_percent": null,
+            "neither_percent": null,
+            "median_minutes_to_target": null,
+            "maximum_adverse_excursion_percent": null,
+            "maximum_favorable_excursion_percent": null,
+            "average_net_pnl": null,
+            "profit_factor": null,
+            "profit_factor_status": "NO_SIGNALS",
+            "maximum_drawdown": null
+          },
+          "scope": "ALTERNATIVE_FIXED_TIME_STRATEGY; EACH_SLOT_HAS_ITS_OWN_TWO_ENTRY_DAILY_CAP"
+        }
+      },
+      "09:45": {
+        "baseline": {
+          "maximum_entries_per_day": 2,
+          "unranked_excluded": 0,
+          "metrics": {
+            "historical_signals": 0,
+            "sample_status": "INSUFFICIENT",
+            "target_first_percent": null,
+            "observed_target_first_percent": null,
+            "stop_first_percent": null,
+            "neither_percent": null,
+            "median_minutes_to_target": null,
+            "maximum_adverse_excursion_percent": null,
+            "maximum_favorable_excursion_percent": null,
+            "average_net_pnl": null,
+            "profit_factor": null,
+            "profit_factor_status": "NO_SIGNALS",
+            "maximum_drawdown": null
+          },
+          "scope": "ALTERNATIVE_FIXED_TIME_STRATEGY; EACH_SLOT_HAS_ITS_OWN_TWO_ENTRY_DAILY_CAP"
+        },
+        "framework": {
+          "maximum_entries_per_day": 2,
+          "unranked_excluded": 0,
+          "metrics": {
+            "historical_signals": 0,
+            "sample_status": "INSUFFICIENT",
+            "target_first_percent": null,
+            "observed_target_first_percent": null,
+            "stop_first_percent": null,
+            "neither_percent": null,
+            "median_minutes_to_target": null,
+            "maximum_adverse_excursion_percent": null,
+            "maximum_favorable_excursion_percent": null,
+            "average_net_pnl": null,
+            "profit_factor": null,
+            "profit_factor_status": "NO_SIGNALS",
+            "maximum_drawdown": null
+          },
+          "scope": "ALTERNATIVE_FIXED_TIME_STRATEGY; EACH_SLOT_HAS_ITS_OWN_TWO_ENTRY_DAILY_CAP"
+        }
+      },
+      "10:00": {
+        "baseline": {
+          "maximum_entries_per_day": 2,
+          "unranked_excluded": 0,
+          "metrics": {
+            "historical_signals": 0,
+            "sample_status": "INSUFFICIENT",
+            "target_first_percent": null,
+            "observed_target_first_percent": null,
+            "stop_first_percent": null,
+            "neither_percent": null,
+            "median_minutes_to_target": null,
+            "maximum_adverse_excursion_percent": null,
+            "maximum_favorable_excursion_percent": null,
+            "average_net_pnl": null,
+            "profit_factor": null,
+            "profit_factor_status": "NO_SIGNALS",
+            "maximum_drawdown": null
+          },
+          "scope": "ALTERNATIVE_FIXED_TIME_STRATEGY; EACH_SLOT_HAS_ITS_OWN_TWO_ENTRY_DAILY_CAP"
+        },
+        "framework": {
+          "maximum_entries_per_day": 2,
+          "unranked_excluded": 0,
+          "metrics": {
+            "historical_signals": 0,
+            "sample_status": "INSUFFICIENT",
+            "target_first_percent": null,
+            "observed_target_first_percent": null,
+            "stop_first_percent": null,
+            "neither_percent": null,
+            "median_minutes_to_target": null,
+            "maximum_adverse_excursion_percent": null,
+            "maximum_favorable_excursion_percent": null,
+            "average_net_pnl": null,
+            "profit_factor": null,
+            "profit_factor_status": "NO_SIGNALS",
+            "maximum_drawdown": null
+          },
+          "scope": "ALTERNATIVE_FIXED_TIME_STRATEGY; EACH_SLOT_HAS_ITS_OWN_TWO_ENTRY_DAILY_CAP"
+        }
+      }
+    },
+    "slippage_assumptions": {
+      "brokerage_rate": 0.0003,
+      "brokerage_cap": 20,
+      "exchange_rate": 1.83e-05,
+      "sebi_rate": 1e-06,
+      "gst_rate": 0.18,
+      "stamp_rate": 2e-05,
+      "slippage_bps": 2,
+      "ipft_rate": 1e-09
+    },
+    "outcome_resolution": "Completed post-decision 5-minute OHLC; ambiguous stop first; full exit-bar MAE is conservative",
+    "trade_limit_scope": "Independent counterfactual slots; not a portfolio claiming more than two live entries",
+    "calibration": "UNVALIDATED; missing samples are not losses or missed opportunities"
+  },
+  "coverage_by_slot": {
+    "09:30": {
+      "archived_candidate_records": 2180,
+      "records_without_point_in_time_input": 2180,
+      "paired_outcome_evaluations": 0
+    },
+    "09:45": {
+      "archived_candidate_records": 2180,
+      "records_without_point_in_time_input": 2180,
+      "paired_outcome_evaluations": 0
+    },
+    "10:00": {
+      "archived_candidate_records": 2180,
+      "records_without_point_in_time_input": 2180,
+      "paired_outcome_evaluations": 0
+    }
+  },
+  "limitations": [
+    "No current data is substituted for historical input.",
+    "Legacy reports without timestamped source inputs cannot establish 09:30/09:45/10:00 policy performance.",
+    "A real replay additionally needs exact-contract post-decision OHLC and recorded execution costs/quotes."
+  ]
+}

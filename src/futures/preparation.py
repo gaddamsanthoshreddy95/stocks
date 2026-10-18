@@ -180,6 +180,11 @@ class PreparedDataProvider:
             self.frames[identity] = self.manager.update_candles(identity, live=True)
         return self.frames[identity]
 
+    def get_confirmation_intraday(self, symbol):
+        # Confirmation needs only today's prefix, never a cold 45-day download.
+        identity='NSE:'+symbol+':5minute'
+        return self.manager.update_candles(identity,live=True,session_only=True)
+
     def preload_sessions(self, symbols):
         identities = ['NSE:'+symbol+':5minute' for symbol in symbols]
         values, errors = bounded_map(lambda key: self.manager.update_candles(key, live=True), identities,
@@ -188,6 +193,15 @@ class PreparedDataProvider:
         for key in errors:
             self.frames[key] = None
         self.manager.errors.update(errors)
+
+    def refresh_execution_quotes(self,symbol,contract,data):
+        keys=['NFO:'+contract['tradingsymbol'],'NSE:'+symbol]
+        fresh=self.manager.gateway.quotes(keys)
+        for key in keys:self.quotes.pop(key,None)
+        self.quotes.update(fresh)
+        return {**data,'quote':self.quotes.get('NFO:'+contract['tradingsymbol'],{}),
+            'spot_quote':self.quotes.get('NSE:'+symbol,{}),
+            'spot_price':self.quotes.get('NSE:'+symbol,{}).get('last_price')}
 
     def get_futures_execution_data(self, symbol, contract):
         key = 'NFO:'+contract['tradingsymbol']
@@ -414,11 +428,11 @@ class PreparedScanner:
         report['execution_safety']['initial_reconciliation'] = initial_reconciliation
         return report
 
-    def update_candles(self, identity, live=False):
+    def update_candles(self, identity, live=False, session_only=False):
         exchange, symbol, interval=identity.split(':')
         cached=self.cache.frame(identity,now=self.now,allow_expired=True)
         record=self.cache.get('candles',identity,now=self.now,allow_expired=True)
-        if live and cached is None and getattr(self,'mode','LIVE_SCAN')=='LIVE_SCAN':
+        if live and cached is None and not session_only and getattr(self,'mode','LIVE_SCAN')=='LIVE_SCAN':
             underlying = symbol if exchange=='NSE' else self.master.get(symbol,{}).get('name')
             if not underlying or self.cache.frame('NSE:'+underlying+':day',now=self.now,allow_expired=True) is None:
                 self.errors[identity]={'type':'PREPARED_CANDLES_MISSING','missing_fields':['Open','High','Low','Close','Volume'], 'cache_path':str(self.cache.path), 'recovery':'No base history available; run DAILY_PREP or AFTER_MARKET_RESEARCH.'}
@@ -442,6 +456,7 @@ class PreparedScanner:
             lookback=730 if interval=='day' and exchange=='NSE' else 120 if interval=='day' else 45
             # Re-fetch the last completed interval too: exchanges can revise it.
             start=max(cached.index[-1]-pd.Timedelta(days=1),self.now-pd.Timedelta(days=lookback)) if cached is not None and not cached.empty else self.now-pd.Timedelta(days=lookback)
+            if session_only and (cached is None or cached.empty):start=stamp.normalize()+pd.Timedelta(hours=9,minutes=15)
             if getattr(self,'mode',None)=='AFTER_MARKET_RESEARCH' and interval=='5minute' and cached is not None and not cached.empty and cached.index[-1].date()==self.data_as_of.date():
                 start=cached.index[-1]-pd.Timedelta(minutes=5)
             history_end=self.data_as_of if getattr(self,'mode',None)=='AFTER_MARKET_RESEARCH' else self.clock()

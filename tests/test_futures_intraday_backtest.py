@@ -39,7 +39,7 @@ def test_neither_exits_intraday_without_carrying_overnight():
     candles = frame()
     result = FuturesIntradayBacktester().simulate(candles, 1, 'SHORT', 'TEST', 500)
     assert result['outcome'] == 'INTRADAY_EXIT'
-    assert pd.Timestamp(result['exit_timestamp']).time().isoformat() == '15:20:00'
+    assert pd.Timestamp(result['exit_timestamp']).time().isoformat() == '15:10:00'
     assert result['gross_pnl'] == 0
     assert result['net_pnl'] < 0
 
